@@ -1,0 +1,528 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Check,
+  ChevronRight,
+  Film,
+  Gauge,
+  Layers3,
+  Play,
+  Sparkles,
+} from "lucide-react";
+import { AppShell } from "../components/AppShell";
+
+type CaptionStyle = {
+  id: string;
+  name: string;
+  description: string;
+  speed: string;
+  mode: "karaoke" | "box" | "reveal" | "kanit";
+  badge?: string;
+};
+
+const captionStyles: CaptionStyle[] = [
+  {
+    id: "karaoke-pop",
+    name: "คาราโอเกะ ป๊อป",
+    description: "ขาวขอบดำ คำที่กำลังพูดเด้งเป็นสีเหลือง เหมาะกับคลิปขายของทั่วไป",
+    speed: "เร็วมาก",
+    mode: "karaoke",
+  },
+  {
+    id: "box-bold",
+    name: "กล่องทึบ อ่านง่าย",
+    description: "กล่องดำช่วยให้ข้อความอ่านชัด แม้คลิปจะมีฉากหลังสว่างหรือรายละเอียดเยอะ",
+    speed: "เร็วมาก",
+    mode: "box",
+  },
+  {
+    id: "reveal-clean",
+    name: "เผยทีละคำ มินิมอล",
+    description: "คำที่ยังไม่พูดจะจางไว้ แล้วค่อยสว่างตามเสียง ดูสุภาพและเป็นธรรมชาติ",
+    speed: "เร็วมาก",
+    mode: "reveal",
+  },
+  {
+    id: "kanit-hf",
+    name: "Kanit เด้ง",
+    description: "ตัวอักษร Kanit คมชัด พร้อมจังหวะเด้งและเบลอเข้า สำหรับงานที่อยากให้ดูพิเศษ",
+    speed: "ละเอียดกว่า",
+    mode: "kanit",
+    badge: "คุณภาพสูง",
+  },
+];
+
+function CaptionPreview({ mode }: { mode: CaptionStyle["mode"] }) {
+  if (mode === "box") {
+    return (
+      <div className="style-caption style-caption-box" aria-hidden="true">
+        <span>ใช้แล้วผิวดู</span>
+        <strong>ฉ่ำขึ้นทันที!</strong>
+      </div>
+    );
+  }
+
+  if (mode === "reveal") {
+    return (
+      <div className="style-caption style-caption-reveal" aria-hidden="true">
+        <span className="style-word-done">เนื้อเบา</span>{" "}
+        <span className="style-word-now">เกลี่ยง่าย</span>{" "}
+        <span>ไม่เป็นคราบ</span>
+      </div>
+    );
+  }
+
+  if (mode === "kanit") {
+    return (
+      <div className="style-caption style-caption-kanit" aria-hidden="true">
+        ตัวนี้ต้องมี!
+        <span>งานผิวสวยมาก</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="style-caption style-caption-karaoke" aria-hidden="true">
+      <span>ของดีที่</span> <strong>อยากป้ายยา</strong>
+      <small>ให้ทุกคนลอง!</small>
+    </div>
+  );
+}
+
+export default function StylesPage() {
+  const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
+  const selected = captionStyles.find((style) => style.id === selectedStyle)!;
+
+  return (
+    <AppShell>
+      <div className="style-page">
+        <header className="style-heading">
+          <div>
+            <div className="style-kicker">
+              <Sparkles size={15} strokeWidth={2.3} /> คลังสไตล์ซับ
+            </div>
+            <h1>เลือกหน้าตาของคลิปคุณ</h1>
+            <p>ดูตัวอย่างจากคลิปจริงก่อนเลือก ทุกสไตล์จับจังหวะตามเสียงให้อัตโนมัติ</p>
+          </div>
+          <div className="style-heading-note" aria-label="จำนวนสไตล์ที่พร้อมใช้">
+            <Layers3 size={18} />
+            <span><strong>4</strong> สไตล์พร้อมใช้</span>
+          </div>
+        </header>
+
+        <section className="style-gallery" aria-label="สไตล์คำบรรยาย">
+          {captionStyles.map((style, index) => {
+            const isSelected = selectedStyle === style.id;
+            return (
+              <article
+                className={`style-card${isSelected ? " style-card-selected" : ""}`}
+                key={style.id}
+              >
+                <div className="style-video-frame">
+                  <video
+                    aria-label={`วิดีโอตัวอย่างสไตล์ ${style.name}`}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload={index === 0 ? "auto" : "metadata"}
+                    poster="/clippang-sample-poster.jpg"
+                  >
+                    <source src="/clippang-sample.mp4" type="video/mp4" />
+                  </video>
+                  <div className="style-video-shade" />
+                  <CaptionPreview mode={style.mode} />
+                  <div className="style-preview-pill">
+                    <Play size={10} fill="currentColor" /> พรีวิวจริง
+                  </div>
+                  {style.badge && (
+                    <div className="style-quality-pill">
+                      <Sparkles size={11} /> {style.badge}
+                    </div>
+                  )}
+                </div>
+
+                <div className="style-card-body">
+                  <div className="style-card-title-row">
+                    <div>
+                      <span className="style-number">0{index + 1}</span>
+                      <h2>{style.name}</h2>
+                    </div>
+                    <span
+                      className={`style-check${isSelected ? " style-check-on" : ""}`}
+                      aria-hidden="true"
+                    >
+                      {isSelected && <Check size={15} strokeWidth={3} />}
+                    </span>
+                  </div>
+                  <p>{style.description}</p>
+                  <div className="style-meta">
+                    <span><Gauge size={14} /> {style.speed}</span>
+                    <span><Film size={14} /> 9:16</span>
+                  </div>
+                  <button
+                    className="style-select-button"
+                    type="button"
+                    onClick={() => setSelectedStyle(style.id)}
+                    aria-pressed={isSelected}
+                  >
+                    {isSelected ? "เลือกใช้อยู่" : "เลือกสไตล์นี้"}
+                    {!isSelected && <ChevronRight size={16} />}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <aside className="style-selection-summary" aria-live="polite">
+          <div className="style-summary-icon"><Check size={18} strokeWidth={3} /></div>
+          <div>
+            <span>สไตล์ที่เลือก</span>
+            <strong>{selected.name}</strong>
+          </div>
+          <p>คุณยังเปลี่ยนสไตล์และตำแหน่งซับได้อีกครั้งก่อนเริ่มเรนเดอร์</p>
+        </aside>
+      </div>
+
+      <style>{`
+        .style-page {
+          --style-ink: #1f251f;
+          --style-muted: #70776f;
+          --style-line: #dedfd8;
+          --style-card: #ffffff;
+          --style-soft: #f3f4ee;
+          --style-accent: #ffd23f;
+          --style-accent-ink: #332800;
+          width: 100%;
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 38px 40px 56px;
+          color: var(--style-ink);
+          font-family: "Kanit", "Leelawadee UI", system-ui, sans-serif;
+        }
+
+        .style-heading {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 28px;
+          margin-bottom: 28px;
+        }
+
+        .style-kicker {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 9px;
+          color: #806300;
+          font-size: 13px;
+          font-weight: 650;
+          letter-spacing: .02em;
+        }
+
+        .style-heading h1 {
+          margin: 0;
+          font-size: clamp(30px, 4vw, 46px);
+          line-height: 1.08;
+          letter-spacing: -.035em;
+          font-weight: 720;
+        }
+
+        .style-heading p {
+          max-width: 650px;
+          margin: 10px 0 0;
+          color: var(--style-muted);
+          font-size: 15px;
+          line-height: 1.65;
+        }
+
+        .style-heading-note {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          flex: 0 0 auto;
+          padding: 10px 14px;
+          border: 1px solid var(--style-line);
+          border-radius: 999px;
+          background: rgba(255,255,255,.72);
+          color: var(--style-muted);
+          font-size: 13px;
+          box-shadow: 0 8px 22px rgba(30,35,27,.04);
+        }
+
+        .style-heading-note strong { color: var(--style-ink); }
+
+        .style-gallery {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 16px;
+        }
+
+        .style-card {
+          min-width: 0;
+          overflow: hidden;
+          border: 1px solid var(--style-line);
+          border-radius: 20px;
+          background: var(--style-card);
+          box-shadow: 0 8px 30px rgba(39,44,35,.045);
+          transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+        }
+
+        .style-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 16px 40px rgba(39,44,35,.09);
+        }
+
+        .style-card-selected {
+          border-color: #d3a700;
+          box-shadow: 0 0 0 2px rgba(255,210,63,.24), 0 16px 42px rgba(83,65,0,.09);
+        }
+
+        .style-video-frame {
+          position: relative;
+          aspect-ratio: 9 / 12;
+          overflow: hidden;
+          margin: 7px;
+          border-radius: 15px;
+          background: #171914;
+          isolation: isolate;
+        }
+
+        .style-video-frame video {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+        }
+
+        .style-video-shade {
+          position: absolute;
+          inset: 42% 0 0;
+          z-index: 1;
+          background: linear-gradient(transparent, rgba(0,0,0,.48));
+          pointer-events: none;
+        }
+
+        .style-preview-pill,
+        .style-quality-pill {
+          position: absolute;
+          z-index: 3;
+          top: 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 8px;
+          border: 1px solid rgba(255,255,255,.28);
+          border-radius: 999px;
+          background: rgba(15,17,13,.58);
+          color: #fff;
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 1;
+          backdrop-filter: blur(8px);
+        }
+
+        .style-preview-pill { left: 10px; }
+        .style-quality-pill { right: 10px; color: #352900; background: rgba(255,210,63,.95); border-color: transparent; }
+
+        .style-caption {
+          position: absolute;
+          z-index: 2;
+          left: 8%;
+          right: 8%;
+          bottom: 15%;
+          color: #fff;
+          text-align: center;
+          font-family: "Kanit", "Leelawadee UI", sans-serif;
+          font-weight: 800;
+          letter-spacing: -.02em;
+          line-height: 1.13;
+          text-shadow: -2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111, 0 3px 7px rgba(0,0,0,.55);
+          pointer-events: none;
+        }
+
+        .style-caption-karaoke { font-size: clamp(16px, 1.55vw, 22px); }
+        .style-caption-karaoke strong { color: #ffe039; font-weight: 800; }
+        .style-caption-karaoke small { display: block; color: #fff; font-size: .82em; }
+
+        .style-caption-box {
+          left: 11%;
+          right: 11%;
+          bottom: 14%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 3px;
+          font-size: clamp(15px, 1.4vw, 20px);
+          text-shadow: none;
+        }
+        .style-caption-box span,
+        .style-caption-box strong {
+          padding: 3px 8px;
+          border-radius: 4px;
+          background: rgba(0,0,0,.82);
+        }
+        .style-caption-box strong { color: #ffd23f; font-weight: 800; }
+
+        .style-caption-reveal {
+          left: 5%;
+          right: 5%;
+          bottom: 15%;
+          font-size: clamp(14px, 1.28vw, 19px);
+          color: rgba(255,255,255,.48);
+        }
+        .style-caption-reveal .style-word-done { color: #fff; }
+        .style-caption-reveal .style-word-now { color: #ffe039; }
+
+        .style-caption-kanit {
+          bottom: 14%;
+          font-size: clamp(18px, 1.65vw, 24px);
+          transform: rotate(-1.2deg);
+          text-shadow: -3px -3px 0 #151515, 3px -3px 0 #151515, -3px 3px 0 #151515, 3px 3px 0 #151515, 0 7px 16px rgba(0,0,0,.42);
+        }
+        .style-caption-kanit span { display: block; color: #ff5f8f; font-size: .86em; }
+
+        .style-card-body { padding: 13px 15px 15px; }
+
+        .style-card-title-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .style-number {
+          display: block;
+          margin-bottom: 3px;
+          color: #92978e;
+          font-family: ui-monospace, "Cascadia Code", monospace;
+          font-size: 9px;
+          letter-spacing: .11em;
+        }
+
+        .style-card h2 {
+          margin: 0;
+          font-size: 17px;
+          line-height: 1.28;
+          letter-spacing: -.018em;
+          font-weight: 680;
+        }
+
+        .style-check {
+          display: grid;
+          place-items: center;
+          width: 24px;
+          height: 24px;
+          flex: 0 0 24px;
+          border: 1px solid #d7d9d2;
+          border-radius: 50%;
+          color: var(--style-accent-ink);
+          background: #fff;
+        }
+
+        .style-check-on { border-color: var(--style-accent); background: var(--style-accent); }
+
+        .style-card-body > p {
+          min-height: 62px;
+          margin: 9px 0 12px;
+          color: var(--style-muted);
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .style-meta {
+          display: flex;
+          gap: 12px;
+          padding-top: 11px;
+          border-top: 1px solid #eeefe9;
+          color: #777d74;
+          font-size: 10.5px;
+        }
+
+        .style-meta span { display: inline-flex; align-items: center; gap: 5px; }
+
+        .style-select-button {
+          width: 100%;
+          height: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          margin-top: 13px;
+          border: 1px solid #d9dcd3;
+          border-radius: 11px;
+          color: var(--style-ink);
+          background: #f7f8f4;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background .18s ease, border-color .18s ease;
+        }
+
+        .style-card-selected .style-select-button {
+          border-color: var(--style-accent);
+          color: var(--style-accent-ink);
+          background: var(--style-accent);
+        }
+
+        .style-select-button:hover { border-color: #aeb5a4; background: #eef1e8; }
+        .style-card-selected .style-select-button:hover { border-color: #e7b900; background: #f4c532; }
+        .style-select-button:focus-visible { outline: 3px solid rgba(206,163,0,.24); outline-offset: 2px; }
+
+        .style-selection-summary {
+          display: grid;
+          grid-template-columns: auto auto minmax(180px, 1fr);
+          align-items: center;
+          gap: 12px;
+          margin-top: 18px;
+          padding: 14px 16px;
+          border: 1px solid #eadca6;
+          border-radius: 15px;
+          background: linear-gradient(90deg, #fff8dd 0%, #fffdf6 70%);
+        }
+
+        .style-summary-icon {
+          display: grid;
+          place-items: center;
+          width: 34px;
+          height: 34px;
+          border-radius: 11px;
+          color: var(--style-accent-ink);
+          background: var(--style-accent);
+        }
+
+        .style-selection-summary span { display: block; color: var(--style-muted); font-size: 10px; }
+        .style-selection-summary strong { display: block; margin-top: 1px; font-size: 13px; }
+        .style-selection-summary p { justify-self: end; margin: 0; color: var(--style-muted); font-size: 11px; }
+
+        @media (max-width: 1120px) {
+          .style-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .style-video-frame { aspect-ratio: 9 / 10; }
+          .style-card-body > p { min-height: 0; }
+          .style-caption-karaoke { font-size: clamp(18px, 2.6vw, 28px); }
+          .style-caption-box { font-size: clamp(17px, 2.3vw, 25px); }
+          .style-caption-reveal { font-size: clamp(16px, 2.15vw, 24px); }
+          .style-caption-kanit { font-size: clamp(20px, 2.8vw, 30px); }
+        }
+
+        @media (max-width: 700px) {
+          .style-page { padding: 26px 18px 40px; }
+          .style-heading { align-items: flex-start; flex-direction: column; gap: 16px; }
+          .style-heading-note { display: none; }
+          .style-gallery { grid-template-columns: 1fr; }
+          .style-video-frame { aspect-ratio: 9 / 10.5; }
+          .style-selection-summary { grid-template-columns: auto 1fr; }
+          .style-selection-summary p { grid-column: 1 / -1; justify-self: start; padding-top: 2px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .style-card { transition: none; }
+          .style-card:hover { transform: none; }
+        }
+      `}</style>
+    </AppShell>
+  );
+}

@@ -1,0 +1,733 @@
+<title>ClipPang Local — Blueprint &amp; Technical Spec</title>
+
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper:   #EDF0F2; --panel:   #F8FAFA; --panel-2: #E4E9EC;
+    --ink:     #11161A; --ink-2:   #45525C; --ink-3:   #6D7B85;
+    --rule:    #D0D9DE; --rule-2:  #B9C5CB;
+    --accent:  #9A6B00; --mark:    #FFD23F;
+    --ok: #1C7A54; --warn: #9C5F0B; --risk: #A62A21; --code-bg: #E6EBEE;
+    --f-sans: "Leelawadee UI", "Noto Sans Thai", "Thonburi", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --f-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+    --shell: 1280px; --rail: 244px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0C1013; --panel: #141A1E; --panel-2: #1A2227;
+      --ink: #E3E9EC; --ink-2: #A7B4BC; --ink-3: #7A8892;
+      --rule: #232D33; --rule-2: #33414A; --accent: #FFD23F; --mark: #FFD23F;
+      --ok: #4FBF8B; --warn: #E0A33C; --risk: #E4695E; --code-bg: #0F1519;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0C1013; --panel: #141A1E; --panel-2: #1A2227;
+    --ink: #E3E9EC; --ink-2: #A7B4BC; --ink-3: #7A8892;
+    --rule: #232D33; --rule-2: #33414A; --accent: #FFD23F; --mark: #FFD23F;
+    --ok: #4FBF8B; --warn: #E0A33C; --risk: #E4695E; --code-bg: #0F1519;
+  }
+  :root[data-theme="light"] {
+    --paper: #EDF0F2; --panel: #F8FAFA; --panel-2: #E4E9EC;
+    --ink: #11161A; --ink-2: #45525C; --ink-3: #6D7B85;
+    --rule: #D0D9DE; --rule-2: #B9C5CB; --accent: #9A6B00; --mark: #FFD23F;
+    --ok: #1C7A54; --warn: #9C5F0B; --risk: #A62A21; --code-bg: #E6EBEE;
+  }
+
+  body { background: var(--paper); color: var(--ink); font-family: var(--f-sans); font-size: 16px; line-height: 1.72; -webkit-font-smoothing: antialiased; }
+  .shell { max-width: var(--shell); margin: 0 auto; padding: 0 24px 120px; display: grid; grid-template-columns: var(--rail) minmax(0,1fr); gap: 48px; align-items: start; }
+
+  .masthead { grid-column: 1 / -1; border-bottom: 1px solid var(--rule); padding: 56px 0 28px; margin-bottom: 40px; }
+  .eyebrow { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); }
+  .masthead h1 { font-size: clamp(30px,4.4vw,46px); line-height: 1.14; font-weight: 700; letter-spacing: -.015em; text-wrap: balance; margin: 14px 0 10px; }
+  .masthead .lede { color: var(--ink-2); max-width: 66ch; font-size: 17px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .chip { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; padding: 4px 10px; border: 1px solid var(--rule-2); border-radius: 2px; color: var(--ink-2); background: var(--panel); }
+  .chip b { color: var(--ink); font-weight: 600; }
+
+  .rail { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto; font-size: 13.5px; }
+  .rail-title { font-family: var(--f-mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); padding-bottom: 12px; border-bottom: 1px solid var(--rule); margin-bottom: 6px; }
+  .rail a { display: grid; grid-template-columns: 30px 1fr; gap: 6px; padding: 5px 0 5px 9px; color: var(--ink-2); text-decoration: none; border-left: 2px solid transparent; transition: color .15s, border-color .15s; }
+  .rail a span:first-child { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3); }
+  .rail a:hover { color: var(--ink); }
+  .rail a.on { color: var(--ink); border-left-color: var(--mark); font-weight: 600; }
+  .rail a.on span:first-child { color: var(--accent); }
+  .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toc-mobile { display: none; grid-column: 1 / -1; margin-bottom: 32px; }
+  .toc-mobile summary { font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+
+  main { min-width: 0; }
+  section { scroll-margin-top: 24px; padding-bottom: 8px; }
+  section + section { margin-top: 64px; }
+  h2 { font-size: 25px; line-height: 1.24; font-weight: 700; letter-spacing: -.01em; margin: 0 0 6px; text-wrap: balance; }
+  h2 .num { font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; color: var(--accent); display: block; margin-bottom: 8px; font-weight: 500; }
+  h3 { font-size: 16.5px; font-weight: 700; margin: 34px 0 8px; letter-spacing: -.005em; }
+  h4 { font-family: var(--f-mono); font-size: 12px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); margin: 26px 0 8px; font-weight: 600; }
+  p { margin: 0 0 14px; max-width: 74ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 20px; max-width: 74ch; }
+  li { margin-bottom: 5px; }
+  li::marker { color: var(--ink-3); }
+  a { color: var(--accent); }
+  .sub { color: var(--ink-2); }
+  .hl { background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 94%, transparent 94%); color: var(--ink); padding: 0 1px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .hl { background: linear-gradient(transparent 58%, rgba(255,210,63,.28) 58%, rgba(255,210,63,.28) 94%, transparent 94%); box-shadow: inset 0 -1px 0 rgba(255,210,63,.6); color: inherit; } }
+  :root[data-theme="dark"] .hl { background: linear-gradient(transparent 58%, rgba(255,210,63,.28) 58%, rgba(255,210,63,.28) 94%, transparent 94%); box-shadow: inset 0 -1px 0 rgba(255,210,63,.6); color: inherit; }
+  :root[data-theme="light"] .hl { background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 94%, transparent 94%); box-shadow: none; color: var(--ink); }
+
+  code, kbd { font-family: var(--f-mono); font-size: .875em; background: var(--code-bg); padding: 1.5px 5px; border-radius: 2px; color: var(--ink); }
+  pre { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 3px; padding: 16px 18px; overflow-x: auto; margin: 0 0 18px; line-height: 1.62; }
+  pre code { background: none; padding: 0; font-size: 12.6px; }
+
+  .tw { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.6px; background: var(--panel); }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; background: var(--panel-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.n, th.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td code { font-size: 12.4px; }
+
+  .tag { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 2px; border: 1px solid currentColor; white-space: nowrap; }
+  .t-mvp { color: var(--ok); } .t-v11 { color: var(--accent); } .t-v2 { color: var(--ink-3); } .t-risk { color: var(--risk); }
+
+  .callout { border: 1px solid var(--rule); border-left: 3px solid var(--accent); background: var(--panel); padding: 14px 18px; margin: 0 0 18px; border-radius: 0 3px 3px 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .lbl { font-family: var(--f-mono); font-size: 11px; letter-spacing: .13em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 4px; }
+  .callout.danger { border-left-color: var(--risk); }
+  .callout.danger .lbl { color: var(--risk); }
+  .callout.good { border-left-color: var(--ok); }
+  .callout.good .lbl { color: var(--ok); }
+
+  figure { margin: 0 0 22px; }
+  figure svg { display: block; width: 100%; max-width: 100%; height: auto; }
+  .figwrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--panel); border-radius: 3px; padding: 18px 16px 10px; }
+  figcaption { font-size: 12.8px; color: var(--ink-3); margin-top: 10px; padding-left: 2px; max-width: 74ch; }
+  svg text { font-family: var(--f-mono); fill: currentColor; }
+  .box { fill: var(--panel-2); stroke: var(--rule-2); }
+  .boxq { fill: none; stroke: var(--rule-2); stroke-dasharray: 4 3; }
+  .lead { stroke: currentColor; fill: none; }
+  .leadq { stroke: currentColor; fill: none; stroke-dasharray: 5 4; opacity: .6; }
+  .hot { stroke: var(--accent); } .hotf { fill: var(--accent); }
+  .ttl { font-size: 12.5px; font-weight: 600; }
+  .sml { font-size: 10.5px; opacity: .72; }
+  .lbl { font-size: 10.5px; opacity: .8; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 16px; margin-bottom: 18px; }
+  .card { border: 1px solid var(--rule); background: var(--panel); border-radius: 3px; padding: 15px 17px; }
+  .card h5 { font-size: 14px; margin: 0 0 6px; font-weight: 700; }
+  .card p { font-size: 13.6px; margin: 0; color: var(--ink-2); }
+  .card .metric { font-family: var(--f-mono); font-size: 22px; font-variant-numeric: tabular-nums; color: var(--ink); display: block; margin-bottom: 2px; }
+
+  .foot { grid-column: 1 / -1; border-top: 1px solid var(--rule); margin-top: 72px; padding-top: 22px; font-size: 13px; color: var(--ink-3); }
+
+  @media (max-width: 940px) {
+    .shell { grid-template-columns: minmax(0,1fr); gap: 0; padding: 0 18px 80px; }
+    .rail { display: none; }
+    .toc-mobile { display: block; }
+    body { font-size: 15.5px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="eyebrow">Technical Blueprint · Local Edition v1.0 · สิงหาคม 2026</div>
+    <h1>ClipPang Local — โปรแกรมใส่ Subtitle + AI Voiceover ที่รันบนเครื่องตัวเอง</h1>
+    <p class="lede">
+      ผู้ใช้ clone จาก GitHub มารันบนคอมตัวเอง ใส่ Gemini API key ของตัวเอง แล้วเปลี่ยนคลิปสินค้าดิบ
+      เป็นคลิปพร้อมโพสต์ที่มีเสียงพากย์ไทยและซับคาราโอเกะ ไม่มีเซิร์ฟเวอร์ ไม่มีบัญชี ไม่มีค่าบริการ
+      — เจ้าของโปรเจกต์ไม่มีต้นทุนต่อคลิปเลยแม้แต่บาทเดียว
+    </p>
+    <div class="chips">
+      <span class="chip">รัน <b>เครื่องผู้ใช้</b></span>
+      <span class="chip">Server <b>Node 22+ · zero-dep</b></span>
+      <span class="chip">UI <b>Vite + React</b></span>
+      <span class="chip">DB <b>node:sqlite</b></span>
+      <span class="chip">Media <b>FFmpeg · libass · HyperFrames</b></span>
+      <span class="chip">AI <b>Gemini TTS · Claude</b> (key ของผู้ใช้)</span>
+    </div>
+  </header>
+
+  <details class="toc-mobile">
+    <summary>สารบัญ §00–§13</summary>
+    <nav class="rail" style="display:block; position:static; max-height:none; padding-top:12px;" id="toc-m"></nav>
+  </details>
+
+  <nav class="rail" aria-label="สารบัญ">
+    <div class="rail-title">สารบัญ</div>
+    <div id="toc"></div>
+  </nav>
+
+  <main>
+
+    <!-- 00 -->
+    <section id="s00">
+      <h2><span class="num">§00</span>ภาพรวมและขอบเขต</h2>
+      <p>
+        เวอร์ชันนี้แทนที่เวอร์ชัน SaaS (<code>blueprint.html</code> ซึ่งพักไว้)
+        <strong>ตัวโปรดักต์ไม่เปลี่ยนเลย</strong> — pipeline, อัลกอริทึม chunked TTS, ระบบสไตล์สองเลน
+        และ wizard 5 สเต็ป ยกมาทั้งชุด สิ่งที่เปลี่ยนคือ<span class="hl">ทุกอย่างที่เกี่ยวกับการเป็นบริการ
+        ถูกตัดทิ้ง</span> และมี "การติดตั้งให้คนทั่วไปใช้เป็น" เข้ามาแทน
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:230px">เวอร์ชัน SaaS (พักไว้)</th><th>เวอร์ชัน Local (ทำตอนนี้)</th></tr></thead>
+          <tbody>
+            <tr><td>Redis + BullMQ</td><td>คิวในโปรเซสเดียวกัน เก็บสถานะลง SQLite</td></tr>
+            <tr><td>Cloudflare R2 + presigned URL</td><td>โฟลเดอร์บนดิสก์ของผู้ใช้</td></tr>
+            <tr><td>MongoDB Atlas</td><td><code>node:sqlite</code> ที่ติดมากับ Node</td></tr>
+            <tr><td>สมัครสมาชิก · เครดิต · ชำระเงิน</td><td>ไม่มี — เปิดมาใช้ได้เลย</td></tr>
+            <tr><td>แยก worker pool 2 เครื่อง</td><td>โปรเซสเดียว รันทีละ 1–2 งาน</td></tr>
+            <tr><td>Plesk + VPS + ufw + TLS</td><td>ไม่มีเซิร์ฟเวอร์</td></tr>
+            <tr><td>เจ้าของแบกค่า AI ของผู้ใช้</td><td><strong>ผู้ใช้ใส่ key ตัวเอง จ่าย Google เอง</strong></td></tr>
+            <tr><td>—</td><td><strong>First-run setup ที่คนไม่ใช่สายเทคก็ผ่านได้</strong> (§08)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid2">
+        <div class="card"><span class="metric">0 บาท</span><h5>ต้นทุนของเจ้าของโปรเจกต์</h5><p>ไม่มีเซิร์ฟเวอร์ ไม่มีค่า API — แจกให้คนลองได้ไม่จำกัด</p></div>
+        <div class="card"><span class="metric">~฿0.15</span><h5>ต้นทุนต่อคลิปของผู้ใช้</h5><p>Gemini TTS $0.004 จาก key ของเขาเอง (วัดจริงแล้ว)</p></div>
+        <div class="card"><span class="metric">&lt; 10 นาที</span><h5>เวลาติดตั้งของคนทั่วไป</h5><p>เกณฑ์ที่ต้องผ่าน นับตั้งแต่ดาวน์โหลดจนได้คลิปแรก</p></div>
+        <div class="card"><span class="metric">2 อย่าง</span><h5>สิ่งที่ผู้ใช้ต้องมีก่อน</h5><p>Node.js กับ Gemini API key เท่านั้น — ที่เหลือโปรแกรมจัดการเอง</p></div>
+      </div>
+
+      <h4>อยู่นอกขอบเขต</h4>
+      <ul>
+        <li><strong>ไม่ทำ installer แบบ .exe / .dmg</strong> ในรอบนี้ — ใช้ git clone + สคริปต์เปิด</li>
+        <li><strong>ไม่มีการอัปเดตอัตโนมัติ</strong> — ผู้ใช้ <code>git pull</code> เอง</li>
+        <li><strong>ไม่รองรับผู้ใช้หลายคนพร้อมกัน</strong> — เครื่องหนึ่งคือคนหนึ่ง</li>
+        <li><strong>ไม่เก็บ telemetry ใด ๆ</strong> — ทุกอย่างอยู่บนเครื่องผู้ใช้ รวมทั้ง API key</li>
+      </ul>
+    </section>
+
+    <!-- 01 -->
+    <section id="s01">
+      <h2><span class="num">§01</span>รายการฟีเจอร์</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:130px">กลุ่ม</th><th>ฟีเจอร์</th><th style="width:78px">ระดับ</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="4">Setup</td><td>ตรวจของที่ขาดตอนเปิดครั้งแรก แล้ว<strong>โหลด ffmpeg ให้อัตโนมัติ</strong>ถ้าไม่มี</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>หน้ากรอก Gemini API key พร้อมลิงก์ไปหน้าขอ key และปุ่มทดสอบ key</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ไฟล์ <code>เริ่มโปรแกรม.bat</code> / <code>.command</code> ดับเบิลคลิกแล้วเปิดเบราว์เซอร์ให้เลย</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>โหลดฟอนต์ไทย (Kanit) ให้อัตโนมัติ ไม่ต้องติดตั้งลงเครื่อง</td><td><span class="tag t-mvp">MVP</span></td></tr>
+
+            <tr><td rowspan="3">Media</td><td>ลากคลิปวางในหน้าเว็บ หรือหย่อนไฟล์ลงโฟลเดอร์ <code>input/</code> ก็ได้</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Normalize 1080×1920/30fps + scene detection + ตรวจซับเบิร์นเดิม</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>คลังคลิปใช้ซ้ำข้ามโปรเจกต์</td><td><span class="tag t-v11">ถัดไป</span></td></tr>
+
+            <tr><td rowspan="3">Script</td><td>ฟอร์มข้อมูลสินค้า → สร้างสคริปต์ 5 เวอร์ชัน</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>แก้รายท่อน + regenerate เฉพาะท่อนที่ไม่ชอบ</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ใช้ Gemini เขียนสคริปต์ได้ด้วย ถ้าผู้ใช้ไม่มี Claude key</td><td><span class="tag t-mvp">MVP</span></td></tr>
+
+            <tr><td rowspan="3">Voice</td><td>เลือกเสียง 30 แบบ + โทน + ความเร็ว · ฟังตัวอย่างก่อนใช้</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>แคชเสียงรายท่อนบนดิสก์ — พูดประโยคเดิมซ้ำไม่เสียเงินอีก</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>อัปโหลดเสียงพากย์ที่อัดเองแทน TTS</td><td><span class="tag t-v11">ถัดไป</span></td></tr>
+
+            <tr><td rowspan="3">Caption</td><td>สไตล์ซับ 4 แบบ (3 เลน A + Kanit เลน B) พร้อมพรีวิววิดีโอจริง</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td><strong>เลือกตำแหน่งซับ บน / กลาง / ล่าง</strong></td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ปรับสีไฮไลต์ ขนาด ระยะขอบ แล้วบันทึกเป็น preset</td><td><span class="tag t-v11">ถัดไป</span></td></tr>
+
+            <tr><td rowspan="4">Render</td><td>ร่างด้วยเลน A → เลือก → เรนเดอร์จริงด้วยเลน B (Kanit)</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>พรีวิวในเบราว์เซอร์ + เปิดโฟลเดอร์ผลลัพธ์ให้เลย</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Export .srt / .ass / ไฟล์เสียงพากย์แยก</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Batch — 1 สินค้า × N เวอร์ชัน · BGM + ducking · Originality pass</td><td><span class="tag t-v11">ถัดไป</span></td></tr>
+
+            <tr><td rowspan="2">งานที่รันค้าง</td><td>ปิดเบราว์เซอร์แล้วเปิดใหม่ยังเห็นงานเดิม (สถานะอยู่ใน SQLite)</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ปิดโปรแกรมกลางคัน เปิดใหม่แล้วงานที่ค้างกลับเข้าคิวเอง</td><td><span class="tag t-v11">ถัดไป</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 02 -->
+    <section id="s02">
+      <h2><span class="num">§02</span>สถาปัตยกรรม</h2>
+      <p>
+        โปรเซสเดียว ฟังที่ <code>127.0.0.1</code> เท่านั้น เบราว์เซอร์คือหน้าจอ ดิสก์คือที่เก็บของ
+        ไม่มีอะไรวิ่งออกเน็ตนอกจากการเรียก API ของ Google และ Anthropic ด้วย key ของผู้ใช้เอง
+      </p>
+
+      <figure>
+        <div class="figwrap">
+          <svg viewBox="0 0 1000 268" role="img" aria-label="แผนผังสถาปัตยกรรมแบบรันบนเครื่อง: เบราว์เซอร์คุยกับโปรเซส Node เดียวผ่าน localhost โปรเซสนั้นมีทั้งเว็บเซิร์ฟเวอร์ คิว และตัวเรนเดอร์ อ่านเขียนไฟล์บนดิสก์และ SQLite และเรียก API ภายนอกด้วยคีย์ของผู้ใช้">
+            <defs>
+              <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <rect class="boxq" x="14" y="10" width="700" height="196" rx="4"/>
+            <text class="sml" x="24" y="26" text-anchor="start">เครื่องของผู้ใช้ — ไม่มีอะไรออกเน็ตนอกกรอบนี้ ยกเว้นลูกศรขวาสุด</text>
+
+            <rect class="box" x="34" y="46" width="190" height="56" rx="3"/>
+            <text class="ttl" x="129" y="71" text-anchor="middle">Browser</text>
+            <text class="sml" x="129" y="88" text-anchor="middle">localhost:4321</text>
+
+            <rect class="box hot" x="284" y="36" width="220" height="140" rx="3"/>
+            <text class="ttl hotf" x="394" y="56" text-anchor="middle">โปรเซส Node เดียว</text>
+            <rect class="boxq" x="296" y="66" width="196" height="30" rx="2"/>
+            <text class="sml" x="394" y="85" text-anchor="middle">HTTP + SSE (zero-dep)</text>
+            <rect class="boxq" x="296" y="102" width="196" height="30" rx="2"/>
+            <text class="sml" x="394" y="121" text-anchor="middle">คิวในหน่วยความจำ</text>
+            <rect class="boxq" x="296" y="138" width="196" height="30" rx="2"/>
+            <text class="sml" x="394" y="157" text-anchor="middle">ffmpeg · Chrome</text>
+
+            <rect class="box" x="560" y="36" width="140" height="56" rx="3"/>
+            <text class="ttl" x="630" y="61" text-anchor="middle">ดิสก์</text>
+            <text class="sml" x="630" y="78" text-anchor="middle">projects/ · cache/</text>
+
+            <rect class="box" x="560" y="120" width="140" height="56" rx="3"/>
+            <text class="ttl" x="630" y="145" text-anchor="middle">SQLite</text>
+            <text class="sml" x="630" y="162" text-anchor="middle">clippang.db</text>
+
+            <rect class="box" x="790" y="72" width="196" height="68" rx="3"/>
+            <text class="ttl" x="888" y="97" text-anchor="middle">Gemini · Claude</text>
+            <text class="sml" x="888" y="114" text-anchor="middle">คีย์ของผู้ใช้เอง</text>
+            <text class="sml" x="888" y="130" text-anchor="middle">ผู้ใช้จ่ายตรงกับผู้ให้บริการ</text>
+
+            <line class="lead" x1="226" y1="74" x2="278" y2="74" marker-end="url(#a1)"/>
+            <text class="lbl" x="252" y="64" text-anchor="middle">HTTP</text>
+            <line class="lead" x1="278" y1="92" x2="226" y2="92" marker-end="url(#a1)"/>
+            <text class="lbl" x="252" y="110" text-anchor="middle">SSE progress</text>
+
+            <line class="lead" x1="506" y1="64" x2="554" y2="64" marker-end="url(#a1)"/>
+            <text class="lbl" x="530" y="54" text-anchor="middle">อ่าน/เขียน</text>
+            <line class="lead" x1="506" y1="148" x2="554" y2="148" marker-end="url(#a1)"/>
+            <text class="lbl" x="530" y="138" text-anchor="middle">สถานะงาน</text>
+
+            <line class="lead hot" x1="716" y1="106" x2="784" y2="106" marker-end="url(#a1)"/>
+            <text class="lbl hotf" x="750" y="96" text-anchor="middle">HTTPS</text>
+
+            <text class="lbl" x="14" y="230" text-anchor="start">ไม่มี: เซิร์ฟเวอร์ · ฐานข้อมูลภายนอก · object storage · Redis · บัญชีผู้ใช้ · การเก็บสถิติการใช้งาน</text>
+            <text class="lbl" x="14" y="250" text-anchor="start">ผลลัพธ์: ไม่มีอะไรให้ดูแล และเจ้าของโปรเจกต์ไม่เห็นข้อมูลของผู้ใช้เลยแม้แต่นิดเดียว</text>
+          </svg>
+        </div>
+        <figcaption>
+          กรอบประบอกขอบเขตความเป็นส่วนตัว — คลิป สคริปต์ และคีย์ ไม่เคยออกจากเครื่องผู้ใช้
+          ลูกศรเดียวที่ออกนอกกรอบคือการเรียก TTS/LLM ซึ่งผู้ใช้เป็นคนจ่ายและควบคุมเอง
+        </figcaption>
+      </figure>
+
+      <div class="callout danger">
+        <span class="lbl">ข้อบังคับ ห้ามพลาด</span>
+        <p>
+          <strong>เซิร์ฟเวอร์ต้อง bind <code>127.0.0.1</code> เท่านั้น ห้าม <code>0.0.0.0</code></strong>
+          ถ้า bind ทุก interface แล้วผู้ใช้ไปนั่งร้านกาแฟ คนอื่นในวงเดียวกันเปิดหน้าเว็บนี้ได้
+          และใช้ API key ของเขายิง TTS ได้ฟรี ๆ — ค่านี้ต้อง hardcode ไม่ใช่ config
+        </p>
+      </div>
+    </section>
+
+    <!-- 03 -->
+    <section id="s03">
+      <h2><span class="num">§03</span>Tech stack และเหตุผล</h2>
+      <p>
+        เกณฑ์ตัดสินเปลี่ยนไปจากเวอร์ชัน SaaS อย่างสิ้นเชิง — เดิมคือ "สเกลได้ไหม"
+        ตอนนี้คือ <span class="hl">"คนที่ไม่ใช่โปรแกรมเมอร์ติดตั้งผ่านไหม"</span>
+        ทุกบรรทัดข้างล่างเลือกด้วยเกณฑ์นี้
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:150px">ชั้น</th><th style="width:210px">เลือกใช้</th><th>เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td>Web server</td><td><code>node:http</code> ล้วน ๆ</td><td><strong>ไม่มี dependency</strong> → <code>npm install</code> เร็วและแทบไม่มีอะไรพังได้ · การอัปโหลดใช้ <code>PUT</code> ไฟล์ดิบทีละไฟล์ ไม่ต้องมีตัว parse multipart</td></tr>
+            <tr><td>Frontend</td><td>Vite + React · <strong>commit ไฟล์ที่ build แล้ว</strong></td><td>ผู้ใช้ปลายทางไม่ต้อง build และไม่ต้องลง dev dependency เลย · คนที่จะแก้ UI ค่อยรัน <code>npm run dev</code></td></tr>
+            <tr><td>ฐานข้อมูล</td><td><code>node:sqlite</code></td><td>ติดมากับ Node 22+ ไม่ต้องติดตั้งอะไร · ไฟล์เดียว ก็อปไปไหนก็ได้ · เขียนผ่าน adapter เผื่อสลับกลับไป Mongo ตอนขึ้น cloud</td></tr>
+            <tr><td>คิวงาน</td><td>คิวในโปรเซส + สถานะใน SQLite</td><td>ผู้ใช้คนเดียว รันทีละ 1–2 งาน · Redis เป็นของที่ต้องติดตั้งเพิ่มโดยไม่ได้อะไรกลับมา</td></tr>
+            <tr><td>ffmpeg</td><td>โหลด binary ให้อัตโนมัติตอนเปิดครั้งแรก</td><td><strong>นี่คือด่านตายของ Windows user</strong> · ถ้าเครื่องมี ffmpeg อยู่แล้วก็ใช้ตัวนั้น</td></tr>
+            <tr><td>เลน B</td><td><code>hyperframes</code></td><td>dependency ตัวเดียวของโปรเจกต์ · มันโหลด Chrome ของตัวเอง ผู้ใช้ไม่ต้องจัดการ</td></tr>
+            <tr><td>ฟอนต์</td><td>Kanit ในโฟลเดอร์โปรเจกต์</td><td>เลน B ฝังเป็น data URI · เลน A ชี้ผ่าน <code>fontsdir</code> — ไม่ต้องติดตั้งฟอนต์ลงเครื่อง</td></tr>
+            <tr><td>TTS / LLM</td><td>Gemini เป็นหลัก · Claude ถ้ามี key</td><td>ผู้ใช้ขอ Gemini key ฟรีได้ใน 2 นาที · ถ้าบังคับให้มี Claude key ด้วยจะเสียคนไปครึ่ง</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">ผลรวมของการเลือกทั้งหมด</span>
+        <p>
+          <code>node_modules</code> ของผู้ใช้ปลายทางมี <strong>hyperframes ตัวเดียว</strong>
+          และของนั้นจำเป็นเฉพาะตอนใช้สไตล์เลน B — คนที่ใช้แค่สไตล์ธรรมดารันได้โดยไม่ต้อง
+          <code>npm install</code> อะไรเลย
+        </p>
+      </div>
+    </section>
+
+    <!-- 04 -->
+    <section id="s04">
+      <h2><span class="num">§04</span>Pipeline</h2>
+      <p>
+        เหมือนเวอร์ชัน SaaS ทุกประการ ยกเว้นขั้นที่ 1 (ไม่มี presigned upload) และขั้นที่ 10
+        (ไม่ต้องอัปขึ้น cloud ไม่ต้องตัดเครดิต) รายละเอียดอัลกอริทึมอยู่ใน
+        <code>blueprint.html</code> §05 ซึ่งยังใช้ได้ทั้งหมด
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th class="n" style="width:44px">#</th><th style="width:140px">ขั้นตอน</th><th>สิ่งที่ทำ</th><th style="width:92px" class="n">งบเวลา</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td>Ingest</td><td>รับไฟล์จาก <code>PUT</code> หรืออ่านจากโฟลเดอร์ <code>input/</code> → probe → normalize → proxy + thumbnail</td><td class="n">3 วิ/คลิป</td></tr>
+            <tr><td class="n">2</td><td>Analyze</td><td>scene detection · ตรวจซับเบิร์นเดิม · วัด luminance</td><td class="n">2 วิ/คลิป</td></tr>
+            <tr><td class="n">3</td><td>Script</td><td>brief → LLM → 5 เวอร์ชัน แต่ละเวอร์ชันแบ่งเป็นท่อน</td><td class="n">6–10 วิ</td></tr>
+            <tr><td class="n">4</td><td>Voice</td><td>TTS ทีละท่อน (ขนาน 1 สำหรับ Gemini free tier) → วัดความยาวจริง → แคช</td><td class="n">10–25 วิ</td></tr>
+            <tr><td class="n">5</td><td>Timeline</td><td>prefix-sum → จับคู่ท่อน↔ช็อต → duration fitting</td><td class="n">&lt; 1 วิ</td></tr>
+            <tr><td class="n">6</td><td>Caption</td><td>คอมไพล์ <code>.ass</code> (เลน A) หรือ composition HTML แล้วเรนเดอร์เลเยอร์ alpha (เลน B)</td><td class="n">0 วิ / 60–90 วิ</td></tr>
+            <tr><td class="n">7</td><td>Compose</td><td>ต่อคลิปตาม timeline</td><td class="n">3–6 วิ</td></tr>
+            <tr><td class="n">8</td><td>Mix</td><td>ต่อเสียง + normalize −14 LUFS</td><td class="n">2 วิ</td></tr>
+            <tr><td class="n">9</td><td>Package</td><td>เบิร์นหรือวางทับซับ + mux + poster + .srt</td><td class="n">8 วิ</td></tr>
+            <tr><td class="n">10</td><td>Deliver</td><td>เขียนผลลง <code>projects/&lt;id&gt;/out/</code> → แจ้งหน้าเว็บ → มีปุ่มเปิดโฟลเดอร์</td><td class="n">&lt; 1 วิ</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">
+        รวมเลน A ≈ <strong>25–40 วินาที</strong> · เลน B ≈ <strong>90–130 วินาที</strong>
+        (วัดจริงบนเครื่อง 10 คอร์ · เครื่องผู้ใช้ทั่วไปจะช้ากว่านี้ 1.5–2 เท่า)
+      </p>
+    </section>
+
+    <!-- 05 -->
+    <section id="s05">
+      <h2><span class="num">§05</span>ข้อมูลบนดิสก์และ SQLite</h2>
+      <p>
+        หลักการ: <span class="hl">โฟลเดอร์คือความจริง SQLite เป็นแค่ดัชนี</span>
+        ถ้าไฟล์ <code>.db</code> หายไป ผู้ใช้ยังได้คลิปทุกอันคืนจากโฟลเดอร์ และโปรแกรมสร้างดัชนีใหม่ได้
+        — สำคัญมากสำหรับซอฟต์แวร์ที่รันบนเครื่องคนอื่นซึ่งเราไปกู้ให้ไม่ได้
+      </p>
+
+      <pre><code>ClipPang/
+├── เริ่มโปรแกรม.bat / .command   ดับเบิลคลิกเพื่อเปิด
+├── .env                          GEMINI_API_KEY ของผู้ใช้ (อยู่ใน .gitignore)
+├── data/
+│   ├── clippang.db               SQLite — ดัชนีและสถานะงาน
+│   ├── bin/ffmpeg(.exe)          โหลดอัตโนมัติถ้าเครื่องไม่มี
+│   └── cache/tts/&lt;sha256&gt;.wav    เสียงที่เคยสร้าง ใช้ซ้ำข้ามโปรเจกต์
+├── input/                        หย่อนคลิปไว้ตรงนี้ก็ได้ ไม่ต้องลากขึ้นเว็บ
+└── projects/
+    └── 2026-08-11-หัวชาร์จพกพา/
+        ├── project.json          brief + ค่าที่เลือก (อ่านออกด้วยตา แก้มือได้)
+        ├── src/                  คลิปต้นฉบับที่ normalize แล้ว
+        ├── voice/chunk_00.wav    เสียงรายท่อน
+        └── out/
+            ├── final.mp4  poster.jpg  captions.ass  captions.srt
+            └── report.json</code></pre>
+
+      <h4>ตาราง SQLite</h4>
+      <pre><code>-- ดัชนีของโปรเจกต์ เพื่อให้หน้ารายการโหลดเร็วโดยไม่ต้องอ่านทุกโฟลเดอร์
+CREATE TABLE projects (
+  id           TEXT PRIMARY KEY,      -- = ชื่อโฟลเดอร์
+  title        TEXT NOT NULL,
+  product_json TEXT NOT NULL,         -- brief ทั้งก้อน
+  wizard_step  INTEGER DEFAULT 1,
+  created_at   INTEGER, updated_at INTEGER
+);
+
+CREATE TABLE renders (
+  id           TEXT PRIMARY KEY,
+  project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,         -- draft | final
+  lane         TEXT NOT NULL,         -- ass | hyperframes
+  state        TEXT NOT NULL,         -- queued|ingesting|…|ready|failed|canceled
+  progress     INTEGER DEFAULT 0,
+  timeline_json TEXT,
+  outputs_json TEXT,
+  error_json   TEXT,
+  attempts     INTEGER DEFAULT 0,
+  created_at   INTEGER, started_at INTEGER, finished_at INTEGER
+);
+CREATE INDEX renders_by_project ON renders(project_id, created_at DESC);
+CREATE INDEX renders_pending    ON renders(state, created_at);
+
+-- แคชเสียง: คีย์เดียวกับชื่อไฟล์ใน data/cache/tts
+CREATE TABLE voice_cache (
+  key TEXT PRIMARY KEY,               -- sha256(provider|voice|speed|text)
+  duration_ms INTEGER NOT NULL,
+  provider TEXT, voice TEXT, created_at INTEGER
+);
+
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);  -- ffmpeg path, เวอร์ชัน, ฯลฯ</code></pre>
+
+      <div class="callout">
+        <span class="lbl">Adapter เผื่ออนาคต</span>
+        <p>
+          ทุกการเข้าถึงข้อมูลผ่าน interface เดียว (<code>listProjects</code>, <code>saveRender</code>, …)
+          โดยมี <code>SqliteStore</code> เป็นตัวเดียวที่ implement ตอนนี้ ตอนขึ้น cloud ค่อยเขียน
+          <code>MongoStore</code> เพิ่ม โดยไม่ต้องแตะโค้ด pipeline เลย —
+          <strong>ห้ามเรียก SQL ตรงจากที่อื่นนอกจากไฟล์ store</strong>
+        </p>
+      </div>
+    </section>
+
+    <!-- 06 -->
+    <section id="s06">
+      <h2><span class="num">§06</span>API ภายใน</h2>
+      <p>ไม่มี auth เพราะฟังแค่ localhost · ทุก path ขึ้นต้น <code>/api</code></p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:62px">Method</th><th style="width:270px">Path</th><th>หน้าที่</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/setup/status</code></td><td>เช็ค ffmpeg · API key · ฟอนต์ · เวอร์ชัน Node → ใช้วาดหน้า first-run</td></tr>
+            <tr><td>POST</td><td><code>/api/setup/ffmpeg</code></td><td>สั่งโหลด ffmpeg (สตรีมความคืบหน้า)</td></tr>
+            <tr><td>POST</td><td><code>/api/setup/key</code></td><td>บันทึก API key ลง <code>.env</code> แล้วยิงทดสอบจริงหนึ่งครั้ง</td></tr>
+            <tr><td>PUT</td><td><code>/api/assets/:filename</code></td><td>อัปโหลดคลิป — <strong>ส่ง body เป็นไฟล์ดิบ</strong> ไม่ใช่ multipart</td></tr>
+            <tr><td>GET</td><td><code>/api/input</code></td><td>รายการไฟล์ในโฟลเดอร์ <code>input/</code></td></tr>
+            <tr><td>GET/POST</td><td><code>/api/projects</code></td><td>ลิสต์ / สร้างโปรเจกต์</td></tr>
+            <tr><td>GET/PATCH/DELETE</td><td><code>/api/projects/:id</code></td><td>อ่าน / แก้ brief และค่าที่เลือก / ลบ</td></tr>
+            <tr><td>POST</td><td><code>/api/projects/:id/script</code></td><td>สร้างสคริปต์ 5 เวอร์ชัน</td></tr>
+            <tr><td>POST</td><td><code>/api/projects/:id/script/:vid/chunk/:i</code></td><td>regenerate เฉพาะท่อนเดียว</td></tr>
+            <tr><td>GET</td><td><code>/api/voices</code> · <code>/api/styles</code></td><td>คลังเสียงและคลังสไตล์</td></tr>
+            <tr><td>POST</td><td><code>/api/voices/:id/preview</code></td><td>ฟังตัวอย่างเสียง (แคช)</td></tr>
+            <tr><td>POST</td><td><code>/api/projects/:id/renders</code></td><td>สั่งเรนเดอร์ <code>{kind: draft|final}</code> → <code>202 {renderId}</code></td></tr>
+            <tr><td>POST</td><td><code>/api/renders/:id/promote</code></td><td>โปรโมตร่างเป็นตัวจริง — ใช้ timeline และเสียงเดิม ไม่ยิง TTS ซ้ำ</td></tr>
+            <tr><td>GET</td><td><code>/api/renders/:id/events</code></td><td><strong>SSE</strong> — ใช้ได้เต็มที่เพราะไม่มี proxy คั่น</td></tr>
+            <tr><td>POST</td><td><code>/api/renders/:id/cancel</code></td><td>ยกเลิกงาน (ฆ่า child process ที่รันอยู่)</td></tr>
+            <tr><td>POST</td><td><code>/api/open</code></td><td>เปิดโฟลเดอร์ผลลัพธ์ด้วย explorer/finder — ฟีเจอร์เล็กที่คนชอบมาก</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 07 -->
+    <section id="s07">
+      <h2><span class="num">§07</span>คิวงานในโปรเซส</h2>
+      <ul>
+        <li><strong>รันพร้อมกันได้ 1 งาน</strong> สำหรับเลน B และ 2 งานสำหรับเลน A — ผู้ใช้กำลังใช้เครื่องอยู่ด้วย ห้ามกินเครื่องจนใช้งานอย่างอื่นไม่ได้</li>
+        <li><strong>คิวร่างได้คิวก่อนคิวตัวจริงเสมอ</strong> — คนกดร่างแล้วนั่งรออยู่หน้าจอ</li>
+        <li><strong>สถานะเขียนลง SQLite ทุกครั้งที่เปลี่ยน</strong> ปิดโปรแกรมแล้วเปิดใหม่ยังเห็นว่างานไหนค้าง</li>
+        <li><strong>ทุกงานทำใน temp dir ของตัวเอง แล้วลบใน <code>finally</code></strong> — ดิสก์เต็มบนเครื่องคนอื่นคือปัญหาที่เราตามไปแก้ไม่ได้</li>
+        <li><strong>จับ SIGINT</strong> ผู้ใช้กด Ctrl+C บ่อยกว่าที่คิด — ต้องฆ่า child process ของ ffmpeg/Chrome ให้หมด ไม่งั้นเหลือ process ผีค้างเครื่อง</li>
+        <li><strong>Gemini free tier ยิงขนานไม่ได้</strong> — TTS ยิงทีละคำขอ และอ่าน <code>retryDelay</code> ที่ Google ส่งกลับมา (วัดมาแล้วในสัปดาห์แรก)</li>
+      </ul>
+    </section>
+
+    <!-- 08 -->
+    <section id="s08">
+      <h2><span class="num">§08</span>First-run setup — ส่วนที่สำคัญที่สุด</h2>
+      <p>
+        กลุ่มเป้าหมายหลักคือคนทั่วไปที่ไม่ใช่สายเทค สำหรับพวกเขา
+        <span class="hl">ความยากทั้งหมดของโปรเจกต์นี้อยู่ในสิบนาทีแรก</span>
+        ถ้าผ่านตรงนี้ไปได้ ที่เหลือคือกดปุ่มตามหน้าเว็บ
+      </p>
+
+      <figure>
+        <div class="figwrap">
+          <svg viewBox="0 0 1000 250" role="img" aria-label="ผังการติดตั้งครั้งแรก: ตรวจ Node แล้วตรวจ ffmpeg ถ้าไม่มีให้ดาวน์โหลดอัตโนมัติ จากนั้นขอ API key ทดสอบคีย์ แล้วเข้าสู่หน้าใช้งาน โดยมีทางออกเมื่อผู้ใช้ยังไม่มีคีย์">
+            <defs>
+              <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <rect class="box" x="8"   y="60" width="150" height="50" rx="3"/>
+            <text class="ttl" x="83"  y="80" text-anchor="middle">ดับเบิลคลิก</text>
+            <text class="sml" x="83"  y="96" text-anchor="middle">เริ่มโปรแกรม.bat</text>
+
+            <rect class="box" x="196" y="60" width="150" height="50" rx="3"/>
+            <text class="ttl" x="271" y="80" text-anchor="middle">ตรวจ Node</text>
+            <text class="sml" x="271" y="96" text-anchor="middle">ไม่มี → เปิดหน้าโหลด</text>
+
+            <rect class="box" x="384" y="60" width="160" height="50" rx="3"/>
+            <text class="ttl" x="464" y="80" text-anchor="middle">ตรวจ ffmpeg</text>
+            <text class="sml" x="464" y="96" text-anchor="middle">ไม่มี → โหลดให้เอง</text>
+
+            <rect class="box" x="582" y="60" width="160" height="50" rx="3"/>
+            <text class="ttl" x="662" y="80" text-anchor="middle">ขอ API key</text>
+            <text class="sml" x="662" y="96" text-anchor="middle">+ ปุ่มทดสอบคีย์</text>
+
+            <rect class="box hot" x="780" y="60" width="180" height="50" rx="3"/>
+            <text class="ttl hotf" x="870" y="80" text-anchor="middle">พร้อมใช้งาน</text>
+            <text class="sml" x="870" y="96" text-anchor="middle">เปิดเบราว์เซอร์ให้เลย</text>
+
+            <line class="lead" x1="160" y1="85" x2="190" y2="85" marker-end="url(#a2)"/>
+            <line class="lead" x1="348" y1="85" x2="378" y2="85" marker-end="url(#a2)"/>
+            <line class="lead" x1="546" y1="85" x2="576" y2="85" marker-end="url(#a2)"/>
+            <line class="lead" x1="744" y1="85" x2="774" y2="85" marker-end="url(#a2)"/>
+
+            <rect class="boxq" x="384" y="150" width="160" height="46" rx="3"/>
+            <text class="sml" x="464" y="170" text-anchor="middle">โหลด 30–80MB</text>
+            <text class="sml" x="464" y="186" text-anchor="middle">แสดง % ให้เห็น</text>
+            <polyline class="leadq" points="464,112 464,146" marker-end="url(#a2)"/>
+
+            <rect class="boxq" x="582" y="150" width="160" height="46" rx="3"/>
+            <text class="sml" x="662" y="170" text-anchor="middle">ยังไม่มีคีย์?</text>
+            <text class="sml" x="662" y="186" text-anchor="middle">ลิงก์ + วิธีขอ 4 ขั้น</text>
+            <polyline class="leadq" points="662,112 662,146" marker-end="url(#a2)"/>
+
+            <text class="lbl" x="8" y="228" text-anchor="start">ทุกกล่องต้องบอกด้วยภาษาคนว่ากำลังทำอะไรและเหลืออีกเท่าไหร่ — หน้าจอค้างเงียบ ๆ คือจุดที่ผู้ใช้เลิกใช้</text>
+          </svg>
+        </div>
+        <figcaption>
+          สองกล่องเส้นประคือจุดที่คนทั่วไปหลุดมากที่สุด จึงต้องมีทางออกในตัวทั้งคู่ —
+          ไม่ใช่แค่ขึ้น error แล้วให้ไปหาเอาเองใน Google
+        </figcaption>
+      </figure>
+
+      <h4>รายละเอียดที่ตัดสินว่าคนจะใช้ได้หรือไม่ได้</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:170px">เรื่อง</th><th>ทำอย่างไร</th></tr></thead>
+          <tbody>
+            <tr><td>ffmpeg</td><td>หาตามลำดับ: <code>data/bin/</code> → PATH ของเครื่อง → ดาวน์โหลด · Windows ดึงจาก gyan.dev, macOS/Linux ใช้ static build · ตรวจว่ามี libass ก่อนบันทึกว่าใช้ได้</td></tr>
+            <tr><td>Node ไม่มี</td><td><code>.bat</code> ตรวจก่อน ถ้าไม่มีให้เปิดหน้าดาวน์โหลด Node พร้อมข้อความภาษาไทย ไม่ใช่ปล่อยให้ขึ้น <code>'node' is not recognized</code> แล้วหน้าต่างปิดหายไป</td></tr>
+            <tr><td>API key</td><td>ฟอร์มมีลิงก์ไป aistudio.google.com พร้อมขั้นตอน 4 ข้อ · กด "ทดสอบ" แล้วยิง TTS ประโยคสั้นจริง ๆ ให้ฟัง — เห็นว่าใช้ได้ทันที ไม่ต้องเดา</td></tr>
+            <tr><td>เก็บ key</td><td>เขียนลง <code>.env</code> ที่อยู่ใน <code>.gitignore</code> แล้ว · ห้ามส่งค่า key กลับไปหน้าเว็บ แสดงแค่ 4 ตัวท้าย</td></tr>
+            <tr><td>พอร์ตชนกัน</td><td>ลอง 4321 → 4322 → 4323 … แล้วเปิดเบราว์เซอร์ไปพอร์ตที่ได้จริง</td></tr>
+            <tr><td>ข้อความ error</td><td>ภาษาไทย บอกทางแก้เสมอ · "โหลด ffmpeg ไม่สำเร็จ (เน็ตหลุด?) กดลองใหม่ หรือดาวน์โหลดเองแล้ววางไว้ที่ <code>data/bin/</code>"</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 09 -->
+    <section id="s09">
+      <h2><span class="num">§09</span>หน้าจอ</h2>
+      <pre><code>/                      หน้าแรก — รายการโปรเจกต์ + ปุ่มสร้างใหม่ + สถานะงานที่รันอยู่
+/setup                 first-run wizard (บังคับผ่านก่อนใช้งานครั้งแรก)
+/p/:id                 โปรเจกต์หนึ่งอัน — wizard 5 สเต็ปในหน้าเดียว เลื่อนดูได้
+   ① คลิป              ลากวาง หรือเลือกจากโฟลเดอร์ input/
+   ② สินค้า            ฟอร์ม brief
+   ③ เสียง             การ์ดเสียง + ฟังตัวอย่าง + สไลเดอร์ความเร็ว
+   ④ สคริปต์+สไตล์      5 การ์ดเทียบกัน · เลือกสไตล์ · เลือกตำแหน่งซับ บน/กลาง/ล่าง
+   ⑤ ผลลัพธ์            ร่างเป็นกริด → เลือก → เรนเดอร์ตัวจริง → เปิดโฟลเดอร์
+/styles                แกลเลอรีสไตล์ เล่นพรีวิววนอัตโนมัติ
+/settings              API key · โฟลเดอร์ที่ใช้ · เวอร์ชัน · ปุ่มล้างแคช</code></pre>
+      <ul>
+        <li>คำว่า "เลน A / เลน B" ห้ามโผล่ใน UI — ผู้ใช้เห็นแค่ <em>ร่าง</em> กับ <em>ตัวจริง</em></li>
+        <li>ทุกที่ที่ใช้เวลานานต้องบอกเป็นภาษาคน: "กำลังพากย์ท่อนที่ 5 จาก 12"</li>
+        <li>ปุ่ม "เปิดโฟลเดอร์" ในหน้าผลลัพธ์ — ผู้ใช้กลุ่มนี้ทำงานกับไฟล์ ไม่ใช่กับลิงก์</li>
+      </ul>
+    </section>
+
+    <!-- 10 -->
+    <section id="s10">
+      <h2><span class="num">§10</span>ความปลอดภัยและความเป็นส่วนตัว</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:200px">เรื่อง</th><th>มาตรการ</th></tr></thead>
+          <tbody>
+            <tr><td>bind address</td><td><strong><code>127.0.0.1</code> hardcode</strong> ไม่ให้ config เปลี่ยน — กัน API key ของผู้ใช้ถูกคนอื่นในวง wifi เอาไปใช้</td></tr>
+            <tr><td>API key</td><td>อยู่ใน <code>.env</code> บนเครื่องผู้ใช้เท่านั้น · ไม่เคยส่งกลับหน้าเว็บ · ไม่เคยเข้า log</td></tr>
+            <tr><td>Path traversal</td><td>ทุก path ที่มาจากคำขอต้อง resolve แล้วเช็คว่ายังอยู่ใต้โฟลเดอร์โปรเจกต์ — <code>PUT /api/assets/../../.env</code> ต้องถูกปฏิเสธ</td></tr>
+            <tr><td>ชนิดไฟล์</td><td>ตรวจ magic bytes ไม่เชื่อนามสกุล · จำกัด 500MB ต่อไฟล์</td></tr>
+            <tr><td><code>/api/open</code></td><td>เปิดได้เฉพาะโฟลเดอร์ใต้ <code>projects/</code> เท่านั้น ห้ามรับ path อิสระ</td></tr>
+            <tr><td>ข้อมูลผู้ใช้</td><td>ไม่มี telemetry ไม่มี analytics ไม่มีอะไรส่งกลับมาหาเจ้าของโปรเจกต์เลย — เขียนไว้ใน README ให้ชัด</td></tr>
+            <tr><td>เนื้อหา</td><td>README ต้องเตือนเรื่องลิขสิทธิ์คลิปที่ผู้ใช้เอามาใช้ และความเสี่ยงเรื่อง unoriginal content ของแพลตฟอร์ม</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section id="s11">
+      <h2><span class="num">§11</span>โครงสร้าง repo</h2>
+      <pre><code>clippang/
+├── เริ่มโปรแกรม.bat            Windows — ตรวจ Node แล้วรัน
+├── start.command               macOS
+├── start.sh                    Linux
+├── package.json                dependency เดียว: hyperframes (optional)
+├── server/
+│   ├── index.mjs               http + routing + เปิดเบราว์เซอร์
+│   ├── setup.mjs               ตรวจของ · โหลด ffmpeg · ทดสอบ key
+│   ├── queue.mjs               คิวในโปรเซส
+│   └── store/
+│       ├── index.mjs           interface
+│       └── sqlite.mjs          ตัวเดียวที่ implement ตอนนี้
+├── pipeline/                   ยกมาจาก spike/src ทั้งชุด
+│   ├── core.mjs  media.mjs  script.mjs  tts.mjs  ass.mjs
+│   ├── hyperframes.mjs  render.mjs
+│   └── styles/*.json
+├── web/
+│   ├── src/                    React — ต้องมี dev dependency เฉพาะคนแก้ UI
+│   └── dist/                   ★ commit ไฟล์ที่ build แล้ว ผู้ใช้ไม่ต้อง build
+├── fonts/Kanit-*.ttf
+├── vendor/gsap.min.js
+└── docs/                       blueprint ทั้งสองเวอร์ชัน</code></pre>
+      <p class="sub">
+        <code>pipeline/</code> คือโค้ดจาก spike ที่ทดสอบแล้วทั้งหมด ย้ายมาโดยแทบไม่ต้องแก้ —
+        นี่คือผลตอบแทนจากการที่สัปดาห์แรกเขียนมันโดยไม่แตะ I/O ของ CLI
+      </p>
+    </section>
+
+    <!-- 12 -->
+    <section id="s12">
+      <h2><span class="num">§12</span>แผนส่งงาน</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:110px">ช่วง</th><th style="width:190px">Milestone</th><th>ส่งอะไร</th><th style="width:170px">ผ่านเมื่อ</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td>โครง + pipeline ย้ายบ้าน</td><td>repo ใหม่ · ย้าย <code>spike/src</code> → <code>pipeline/</code> · SQLite store · คิวในโปรเซส · API หลัก</td><td>ยิง API แล้วได้คลิปเหมือนที่ CLI เคยทำ</td></tr>
+            <tr><td class="n">2</td><td>First-run setup</td><td>ตรวจของ · โหลด ffmpeg ทุก OS · หน้ากรอกและทดสอบ key · สคริปต์เปิด 3 แบบ</td><td>เครื่องเปล่าที่มีแค่ Node ใช้งานได้ใน 10 นาที</td></tr>
+            <tr><td class="n">3</td><td>UI wizard</td><td>React 5 สเต็ป · SSE progress · แกลเลอรีสไตล์ · หน้าผลลัพธ์</td><td>คนนอกทำคลิปได้เองโดยไม่ต้องสอน</td></tr>
+            <tr><td class="n">4</td><td>เก็บงาน + ปล่อย</td><td>ข้อความ error ภาษาไทยทุกจุด · README + วิดีโอสอน · ทดสอบบน Windows เครื่องเปล่า</td><td>คนทดสอบ 3 คนติดตั้งเองได้โดยไม่ถามอะไรเลย</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 13 -->
+    <section id="s13">
+      <h2><span class="num">§13</span>ความเสี่ยง</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:230px">ความเสี่ยง</th><th style="width:80px">ระดับ</th><th>การรับมือ</th></tr></thead>
+          <tbody>
+            <tr><td>ติดตั้งไม่ผ่าน แล้วเงียบหายไป</td><td><span class="tag t-risk">สูง</span></td><td>ความเสี่ยงอันดับหนึ่งของเวอร์ชันนี้ · ต้องทดสอบบน Windows เครื่องเปล่าจริง ไม่ใช่เครื่อง dev ที่มีของครบ · มีวิดีโอสอน 3 นาที</td></tr>
+            <tr><td>Gemini free tier ยิงขนานไม่ได้ / โควตาหมด</td><td><span class="tag t-risk">สูง</span></td><td>ยิงทีละคำขอ + อ่าน <code>retryDelay</code> + แคชทุกท่อน · ขึ้นข้อความบอกตรง ๆ ว่าโควตาหมดและรอได้เมื่อไหร่</td></tr>
+            <tr><td>เครื่องผู้ใช้ช้าเกินจนเลน B ใช้ไม่ได้</td><td><span class="tag t-v11">กลาง</span></td><td>วัดเวลาเรนเดอร์ครั้งแรกแล้วจำไว้ · ถ้าเกิน 5 นาทีให้แนะนำสไตล์เลน A พร้อมบอกเหตุผล</td></tr>
+            <tr><td>ผู้ใช้ทำ <code>.env</code> หลุดขึ้น GitHub</td><td><span class="tag t-v11">กลาง</span></td><td><code>.gitignore</code> ตั้งแต่ commit แรก · README เตือน · setup ไม่แสดง key เต็มที่ไหนเลย</td></tr>
+            <tr><td>ลิขสิทธิ์คลิปที่ผู้ใช้เอามาใช้</td><td><span class="tag t-v11">กลาง</span></td><td>เตือนใน README และในหน้าอัปโหลด · ความรับผิดชอบอยู่ที่ผู้ใช้ เพราะเขารันบนเครื่องตัวเอง</td></tr>
+            <tr><td>รองรับสามระบบปฏิบัติการ</td><td><span class="tag t-v11">กลาง</span></td><td>ทุก path ผ่าน <code>node:path</code> · ทดสอบ Windows เป็นหลัก (กลุ่มเป้าหมายส่วนใหญ่)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout good">
+        <span class="lbl">สิ่งที่หายไปพร้อมการเปลี่ยนทิศ</span>
+        <p>
+          ความเสี่ยงเดิม 4 ข้อหายไปเลย: Plesk รันงานหนักไม่ได้ · SSE โดน buffer · ดิสก์เซิร์ฟเวอร์เต็ม ·
+          ต้นทุน AI บานเพราะผู้ใช้กด regenerate รัว — <strong>ทั้งหมดกลายเป็นปัญหาของเครื่องผู้ใช้เอง
+          ซึ่งเขาควบคุมได้และเราไม่ต้องจ่าย</strong>
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    ClipPang Local Blueprint v1.0 · 11 สิงหาคม 2026 · แทนที่ <code>blueprint.html</code> ซึ่งเป็นเวอร์ชัน SaaS ที่พักไว้
+    — ตัวเลขเวลาและต้นทุนทั้งหมดมาจากการวัดจริงในสัปดาห์แรก ไม่ใช่การประมาณ
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var sections = Array.prototype.slice.call(document.querySelectorAll("main section"));
+    var titles = sections.map(function (s) {
+      var h = s.querySelector("h2");
+      var num = h.querySelector(".num").textContent.trim();
+      var clone = h.cloneNode(true);
+      clone.querySelector(".num").remove();
+      return { id: s.id, num: num, text: clone.textContent.trim() };
+    });
+    function build(target) {
+      target.innerHTML = titles.map(function (t) {
+        return '<a href="#' + t.id + '" data-for="' + t.id + '"><span>' + t.num + '</span><span>' + t.text + '</span></a>';
+      }).join("");
+    }
+    build(document.getElementById("toc"));
+    build(document.getElementById("toc-m"));
+    var links = Array.prototype.slice.call(document.querySelectorAll('.rail a[data-for]'));
+    function setActive(id) { links.forEach(function (a) { a.classList.toggle("on", a.dataset.for === id); }); }
+    if ("IntersectionObserver" in window) {
+      var seen = {};
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
+        var best = null, bestV = 0;
+        sections.forEach(function (s) { var v = seen[s.id] || 0; if (v > bestV) { bestV = v; best = s.id; } });
+        if (best) setActive(best);
+      }, { rootMargin: "-10% 0px -70% 0px", threshold: [0, .25, .5, 1] });
+      sections.forEach(function (s) { io.observe(s); });
+    }
+    setActive("s00");
+  })();
+</script>

@@ -1,0 +1,196 @@
+"use client";
+
+import Link from "next/link";
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Clock3,
+  Download,
+  Film,
+  FolderOpen,
+  MoreHorizontal,
+  Play,
+  Plus,
+  Sparkles,
+  UploadCloud,
+  WandSparkles,
+} from "lucide-react";
+import { AppShell } from "./AppShell";
+
+const projects = [
+  {
+    title: "หัวชาร์จพกพาแม่เหล็ก",
+    meta: "29 วินาที · ซับป๊อปเหลือง",
+    status: "พร้อมดาวน์โหลด",
+    statusClass: "ready",
+    image: "/clippang-sample-poster.jpg",
+    href: "/p/charger",
+    updated: "12 นาทีที่แล้ว",
+  },
+  {
+    title: "เซรั่มผิวโกลว์ 7 วัน",
+    meta: "42 วินาที · ซับมินิมอล",
+    status: "ร่าง 3 เวอร์ชัน",
+    statusClass: "draft",
+    image: "/clippang-sample-poster.jpg",
+    href: "/p/serum",
+    updated: "เมื่อวาน 18:24",
+  },
+  {
+    title: "แก้วเก็บความเย็น 890 ml",
+    meta: "กำลังสร้างเสียงพากย์",
+    status: "กำลังทำ 58%",
+    statusClass: "running",
+    image: "/clippang-sample-poster.jpg",
+    href: "/p/cup",
+    updated: "กำลังทำงาน",
+  },
+];
+
+export function Dashboard() {
+  return (
+    <AppShell>
+      <div className="dashboard page-stack">
+        <section className="dashboard-heading">
+          <div>
+            <p className="eyebrow">แดชบอร์ดครีเอเตอร์</p>
+            <h1>สวัสดีครับ ปังปอนด์ <span aria-hidden="true">👋</span></h1>
+            <p>เปลี่ยนคลิปสินค้าดิบให้พร้อมปักตะกร้า—เสียงพากย์ ซับ และไฟล์ส่งออก ครบในที่เดียว</p>
+          </div>
+          <Link href="/p/new" className="button button-primary desktop-heading-cta">
+            <Plus size={18} />
+            สร้างคลิปใหม่
+          </Link>
+        </section>
+
+        <section className="creator-hero">
+          <div className="hero-copy">
+            <span className="hero-pill"><Sparkles size={14} /> AI ช่วยคิดให้ครบทุกท่อน</span>
+            <h2>คลิปพร้อมขาย<br /><mark>ในไม่กี่นาที</mark></h2>
+            <p>
+              วางคลิป กรอกจุดขาย แล้วเลือกเสียงที่ใช่ ClipPang จะสร้างสคริปต์ 5 แบบ
+              พร้อมซับคาราโอเกะให้คุณเลือกก่อนเรนเดอร์จริง
+            </p>
+            <div className="hero-actions">
+              <Link href="/p/new" className="button button-dark">
+                <WandSparkles size={18} />
+                เริ่มสร้างคลิป
+              </Link>
+              <Link href="/styles" className="button button-ghost-dark">
+                ดูสไตล์ซับ <ArrowRight size={17} />
+              </Link>
+            </div>
+            <div className="hero-proof">
+              <span><Check size={14} /> ไม่ต้องตัดต่อเป็น</span>
+              <span><Check size={14} /> ข้อมูลอยู่บนเครื่องคุณ</span>
+            </div>
+          </div>
+
+          <div className="hero-studio" aria-label="ตัวอย่างก่อนและหลังใช้ ClipPang">
+            <div className="hero-grid-lines" aria-hidden="true" />
+            <div className="phone-preview hero-phone">
+              <video
+                src="/clippang-sample.mp4"
+                poster="/clippang-sample-poster.jpg"
+                muted
+                playsInline
+                loop
+                autoPlay
+                aria-label="ตัวอย่างคลิปสินค้าที่ใส่ซับแล้ว"
+              />
+              <span className="preview-badge"><Play size={10} fill="currentColor" /> 00:29</span>
+              <div className="preview-caption preview-caption-pop">
+                พกง่าย <em>ติดแน่น</em>ทุกที่
+              </div>
+            </div>
+            <div className="floating-card floating-script">
+              <span className="float-icon"><Sparkles size={16} /></span>
+              <div><small>AI SCRIPT</small><b>พร้อมแล้ว 5 แบบ</b></div>
+              <Check size={17} className="float-check" />
+            </div>
+            <div className="floating-card floating-voice">
+              <span className="wave-mini"><i/><i/><i/><i/><i/></span>
+              <div><small>VOICEOVER</small><b>เสียงเมษา · สดใส</b></div>
+            </div>
+            <div className="hero-sticker">ขาย<br />ปัง!</div>
+          </div>
+        </section>
+
+        <section className="dashboard-grid">
+          <div className="projects-panel panel">
+            <div className="section-heading">
+              <div>
+                <h2>โปรเจกต์ล่าสุด</h2>
+                <p>กลับมาทำต่อหรือดาวน์โหลดไฟล์ที่พร้อมแล้ว</p>
+              </div>
+              <Link href="/" className="text-link">ดูทั้งหมด <ChevronRight size={15} /></Link>
+            </div>
+
+            <div className="project-list">
+              {projects.map((project, index) => (
+                <Link href={project.href} className="project-row" key={project.title}>
+                  <div className="project-thumb">
+                    <img src={project.image} alt="" />
+                    {index === 2 && <span className="project-progress-ring">58</span>}
+                  </div>
+                  <div className="project-main">
+                    <h3>{project.title}</h3>
+                    <p>{project.meta}</p>
+                    <span className={`project-status ${project.statusClass}`}>
+                      <i /> {project.status}
+                    </span>
+                  </div>
+                  <time>{project.updated}</time>
+                  <button type="button" className="row-more" aria-label={`ตัวเลือก ${project.title}`}>
+                    <MoreHorizontal size={19} />
+                  </button>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <aside className="activity-column">
+            <div className="running-card panel-dark">
+              <div className="running-top">
+                <span className="live-pill"><i /> กำลังทำงาน</span>
+                <Clock3 size={18} />
+              </div>
+              <h3>แก้วเก็บความเย็น 890 ml</h3>
+              <p>กำลังพากย์ท่อนที่ 5 จาก 12</p>
+              <div className="running-progress"><span style={{ width: "58%" }} /></div>
+              <div className="running-meta"><b>58%</b><span>เหลือประมาณ 34 วินาที</span></div>
+              <Link href="/p/cup" className="running-link">ดูความคืบหน้า <ArrowRight size={16} /></Link>
+            </div>
+
+            <div className="quick-card panel">
+              <div className="section-heading compact"><h2>ทางลัด</h2></div>
+              <Link href="/p/new" className="quick-link">
+                <span className="quick-icon yellow"><UploadCloud size={18} /></span>
+                <span><b>วางคลิปใหม่</b><small>MP4, MOV สูงสุด 500 MB</small></span>
+                <ChevronRight size={16} />
+              </Link>
+              <Link href="/" className="quick-link">
+                <span className="quick-icon green"><FolderOpen size={18} /></span>
+                <span><b>เปิดโฟลเดอร์ผลงาน</b><small>ดูไฟล์ที่เรนเดอร์แล้ว</small></span>
+                <ChevronRight size={16} />
+              </Link>
+              <Link href="/styles" className="quick-link">
+                <span className="quick-icon purple"><Film size={18} /></span>
+                <span><b>เลือกสไตล์โปรด</b><small>พรีวิวซับ 4 รูปแบบ</small></span>
+                <ChevronRight size={16} />
+              </Link>
+            </div>
+          </aside>
+        </section>
+
+        <section className="stats-strip" aria-label="สถิติการใช้งาน">
+          <div><span className="stat-icon"><Film size={18} /></span><p><small>คลิปเดือนนี้</small><b>12</b></p></div>
+          <div><span className="stat-icon"><Clock3 size={18} /></span><p><small>เวลาที่ประหยัด</small><b>4.8 ชม.</b></p></div>
+          <div><span className="stat-icon"><Download size={18} /></span><p><small>ส่งออกสำเร็จ</small><b>98%</b></p></div>
+          <div className="stats-message"><Sparkles size={18} /><span>คุณสร้างคลิปเร็วขึ้น <b>3.2 เท่า</b> จากสัปดาห์แรก</span></div>
+        </section>
+      </div>
+    </AppShell>
+  );
+}
