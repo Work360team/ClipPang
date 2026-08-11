@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import {
   Check,
@@ -12,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppShell } from "../components/AppShell";
+import { HardLink as Link } from "../components/HardLink";
 
 type CaptionStyle = {
   id: string;

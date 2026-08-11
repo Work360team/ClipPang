@@ -60,3 +60,17 @@ test("setup home action bypasses the broken RSC client transition", async () => 
   assert.match(setupPage, /window\.location\.assign\("\/"\)/);
   assert.doesNotMatch(setupPage, /from "next\/link"/);
 });
+
+test("local app navigation avoids Vinext RSC prefetch transitions", async () => {
+  const files = [
+    "../app/components/AppShell.tsx",
+    "../app/components/Dashboard.tsx",
+    "../app/components/ProjectWizard.tsx",
+    "../app/styles/page.tsx",
+  ];
+  const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
+  for (const source of sources) assert.doesNotMatch(source, /from "next\/link"/);
+
+  const hardLink = await readFile(new URL("../app/components/HardLink.tsx", import.meta.url), "utf8");
+  assert.match(hardLink, /return <a href=\{href\}[^>]*>\{children\}<\/a>/);
+});

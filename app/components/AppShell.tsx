@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
+import { HardLink as Link } from "./HardLink";
 
 const navItems = [
   { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
@@ -209,7 +209,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="topbar-actions">
-            <Link href={engineState === "connected" ? "/setup" : "/setup"} className={`engine-chip engine-${engineState}`} title={engineState === "connected" ? "ClipPang Local เชื่อมต่ออยู่" : "หน้านี้เป็นเว็บตัวอย่าง"}>
+            <Link
+              href={engineState === "connected" && setupReady ? "/settings" : "/setup"}
+              className={`engine-chip engine-${engineState}`}
+              title={engineState === "connected" && setupReady ? "เปิดการตั้งค่า ClipPang Local" : engineState === "connected" ? "ตั้งค่า ClipPang Local ให้เสร็จ" : "หน้านี้เป็นเว็บตัวอย่าง"}
+            >
               <Radio size={14} />
               {engineState === "connected" ? "LOCAL เชื่อมต่อแล้ว" : engineState === "checking" ? "กำลังเชื่อมต่อ" : "WEB DEMO"}
             </Link>

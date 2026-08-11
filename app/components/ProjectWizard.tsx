@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -40,6 +39,7 @@ import {
   type DragEvent,
 } from "react";
 import { AppShell } from "./AppShell";
+import { HardLink as Link } from "./HardLink";
 import {
   detectLocalEngine,
   localApi,
@@ -169,7 +169,6 @@ const initialBrief: ProductBrief = {
 
 export function ProjectWizard() {
   const params = useParams<{ id?: string }>();
-  const router = useRouter();
   const routeId = typeof params?.id === "string" && params.id !== "new" ? params.id : null;
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
   const [projectId, setProjectId] = useState<string | null>(routeId);
@@ -381,7 +380,7 @@ export function ProjectWizard() {
       stopWatchingRenderRef.current?.();
       previewAudioRef.current?.pause();
     };
-    // routeId is stable for the lifetime of this editor; router.replace should not reset in-flight state.
+    // routeId is stable for the lifetime of this editor; replacing the address should not reset in-flight state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -424,7 +423,7 @@ export function ProjectWizard() {
     if (projectId) return projectId;
     const result = await localApi.createProject({ title: brief.name || fileName || "โปรเจกต์ใหม่", product: projectProduct() });
     setProjectId(result.project.id);
-    router.replace(`/p/${encodeURIComponent(result.project.id)}`);
+    window.history.replaceState(null, "", `/p/${encodeURIComponent(result.project.id)}`);
     return result.project.id;
   };
 
