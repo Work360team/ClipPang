@@ -86,18 +86,32 @@ function parseMaybeJson(value, fallback = null) {
 
 function normalizeProject(project, store) {
   if (!project) return null;
-  const product = project.product ?? project.product_json ?? {};
+  const product = parseMaybeJson(project.product ?? project.product_json ?? {}, {});
+  let currentEditPlanHash = null;
+  let currentEditPlanUsable = true;
+  try {
+    currentEditPlanHash = resolveMediaPlan({}, product, { requireTimeline: true })?.editPlanHash ?? null;
+  } catch {
+    currentEditPlanUsable = false;
+  }
   const renders = (
     store.listProjectRenders?.(project.id)
       ?? store.listRenders?.({ projectId: project.id })
       ?? []
-  ).map((render) => withOutputUrls(render, project));
+  ).map((render) => {
+    const normalized = withOutputUrls(render, project);
+    const renderEditPlanHash = normalized?.config?.editPlanHash ?? null;
+    return {
+      ...normalized,
+      stale: !currentEditPlanUsable || renderEditPlanHash !== currentEditPlanHash,
+    };
+  });
   const wizardStep = project.wizardStep ?? project.wizard_step ?? 1;
   const createdAt = project.createdAt ?? project.created_at ?? null;
   const updatedAt = project.updatedAt ?? project.updated_at ?? null;
   return {
     ...project,
-    product: parseMaybeJson(product, product),
+    product,
     wizardStep,
     wizard_step: wizardStep,
     createdAt,
@@ -181,6 +195,7 @@ function normalizeProductMedia(product) {
     }
     const timeline = normalizeTimelineClips(result.timelineClips, {
       assetNames: result.assets.map((asset) => asset.name),
+      allowEmpty: true,
     });
     result.timelineClips = timeline.clips;
   }

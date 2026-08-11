@@ -389,6 +389,19 @@ test("API exposes string script chunks and converts them back for regeneration",
   assert.deepEqual(patched.project.product, { name: "สินค้าแก้แล้ว" });
   assert.equal(store.getProject(project.id).selectedVoice, "Kore");
 
+  const emptiedTimeline = await responseJson(await apiRequest(api, `/api/projects/${project.id}`, {
+    method: "PATCH",
+    body: {
+      product: {
+        name: "สินค้าแก้แล้ว",
+        assets: [{ name: "ต้นฉบับ.mp4" }],
+        timelineClips: [],
+      },
+    },
+  }));
+  assert.deepEqual(emptiedTimeline.project.product.timelineClips, []);
+  assert.deepEqual(store.getProject(project.id).product.timelineClips, []);
+
   assert.deepEqual(
     pickScript(
       { scriptId: "v1" },
@@ -404,6 +417,14 @@ test("media validators cap uploads/clips and require canonical contiguous order"
     (error) => error.code === "TOO_MANY_SOURCE_ASSETS",
   );
   const assetNames = ["a.mp4"];
+  assert.deepEqual(
+    normalizeTimelineClips([], { assetNames, allowEmpty: true }),
+    { clips: [], totalMs: 0 },
+  );
+  assert.throws(
+    () => normalizeTimelineClips([], { assetNames }),
+    (error) => error.code === "TIMELINE_CLIPS_REQUIRED",
+  );
   assert.throws(
     () => normalizeTimelineClips([
       { id: "one", assetName: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 1_000 },
@@ -555,6 +576,8 @@ test("render rejects overlong plans before enqueue and promotion rejects stale d
   }));
   const draft = await waitForRender(store, draftPayload.renderId, (item) => item.state === "ready");
   assert.match(draft.config.editPlanHash, /^[a-f0-9]{64}$/);
+  const currentProject = await responseJson(await apiRequest(api, `/api/projects/${project.id}`));
+  assert.equal(currentProject.project.renders.find((render) => render.id === draft.id).stale, false);
   store.updateProject(project.id, {
     product: {
       ...initialProduct,
@@ -566,4 +589,6 @@ test("render rejects overlong plans before enqueue and promotion rejects stale d
   const stale = await apiRequest(api, `/api/renders/${draft.id}/promote`, { method: "POST", body: {} });
   assert.equal(stale.status, 409);
   assert.equal((await stale.json()).error.code, "STALE_DRAFT");
+  const editedProject = await responseJson(await apiRequest(api, `/api/projects/${project.id}`));
+  assert.equal(editedProject.project.renders.find((render) => render.id === draft.id).stale, true);
 });

@@ -71,8 +71,12 @@ export function normalizeAssetCatalog(input, { optional = false } = {}) {
  * more than once (for split/repeated sections); each occurrence is a distinct
  * timeline clip.
  */
-export function normalizeTimelineClips(input, { assetNames } = {}) {
-  if (!Array.isArray(input) || input.length === 0) {
+export function normalizeTimelineClips(input, { assetNames, allowEmpty = false } = {}) {
+  if (!Array.isArray(input)) {
+    throw validationError("ข้อมูลไทม์ไลน์ไม่ถูกต้อง กรุณาลองจัดคลิปใหม่", "INVALID_TIMELINE_CLIPS");
+  }
+  if (input.length === 0) {
+    if (allowEmpty) return { clips: [], totalMs: 0 };
     throw validationError("ยังไม่มีชิ้นวิดีโอบนไทม์ไลน์ กรุณาเพิ่มและเรียงคลิปก่อนสร้าง", "TIMELINE_CLIPS_REQUIRED");
   }
   if (input.length > MAX_TIMELINE_CLIPS) {

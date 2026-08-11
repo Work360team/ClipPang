@@ -176,6 +176,7 @@ export interface LocalRender {
   id: string; project_id: string; kind: "draft" | "final"; state: string; progress: number;
   stage?: string | null; message?: string | null; queue_position?: number | null;
   outputs?: Record<string, LocalOutput> | null; error?: { message?: string } | null;
+  stale?: boolean;
 }
 export interface LocalProject {
   id: string; title: string; wizard_step?: number; product?: Record<string, unknown>;
