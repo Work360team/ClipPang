@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { probe, runPipeline } from "../index.mjs";
+import { prepareSources } from "../../server/sources.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workspace = path.resolve(here, "..", "..");
@@ -13,6 +14,23 @@ const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-render-test-"
 const progress = [];
 
 try {
+  const serverPrepareRoot = path.join(projectDir, "server-prepare");
+  const serverInput = path.join(serverPrepareRoot, "input");
+  const serverSourceDir = path.join(serverPrepareRoot, "src");
+  fs.mkdirSync(serverInput, { recursive: true });
+  fs.copyFileSync(
+    path.join(workspace, "public", "clippang-sample.mp4"),
+    path.join(serverInput, "คลิป ทดสอบ.mp4"),
+  );
+  const serverPrepared = await prepareSources({ id: "mock-project" }, {}, {
+    assets: [{ name: "คลิป ทดสอบ.mp4" }],
+    timelineClips: [
+      { id: "server-probe", assetName: "คลิป ทดสอบ.mp4", order: 0, trimStartMs: 1_000, trimEndMs: 3_000 },
+    ],
+  }, { inputDir: serverInput, projectSourceDir: serverSourceDir });
+  assert.equal(serverPrepared.sourceSelections[0].selectedDurationMs, 2_000);
+  assert.ok(serverPrepared.sourceSelections[0].actualDurationMs > 29_000);
+
   const result = await runPipeline({
     projectDir,
     sourceFile: path.join(workspace, "public", "clippang-sample.mp4"),
@@ -78,6 +96,43 @@ try {
   assert.ok(reusedProgress.some((event) => event.stage === "voice" && /ไม่เรียก TTS ซ้ำ/.test(event.message)));
   assert.equal(fs.readdirSync(path.join(projectDir, "work")).length, 0);
 
+  const orderedProject = path.join(projectDir, "ordered-edit");
+  fs.mkdirSync(orderedProject);
+  const source = path.join(workspace, "public", "clippang-sample.mp4");
+  const editPlanHash = "a".repeat(64);
+  const ordered = await runPipeline({
+    projectDir: orderedProject,
+    sourceFiles: [source],
+    sourceSelections: [
+      // Input is deliberately not sorted. The visual track must follow order.
+      { id: "second", assetName: "clippang-sample.mp4", file: source, order: 1, trimStartMs: 4_000, trimEndMs: 5_500 },
+      { id: "first", assetName: "clippang-sample.mp4", file: source, order: 0, trimStartMs: 500, trimEndMs: 3_000 },
+    ],
+    selectedTotalMs: 4_000,
+    editPlanHash,
+    brief: { name: "ทดสอบต่อคลิปตามไทม์ไลน์" },
+    script: [{ text: "ดีมาก", role: "hook" }],
+    styleId: "karaoke-pop",
+    kind: "draft",
+    mockTts: true,
+    detectBurnedCaptions: false,
+    width: 360,
+    height: 640,
+    fps: 15,
+    processTimeoutMs: 120_000,
+  });
+  const orderedMedia = await probe(ordered.outputs.video.path);
+  assert.ok(Math.abs(orderedMedia.durationMs - 4_000) <= (1000 / 15) + 2);
+  assert.equal(ordered.timeline.durationMs, 4_000);
+  assert.equal(ordered.timeline.editPlanHash, editPlanHash);
+  assert.equal(ordered.timeline.narrationFit.mode, "pad-silence");
+  assert.deepEqual(ordered.report.timelineClips.map((clip) => clip.id), ["first", "second"]);
+  assert.deepEqual(ordered.report.timelineClips.map((clip) => clip.trimStartMs), [500, 4_000]);
+  assert.deepEqual(ordered.report.timelineClips.map((clip) => clip.durationMs), [2_500, 1_500]);
+  assert.equal(ordered.report.selectedTotalMs, 4_000);
+  assert.ok(Math.abs(ordered.report.outputDurationMs - 4_000) <= (1000 / 15) + 2);
+  assert.equal(fs.readdirSync(path.join(orderedProject, "work")).length, 0);
+
   const abortProject = path.join(projectDir, "abort-case");
   fs.mkdirSync(abortProject);
   const controller = new AbortController();
@@ -111,6 +166,9 @@ try {
     outputs: Object.keys(result.outputs),
     progressEvents: progress.length,
     reusedVoiceWithoutTts: true,
+    orderedEditDurationMs: orderedMedia.durationMs,
+    orderedEditPreserved: true,
+    serverFfprobeValidated: true,
     abortCleanup: true,
   }, null, 2)}\n`);
 } finally {

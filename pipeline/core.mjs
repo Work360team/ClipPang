@@ -135,6 +135,42 @@ export function buildChunkTimeline(takes, timing = DEFAULT_TIMING) {
   return { chunks, durationMs: t + tailMs, timing: { leadInMs, padMs, tailMs } };
 }
 
+/**
+ * The edit timeline is authoritative. Narration may be padded with silence to
+ * reach it, but speech is never truncated and the user's visual trim points
+ * are never stretched or reordered.
+ */
+export function padNarrationTimeline(timeline, targetDurationMs) {
+  const target = Math.round(Number(targetDurationMs));
+  if (!Number.isFinite(target) || target <= 0) {
+    throw new Error("ความยาวไทม์ไลน์ต้องมากกว่า 0ms");
+  }
+  const narrationMs = Math.round(Number(timeline?.durationMs));
+  if (!Number.isFinite(narrationMs) || narrationMs <= 0) {
+    throw new Error("ความยาวเสียงพากย์ไม่ถูกต้อง");
+  }
+  if (narrationMs > target) {
+    const error = new Error(
+      `เสียงพากย์ยาว ${Number((narrationMs / 1000).toFixed(2))} วินาที แต่ไทม์ไลน์ยาว ${Number((target / 1000).toFixed(2))} วินาที ` +
+      "กรุณาลดข้อความ เพิ่มความเร็วเสียง หรือเพิ่มช่วงคลิปโดยให้รวมไม่เกิน 60 วินาที",
+    );
+    error.code = "NARRATION_TOO_LONG";
+    error.status = 400;
+    error.details = { narrationMs, targetDurationMs: target };
+    throw error;
+  }
+  return {
+    ...timeline,
+    durationMs: target,
+    narrationFit: {
+      mode: narrationMs === target ? "exact" : "pad-silence",
+      narrationMs,
+      paddedMs: target - narrationMs,
+      targetDurationMs: target,
+    },
+  };
+}
+
 /** แบ่งเวลาภายในท่อนให้แต่ละคำตามสัดส่วนจำนวนตัวอักษร */
 export function distributeWords(text, startMs, endMs, emphasis = []) {
   const words = segmentWords(text);
@@ -201,6 +237,121 @@ export function buildPieces(sources, { minMs = 1400, maxMs = 4200 } = {}) {
   const best = ordered.reduce((a, b, i) => (b.score > ordered[a].score ? i : a), 0);
   if (best > 0) ordered.unshift(...ordered.splice(best, 1));
   return ordered;
+}
+
+/**
+ * Build the visual track directly from the user's edit decision list. Unlike
+ * buildPieces(), this intentionally does no scene scoring, round-robin, speed
+ * change, looping, or best-shot promotion.
+ */
+export function buildOrderedSourcePlan(sources, selections, {
+  maxAssets = 12,
+  maxClips = 24,
+  maxTotalMs = 60_000,
+} = {}) {
+  if (!Array.isArray(sources) || sources.length === 0) {
+    throw new Error("ต้องมี video source อย่างน้อยหนึ่งไฟล์");
+  }
+  if (!Array.isArray(selections) || selections.length === 0) {
+    throw new Error("ต้องมีชิ้นวิดีโอบนไทม์ไลน์อย่างน้อยหนึ่งชิ้น");
+  }
+  if (sources.length > maxAssets) {
+    const error = new Error(`ใช้ไฟล์ต้นฉบับได้สูงสุด ${maxAssets} ไฟล์ต่อโปรเจกต์`);
+    error.code = "TOO_MANY_SOURCE_ASSETS";
+    error.status = 400;
+    throw error;
+  }
+  if (selections.length > maxClips) {
+    const error = new Error(`ไทม์ไลน์มีได้สูงสุด ${maxClips} ชิ้น`);
+    error.code = "TOO_MANY_TIMELINE_CLIPS";
+    error.status = 400;
+    throw error;
+  }
+
+  const sourceByFile = new Map(sources.map((source) => [source.file, source]));
+  const orders = new Set();
+  selections.forEach((selection, index) => {
+    const order = selection.order == null ? index : Number(selection.order);
+    if (!Number.isInteger(order) || order < 0 || order >= selections.length || orders.has(order)) {
+      const error = new Error(`ลำดับชิ้นวิดีโอต้องเป็นเลขจำนวนเต็มไม่ซ้ำ ตั้งแต่ 0 ถึง ${selections.length - 1}`);
+      error.code = "INVALID_TIMELINE_ORDER";
+      error.status = 400;
+      throw error;
+    }
+    orders.add(order);
+  });
+  const ordered = selections
+    .map((selection, index) => ({ selection, index }))
+    .sort((a, b) => {
+      const left = a.selection.order == null ? a.index : Number(a.selection.order);
+      const right = b.selection.order == null ? b.index : Number(b.selection.order);
+      return left - right || a.index - b.index;
+    })
+    .map(({ selection }) => selection);
+
+  let totalMs = 0;
+  const segments = ordered.map((selection, index) => {
+    const source = sourceByFile.get(selection.file);
+    if (!source) {
+      const error = new Error(`ชิ้นวิดีโอ “${selection.id || index + 1}” อ้างถึงไฟล์ที่ไม่ได้เตรียมไว้`);
+      error.code = "TIMELINE_ASSET_NOT_FOUND";
+      error.status = 400;
+      throw error;
+    }
+    const inMs = Math.round(Number(selection.trimStartMs ?? selection.inMs ?? 0));
+    const trimEnd = selection.trimEndMs == null
+      ? inMs + Math.round(Number(selection.selectedDurationMs))
+      : Math.round(Number(selection.trimEndMs));
+    const actualDurationMs = Math.round(Number(source.meta?.durationMs ?? selection.actualDurationMs));
+    if (!Number.isFinite(inMs) || inMs < 0 || !Number.isFinite(trimEnd) || trimEnd <= inMs) {
+      const error = new Error(`ช่วงเวลาของชิ้น “${selection.id || index + 1}” ไม่ถูกต้อง`);
+      error.code = "INVALID_CLIP_TRIM";
+      error.status = 400;
+      throw error;
+    }
+    if (!Number.isFinite(actualDurationMs) || trimEnd > actualDurationMs) {
+      const error = new Error(
+        `ช่วงของชิ้น “${selection.id || index + 1}” เกินความยาวจริงของไฟล์ต้นฉบับ`,
+      );
+      error.code = "CLIP_TRIM_OUT_OF_RANGE";
+      error.status = 400;
+      throw error;
+    }
+    const durationMs = trimEnd - inMs;
+    const startMs = totalMs;
+    totalMs += durationMs;
+    if (totalMs > maxTotalMs) {
+      const error = new Error(`ความยาวรวมเกิน ${maxTotalMs / 1000} วินาที`);
+      error.code = "TIMELINE_DURATION_LIMIT";
+      error.status = 400;
+      throw error;
+    }
+    return {
+      id: selection.id ?? `clip-${index + 1}`,
+      assetName: selection.assetName ?? source.meta?.name,
+      src: source.file,
+      inMs,
+      srcDurMs: durationMs,
+      outMs: durationMs,
+      startMs,
+      speed: 1,
+      order: selection.order ?? index,
+      trimEndMs: trimEnd,
+    };
+  });
+
+  if (totalMs <= 0) {
+    const error = new Error("ความยาวรวมของไทม์ไลน์ต้องมากกว่า 0 วินาที");
+    error.code = "INVALID_TIMELINE_DURATION";
+    error.status = 400;
+    throw error;
+  }
+  return {
+    segments,
+    totalMs,
+    mode: "ordered-trim",
+    ratio: 1,
+  };
 }
 
 /**

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   AlphaOverlayError,
   ProcessTimeoutError,
+  buildOrderedSourcePlan,
   compileAss,
   compileComposition,
   createRunName,
@@ -16,6 +17,7 @@ import {
   ffmpegAvailable,
   listStyles,
   listVoices,
+  padNarrationTimeline,
   run,
   slugify,
   synthesize,
@@ -86,6 +88,57 @@ test("Gemini exposes the complete 30-voice catalog", async () => {
   assert.ok(voices.every((voice) => voice.provider === "gemini"));
   assert.ok(voices.some((voice) => voice.id === "Kore" && voice.isDefault));
   assert.ok(voices.some((voice) => voice.id === "Sulafat"));
+});
+
+test("ordered edit plan preserves split/repeated source order and exact trims", () => {
+  const sourceA = { file: "a.mp4", meta: { name: "a.mp4", durationMs: 12_000 } };
+  const sourceB = { file: "b.mp4", meta: { name: "b.mp4", durationMs: 8_000 } };
+  const plan = buildOrderedSourcePlan([sourceA, sourceB], [
+    { id: "third", file: "a.mp4", assetName: "a.mp4", order: 2, trimStartMs: 5_000, trimEndMs: 7_000 },
+    { id: "first", file: "a.mp4", assetName: "a.mp4", order: 0, trimStartMs: 1_000, trimEndMs: 2_500 },
+    { id: "second", file: "b.mp4", assetName: "b.mp4", order: 1, trimStartMs: 250, trimEndMs: 1_250 },
+  ]);
+  assert.deepEqual(plan.segments.map((segment) => segment.id), ["first", "second", "third"]);
+  assert.deepEqual(plan.segments.map((segment) => segment.inMs), [1_000, 250, 5_000]);
+  assert.deepEqual(plan.segments.map((segment) => segment.srcDurMs), [1_500, 1_000, 2_000]);
+  assert.deepEqual(plan.segments.map((segment) => segment.startMs), [0, 1_500, 2_500]);
+  assert.equal(plan.totalMs, 4_500);
+  assert.equal(plan.mode, "ordered-trim");
+});
+
+test("ordered edit plan rejects duplicate order, out-of-range trim, and over 60 seconds", () => {
+  const source = { file: "a.mp4", meta: { name: "a.mp4", durationMs: 120_000 } };
+  assert.throws(
+    () => buildOrderedSourcePlan([source], [
+      { id: "a", file: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 1_000 },
+      { id: "b", file: "a.mp4", order: 0, trimStartMs: 1_000, trimEndMs: 2_000 },
+    ]),
+    (error) => error.code === "INVALID_TIMELINE_ORDER",
+  );
+  assert.throws(
+    () => buildOrderedSourcePlan([source], [
+      { id: "past-end", file: "a.mp4", order: 0, trimStartMs: 119_000, trimEndMs: 121_000 },
+    ]),
+    (error) => error.code === "CLIP_TRIM_OUT_OF_RANGE",
+  );
+  assert.throws(
+    () => buildOrderedSourcePlan([source], [
+      { id: "too-long", file: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 60_001 },
+    ]),
+    (error) => error.code === "TIMELINE_DURATION_LIMIT",
+  );
+});
+
+test("narration is padded to the edit duration and never silently truncated", () => {
+  const timeline = { durationMs: 2_500, chunks: [], timing: { leadInMs: 250, padMs: 90, tailMs: 500 } };
+  const padded = padNarrationTimeline(timeline, 4_000);
+  assert.equal(padded.durationMs, 4_000);
+  assert.equal(padded.narrationFit.mode, "pad-silence");
+  assert.equal(padded.narrationFit.paddedMs, 1_500);
+  assert.throws(
+    () => padNarrationTimeline({ ...timeline, durationMs: 4_001 }, 4_000),
+    (error) => error.code === "NARRATION_TOO_LONG" && /ลดข้อความ/.test(error.message),
+  );
 });
 
 test("HyperFrames composition compiles with bundled font and GSAP assets", async () => {

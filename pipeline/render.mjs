@@ -97,7 +97,7 @@ export async function burnAndMux(
     next += 1;
     args.push("-i", overlay);
     filters.push(
-      `[0:v][${idx}:v]overlay=0:0:eof_action=pass:format=auto,tpad=stop_mode=clone:stop_duration=1[v]`,
+      `[0:v][${idx}:v]overlay=0:0:eof_action=pass:format=auto,tpad=stop_mode=clone:stop_duration=${total}[v]`,
     );
   } else {
     if (!fs.existsSync(fontsDir)) throw new Error(`ไม่พบโฟลเดอร์ฟอนต์สำหรับ libass: ${fontsDir}`);
@@ -112,7 +112,7 @@ export async function burnAndMux(
       .replace(/,/g, "\\,");
     filters.push(
       `[0:v]ass=filename='captions.ass':fontsdir='${relativeFonts}',` +
-      "tpad=stop_mode=clone:stop_duration=1[v]",
+      `tpad=stop_mode=clone:stop_duration=${total}[v]`,
     );
   }
 

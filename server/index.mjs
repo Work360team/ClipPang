@@ -8,7 +8,8 @@ import { Readable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createApiHandler } from "./api.mjs";
 import { HOST, DEFAULT_PORT, PATHS, ensureDirectories } from "./config.mjs";
-import { resolveUnderRoot, safeFilename, safeProjectPath } from "./security.mjs";
+import { safeProjectPath } from "./security.mjs";
+import { prepareSources } from "./sources.mjs";
 import { createStore } from "./store/index.mjs";
 import { RenderQueue } from "./queue.mjs";
 import { getSetupStatus } from "./setup.mjs";
@@ -17,7 +18,7 @@ import { runPipeline } from "../pipeline/index.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_ROOT = path.join(ROOT, "dist", "client");
 const WORKER_ENTRY = path.join(ROOT, "dist", "server", "index.js");
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const STATIC_MIME = new Map([
   [".html", "text/html; charset=utf-8"], [".js", "text/javascript; charset=utf-8"],
@@ -74,27 +75,6 @@ export function pickScript(config, product) {
   );
 }
 
-async function prepareSource(project, config, product) {
-  const asset = config.assetName ?? config.asset?.name ?? product.assetName ?? product.asset?.name ?? product.source?.name;
-  if (!asset) {
-    const error = new Error("ยังไม่ได้เลือกคลิปต้นฉบับ กรุณากลับไปขั้น ‘คลิป’ แล้วอัปโหลดไฟล์ก่อน");
-    error.code = "SOURCE_REQUIRED";
-    throw error;
-  }
-  const filename = safeFilename(asset);
-  const inputFile = resolveUnderRoot(PATHS.input, filename);
-  await fsp.access(inputFile, fs.constants.R_OK);
-  const sourceDir = safeProjectPath(project.id, "src");
-  await fsp.mkdir(sourceDir, { recursive: true });
-  const projectSource = resolveUnderRoot(sourceDir, filename);
-  try {
-    await fsp.access(projectSource);
-  } catch {
-    await fsp.copyFile(inputFile, projectSource);
-  }
-  return projectSource;
-}
-
 export async function createLocalRuntime({ store: providedStore, processor } = {}) {
   ensureDirectories();
   const store = providedStore ?? createStore({
@@ -112,11 +92,17 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
     if (!project) throw Object.assign(new Error("ไม่พบโปรเจกต์ของงานเรนเดอร์นี้"), { code: "PROJECT_NOT_FOUND" });
     const config = parseJson(render.config ?? render.config_json, {});
     const product = parseJson(project.product ?? project.product_json, {});
-    const sourceFile = await prepareSource(project, config, product);
+    const prepared = await prepareSources(project, config, product, {
+      signal: render.signal,
+      onProgress: render.onProgress,
+    });
     return runPipeline({
       projectDir: safeProjectPath(project.id),
-      sourceFile,
-      sourceFiles: [sourceFile],
+      sourceFile: prepared.sourceFiles[0],
+      sourceFiles: prepared.sourceFiles,
+      sourceSelections: prepared.sourceSelections,
+      clipPlan: prepared.clipPlan,
+      editPlanHash: prepared.editPlanHash,
       brief: config.brief ?? product.brief ?? product,
       script: pickScript(config, product),
       variant: config.variant ?? config.scriptId ?? config.variantId,
@@ -129,6 +115,10 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       styleId: config.styleId ?? render.styleId ?? render.style_id ?? "pop-yellow",
       position: config.position ?? config.captionPosition ?? "bottom",
       kind: render.kind,
+      ...(prepared.selectedTotalMs != null ? {
+        targetSec: prepared.selectedTotalMs / 1000,
+        selectedTotalMs: prepared.selectedTotalMs,
+      } : {}),
       reuseFrom: config.reuseRenderId ? { renderId: config.reuseRenderId, timeline: config.timeline, outputs: config.draftOutputs } : null,
       mockTts: config.mockTts === true || process.env.CLIPPANG_MOCK_TTS === "1",
       signal: render.signal,

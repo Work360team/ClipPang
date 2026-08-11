@@ -1,6 +1,6 @@
 {
   "name": "clippang-web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ClipPang creator app for Thai AI voiceover and karaoke captions",
   "private": true,
   "engines": {

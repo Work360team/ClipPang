@@ -72,32 +72,57 @@ export interface SetupStatus {
   paths?: { input: string; projects: string };
 }
 
+async function uploadAssetFile(file: File, onProgress?: (progress: number) => void) {
+  if (!onProgress) {
+    return apiFetch<{ ok: true; asset: LocalAsset }>(`/api/assets/${encodeURIComponent(file.name)}`, {
+      method: "PUT", body: file, headers: { "content-type": file.type || "application/octet-stream" },
+    });
+  }
+  return new Promise<{ ok: true; asset: LocalAsset }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `/api/assets/${encodeURIComponent(file.name)}`);
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (event) => event.lengthComputable && onProgress(Math.round((event.loaded / event.total) * 100));
+    xhr.onerror = () => reject(new ClipPangApiError("อัปโหลดไม่สำเร็จ ตรวจว่า ClipPang Local ยังเปิดอยู่แล้วลองใหม่"));
+    xhr.onload = () => {
+      try {
+        const body = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status < 200 || xhr.status >= 300) throw new ClipPangApiError(body?.error?.message || "อัปโหลดไม่สำเร็จ", xhr.status, body?.error?.code);
+        resolve(body);
+      } catch (error) { reject(error); }
+    };
+    xhr.send(file);
+  });
+}
+
 export const localApi = {
   setupStatus: () => apiFetch<SetupStatus>("/api/setup/status"),
   installFfmpeg: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/ffmpeg", { method: "POST", body: "{}" }),
   saveKey: (key: string) => apiFetch<{ ok: true; key: { configured: boolean; last4: string; masked: string } }>("/api/setup/key", { method: "POST", body: JSON.stringify({ key }) }),
   listInput: () => apiFetch<{ ok: true; files: LocalAsset[] }>("/api/input"),
-  uploadAsset: async (file: File, onProgress?: (progress: number) => void) => {
-    if (!onProgress) {
-      return apiFetch<{ ok: true; asset: LocalAsset }>(`/api/assets/${encodeURIComponent(file.name)}`, {
-        method: "PUT", body: file, headers: { "content-type": file.type || "application/octet-stream" },
-      });
+  uploadAsset: uploadAssetFile,
+  uploadAssets: async (files: File[], onProgress?: (progress: number, currentFile: number, totalFiles: number) => void) => {
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0) || 1;
+    let completedBytes = 0;
+    const assets: LocalAsset[] = [];
+    const results: { fileName: string; asset?: LocalAsset; error?: string }[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      try {
+        const result = await uploadAssetFile(file, (fileProgress) => {
+          const loadedBytes = file.size * fileProgress / 100;
+          onProgress?.(Math.round(((completedBytes + loadedBytes) / totalBytes) * 100), index + 1, files.length);
+        });
+        assets.push(result.asset);
+        results.push({ fileName: file.name, asset: result.asset });
+      } catch (error) {
+        results.push({ fileName: file.name, error: error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ" });
+      } finally {
+        completedBytes += file.size;
+        onProgress?.(Math.round((completedBytes / totalBytes) * 100), index + 1, files.length);
+      }
     }
-    return new Promise<{ ok: true; asset: LocalAsset }>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", `/api/assets/${encodeURIComponent(file.name)}`);
-      xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
-      xhr.upload.onprogress = (event) => event.lengthComputable && onProgress(Math.round((event.loaded / event.total) * 100));
-      xhr.onerror = () => reject(new ClipPangApiError("อัปโหลดไม่สำเร็จ ตรวจว่า ClipPang Local ยังเปิดอยู่แล้วลองใหม่"));
-      xhr.onload = () => {
-        try {
-          const body = JSON.parse(xhr.responseText || "{}");
-          if (xhr.status < 200 || xhr.status >= 300) throw new ClipPangApiError(body?.error?.message || "อัปโหลดไม่สำเร็จ", xhr.status, body?.error?.code);
-          resolve(body);
-        } catch (error) { reject(error); }
-      };
-      xhr.send(file);
-    });
+    return { ok: results.every((result) => Boolean(result.asset)), assets, results };
   },
   listProjects: () => apiFetch<{ ok: true; projects: LocalProject[] }>("/api/projects"),
   createProject: (body: Record<string, unknown>) => apiFetch<{ ok: true; project: LocalProject }>("/api/projects", { method: "POST", body: JSON.stringify(body) }),
@@ -121,7 +146,28 @@ export const localApi = {
   clearCache: () => apiFetch<{ ok: true; removed: number }>("/api/settings/cache/clear", { method: "POST", body: "{}" }),
 };
 
-export interface LocalAsset { name: string; originalName?: string; size: number; updatedAt?: string; url: string }
+export interface LocalAsset {
+  name: string;
+  originalName?: string;
+  size: number;
+  updatedAt?: string;
+  url: string;
+  durationMs?: number;
+  width?: number;
+  height?: number;
+}
+export interface LocalProjectAsset extends LocalAsset {
+  durationMs: number;
+  selectedDurationSec: number;
+  order: number;
+}
+export interface LocalTimelineClip {
+  id: string;
+  assetName: string;
+  order: number;
+  trimStartMs: number;
+  trimEndMs: number;
+}
 export interface LocalScript { id: string; name?: string; tag?: string; score?: number; chunks: string[] }
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }

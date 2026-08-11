@@ -3,7 +3,9 @@
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   BadgeCheck,
   Captions,
   Check,
@@ -17,14 +19,17 @@ import {
   Film,
   FolderOpen,
   Gauge,
+  GripVertical,
   LoaderCircle,
   Mic2,
   PackageCheck,
   Pause,
   Play,
+  Plus,
   RotateCcw,
   Save,
   Sparkles,
+  Trash2,
   UploadCloud,
   WandSparkles,
   X,
@@ -36,6 +41,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
   type DragEvent,
 } from "react";
 import { AppShell } from "./AppShell";
@@ -45,13 +51,85 @@ import {
   localApi,
   watchRender,
   type LocalEngineState,
+  type LocalAsset,
   type LocalOutput,
+  type LocalProjectAsset,
   type LocalRender,
   type LocalScript,
+  type LocalTimelineClip,
   type LocalVoice,
 } from "../lib/local-api";
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
+
+type WizardAsset = LocalProjectAsset & {
+  clientId: string;
+  previewUrl?: string;
+  durationKnown?: boolean;
+};
+
+const MAX_CLIPS = 12;
+const MAX_TIMELINE_CLIPS = 24;
+const MAX_TOTAL_DURATION_SEC = 60;
+
+function formatDuration(seconds: number) {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  return `${String(Math.floor(safeSeconds / 60)).padStart(2, "0")}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+function persistedAssets(assets: WizardAsset[], timeline: LocalTimelineClip[] = []): LocalProjectAsset[] {
+  return [...assets]
+    .sort((a, b) => a.order - b.order)
+    .map(({ name, originalName, url, size, durationMs, selectedDurationSec, width, height }, order) => ({
+      name,
+      originalName,
+      url,
+      size,
+      durationMs,
+      selectedDurationSec: timeline.length
+        ? timeline.filter((clip) => clip.assetName === name).reduce((total, clip) => total + Math.max(0, clip.trimEndMs - clip.trimStartMs), 0) / 1000
+        : selectedDurationSec,
+      order,
+      ...(typeof width === "number" ? { width } : {}),
+      ...(typeof height === "number" ? { height } : {}),
+    }));
+}
+
+function persistedTimeline(clips: LocalTimelineClip[]) {
+  return [...clips]
+    .sort((a, b) => a.order - b.order)
+    .map((clip, order) => ({ ...clip, order }));
+}
+
+function makeTimelineId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `clip-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function browserVideoDuration(file: File, objectUrl: string) {
+  return new Promise<number>((resolve, reject) => {
+    const video = document.createElement("video");
+    const timeout = window.setTimeout(() => {
+      video.removeAttribute("src");
+      reject(new Error(`อ่านความยาวของ ${file.name} ไม่สำเร็จ`));
+    }, 12_000);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      window.clearTimeout(timeout);
+      const durationMs = Math.round(video.duration * 1000);
+      video.removeAttribute("src");
+      if (!Number.isFinite(durationMs) || durationMs <= 0) reject(new Error(`ไม่พบความยาวของ ${file.name}`));
+      else resolve(durationMs);
+    };
+    video.onerror = () => {
+      window.clearTimeout(timeout);
+      video.removeAttribute("src");
+      reject(new Error(`เปิด ${file.name} เพื่ออ่านความยาวไม่ได้`));
+    };
+    video.src = objectUrl;
+  });
+}
 
 const steps: { id: WizardStep; label: string; helper: string; icon: typeof Film }[] = [
   { id: 1, label: "คลิป", helper: "เลือกวิดีโอ", icon: Film },
@@ -169,10 +247,28 @@ const initialBrief: ProductBrief = {
 
 export function ProjectWizard() {
   const params = useParams<{ id?: string }>();
-  const routeId = typeof params?.id === "string" && params.id !== "new" ? params.id : null;
+  const rawRouteId = typeof params?.id === "string" ? params.id : null;
+  let decodedRouteId = rawRouteId;
+  try {
+    // vinext currently exposes dynamic path params in their URL-encoded form.
+    // Decode once before localApi encodes the id for the API request, otherwise
+    // Thai project ids become double-encoded and cannot be restored on reload.
+    decodedRouteId = rawRouteId ? decodeURIComponent(rawRouteId) : null;
+  } catch {
+    // Keep the original value so the API can return its normal safe 4xx error.
+  }
+  const routeId = decodedRouteId && decodedRouteId !== "new" ? decodedRouteId : null;
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
   const [projectId, setProjectId] = useState<string | null>(routeId);
   const [assetName, setAssetName] = useState<string | null>(null);
+  const [clipAssets, setClipAssets] = useState<WizardAsset[]>([]);
+  const [activeClipId, setActiveClipId] = useState<string | null>(null);
+  const [draggingClipId, setDraggingClipId] = useState<string | null>(null);
+  const [timelineClips, setTimelineClips] = useState<LocalTimelineClip[]>([]);
+  const [timelineEditorOpen, setTimelineEditorOpen] = useState(false);
+  const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string | null>(null);
+  const [timelinePlayheadMs, setTimelinePlayheadMs] = useState(0);
+  const [timelinePlaying, setTimelinePlaying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [operationMessage, setOperationMessage] = useState("");
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
@@ -209,8 +305,18 @@ export function ProjectWizard() {
   const [isPlaying, setIsPlaying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const timelineVideoRef = useRef<HTMLVideoElement>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const stopWatchingRenderRef = useRef<(() => void) | null>(null);
+  const objectUrlsRef = useRef(new Set<string>());
+  const pendingTimelineSeekRef = useRef<number | null>(null);
+  const timelinePlaybackRevisionRef = useRef(0);
+  const uploadLockRef = useRef(false);
+  const editRevisionRef = useRef(0);
+  const activeRenderEditRevisionRef = useRef<number | null>(null);
+  const projectSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const skipNextTimelineAutosaveRef = useRef(false);
+  const projectReadyForAutosaveRef = useRef(false);
 
   const selectedScriptData = scriptVariants.find((item) => item.id === selectedScript) ?? scriptVariants[0] ?? initialScripts[0];
   const selectedStyleData = captionStyles.find((item) => item.id === selectedStyle) ?? captionStyles[0];
@@ -218,7 +324,27 @@ export function ProjectWizard() {
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData.chunks;
 
   const filteredVoices = voiceLibrary.filter((voice) => voiceFilter === "ทั้งหมด" || voice.tone.includes(voiceFilter));
-  const hasChosenClip = engineState !== "connected" || Boolean(assetName) || videoUrl.startsWith("blob:");
+  const orderedClipAssets = useMemo(() => [...clipAssets].sort((a, b) => a.order - b.order), [clipAssets]);
+  const orderedTimelineClips = useMemo(() => [...timelineClips].sort((a, b) => a.order - b.order), [timelineClips]);
+  const activeClip = orderedClipAssets.find((asset) => asset.clientId === activeClipId) ?? orderedClipAssets[0] ?? null;
+  const selectedTimelineClip = orderedTimelineClips.find((clip) => clip.id === selectedTimelineClipId) ?? orderedTimelineClips[0] ?? null;
+  const selectedTimelineAsset = selectedTimelineClip
+    ? orderedClipAssets.find((asset) => asset.name === selectedTimelineClip.assetName) ?? null
+    : null;
+  const timelineTotalMs = useMemo(
+    () => orderedTimelineClips.reduce((total, clip) => total + Math.max(0, clip.trimEndMs - clip.trimStartMs), 0),
+    [orderedTimelineClips],
+  );
+  const selectedTotalSec = timelineTotalMs / 1000;
+  const clipDurationInvalid = orderedTimelineClips.some((clip) => {
+    const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
+    return !asset || clip.trimStartMs < 0 || clip.trimEndMs <= clip.trimStartMs || clip.trimEndMs > asset.durationMs + 1;
+  });
+  const totalDurationInvalid = selectedTotalSec <= 0 || selectedTotalSec > MAX_TOTAL_DURATION_SEC + 0.001;
+  const clipSelectionInvalid = orderedClipAssets.length === 0 || orderedTimelineClips.length === 0 || clipDurationInvalid || totalDurationInvalid;
+  const hasChosenClip = orderedClipAssets.length > 0;
+  const previewVideoUrl = activeClip?.previewUrl || activeClip?.url || videoUrl;
+  const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clippang-sample.mp4";
   const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
   const downloadableOutputs = Object.entries(renderOutputs).filter(([, output]) => output?.url && output?.filename);
 
@@ -240,13 +366,79 @@ export function ProjectWizard() {
       ...savedBrief,
       features: Array.isArray(savedBrief.features) ? savedBrief.features.join(", ") : savedBrief.features ?? current.features,
     }));
-    const asset = product.asset as { name?: string; url?: string; size?: number; originalName?: string } | undefined;
-    if (asset?.name) {
-      setAssetName(asset.name);
-      setFileName(asset.originalName || asset.name);
-      setFileSize(asset.size ? `${(asset.size / 1024 / 1024).toFixed(1)} MB` : "ไฟล์บนเครื่อง");
-      setVideoUrl(asset.url || `/api/assets/${encodeURIComponent(asset.name)}`);
+    const legacyAsset = product.asset as Partial<LocalProjectAsset> | undefined;
+    const savedAssets = Array.isArray(product.assets) && product.assets.length
+      ? product.assets as Partial<LocalProjectAsset>[]
+      : legacyAsset?.name ? [legacyAsset] : [];
+    const restoredAssets = savedAssets
+      .filter((asset): asset is Partial<LocalProjectAsset> & { name: string } => typeof asset.name === "string" && Boolean(asset.name))
+      .slice(0, MAX_CLIPS)
+      .map((asset, index): WizardAsset => {
+        const durationKnown = typeof asset.durationMs === "number" && asset.durationMs > 0;
+        const durationMs = durationKnown ? asset.durationMs as number : 60_000;
+        const selectedDurationSec = typeof asset.selectedDurationSec === "number" && asset.selectedDurationSec > 0
+          ? Math.min(asset.selectedDurationSec, durationMs / 1000)
+          : Math.min(durationMs / 1000, 8);
+        return {
+          name: asset.name,
+          originalName: asset.originalName || asset.name,
+          url: asset.url || `/api/assets/${encodeURIComponent(asset.name)}`,
+          size: typeof asset.size === "number" ? asset.size : 0,
+          durationMs,
+          selectedDurationSec,
+          order: typeof asset.order === "number" ? asset.order : index,
+          ...(typeof asset.width === "number" ? { width: asset.width } : {}),
+          ...(typeof asset.height === "number" ? { height: asset.height } : {}),
+          clientId: `saved-${index}-${asset.name}`,
+          durationKnown,
+        };
+      })
+      .sort((a, b) => a.order - b.order)
+      .map((asset, order) => ({ ...asset, order }));
+    if (restoredAssets.length) {
+      const first = restoredAssets[0];
+      setClipAssets(restoredAssets);
+      setActiveClipId(first.clientId);
+      setAssetName(first.name);
+      setFileName(first.originalName || first.name);
+      setFileSize(first.size ? `${(first.size / 1024 / 1024).toFixed(1)} MB` : "ไฟล์บนเครื่อง");
+      setVideoUrl(first.url);
     }
+    const savedTimeline = Array.isArray(product.timelineClips)
+      ? product.timelineClips as Partial<LocalTimelineClip>[]
+      : [];
+    const restoredTimeline = savedTimeline
+      .filter((clip): clip is Partial<LocalTimelineClip> & { assetName: string } =>
+        typeof clip.assetName === "string" && restoredAssets.some((asset) => asset.name === clip.assetName))
+      .slice(0, MAX_TIMELINE_CLIPS)
+      .map((clip, index): LocalTimelineClip => {
+        const asset = restoredAssets.find((item) => item.name === clip.assetName)!;
+        const trimStartMs = Math.max(0, Number(clip.trimStartMs) || 0);
+        const requestedEndMs = Number(clip.trimEndMs) || Math.min(asset.durationMs, trimStartMs + 8_000);
+        if (!asset.durationKnown && requestedEndMs > asset.durationMs) asset.durationMs = requestedEndMs;
+        return {
+          id: typeof clip.id === "string" && clip.id ? clip.id : makeTimelineId(),
+          assetName: clip.assetName,
+          order: typeof clip.order === "number" ? clip.order : index,
+          trimStartMs,
+          trimEndMs: Math.max(trimStartMs + 100, Math.min(asset.durationMs, requestedEndMs)),
+        };
+      });
+    const initialTimeline = persistedTimeline(restoredTimeline.length
+      ? restoredTimeline
+      : restoredAssets.map((asset, index) => ({
+          id: makeTimelineId(),
+          assetName: asset.name,
+          order: index,
+          trimStartMs: 0,
+          trimEndMs: Math.min(asset.durationMs, Math.max(100, asset.selectedDurationSec * 1000)),
+        })));
+    if (initialTimeline.length) {
+      setTimelineClips(initialTimeline);
+      setSelectedTimelineClipId(initialTimeline[0].id);
+    }
+    skipNextTimelineAutosaveRef.current = true;
+    projectReadyForAutosaveRef.current = true;
     const savedScripts = product.scripts as LocalScript[] | undefined;
     if (savedScripts?.length) {
       setScriptVariants(savedScripts);
@@ -269,9 +461,14 @@ export function ProjectWizard() {
     return preferred?.url ?? Object.values(outputs).find((output) => output.filename?.toLowerCase().endsWith(".mp4"))?.url ?? null;
   }
 
-  async function completeRender(id: string, kind: "draft" | "final") {
+  async function completeRender(
+    id: string,
+    kind: "draft" | "final",
+    expectedEditRevision?: number,
+  ) {
     try {
       const result = await localApi.getRender(id);
+      if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
       const record = result.render;
       setRenderOutputs(record.outputs ?? {});
       const outputUrl = chooseVideoOutput(record.outputs);
@@ -291,12 +488,17 @@ export function ProjectWizard() {
     }
   }
 
-  function observeRender(id: string, kind: "draft" | "final") {
+  function observeRender(
+    id: string,
+    kind: "draft" | "final",
+    expectedEditRevision?: number,
+  ) {
     stopWatchingRenderRef.current?.();
     stopWatchingRenderRef.current = watchRender(id, (event) => {
+      if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
       setRenderProgress(Number(event.progress ?? 0));
       setOperationMessage(event.message || "กำลังประมวลผล");
-      if (event.state === "ready") void completeRender(id, kind);
+      if (event.state === "ready") void completeRender(id, kind, expectedEditRevision);
       else if (event.state === "failed") {
         setRendering(false);
         setRenderError(event.error?.message || "สร้างคลิปไม่สำเร็จ กรุณาตรวจ FFmpeg และ API key แล้วลองใหม่");
@@ -307,9 +509,10 @@ export function ProjectWizard() {
       }
     }, () => {
       window.setTimeout(async () => {
+        if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
         try {
           const result = await localApi.getRender(id);
-          if (result.render.state === "ready") await completeRender(id, kind);
+          if (result.render.state === "ready") await completeRender(id, kind, expectedEditRevision);
           else if (result.render.state === "failed") {
             setRendering(false);
             setRenderError(result.render.error?.message || "สร้างคลิปไม่สำเร็จ");
@@ -327,11 +530,15 @@ export function ProjectWizard() {
     setRenderProgress(Number(render.progress ?? 0));
     setOperationMessage(render.message || "");
     if (render.state === "ready") {
-      void completeRender(render.id, render.kind);
+      const revision = editRevisionRef.current;
+      activeRenderEditRevisionRef.current = revision;
+      void completeRender(render.id, render.kind, revision);
     } else if (["queued", "running", "ingesting", "processing", "retrying"].includes(render.state)) {
       setActiveStep(5);
       setRendering(true);
-      observeRender(render.id, render.kind);
+      const revision = editRevisionRef.current;
+      activeRenderEditRevisionRef.current = revision;
+      observeRender(render.id, render.kind, revision);
     } else if (render.state === "failed") setRenderError(render.error?.message || "งานครั้งล่าสุดไม่สำเร็จ");
   }
 
@@ -345,6 +552,7 @@ export function ProjectWizard() {
 
   useEffect(() => {
     let active = true;
+    const objectUrls = objectUrlsRef.current;
     detectLocalEngine().then(async (engine) => {
       if (!active) return;
       if (!engine) {
@@ -379,6 +587,8 @@ export function ProjectWizard() {
       active = false;
       stopWatchingRenderRef.current?.();
       previewAudioRef.current?.pause();
+      for (const url of objectUrls) URL.revokeObjectURL(url);
+      objectUrls.clear();
     };
     // routeId is stable for the lifetime of this editor; replacing the address should not reset in-flight state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -411,59 +621,264 @@ export function ProjectWizard() {
     features: brief.features.split(/[,\n]/).map((item) => item.trim()).filter(Boolean),
   });
 
-  const projectProduct = (extra: Record<string, unknown> = {}) => ({
-    brief: briefForApi(),
-    ...(assetName ? { asset: { name: assetName, originalName: fileName, url: `/api/assets/${encodeURIComponent(assetName)}` } } : {}),
-    scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
-    config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, styleId: selectedStyle, position: captionPosition },
-    ...extra,
-  });
+  const projectProduct = (extra: Record<string, unknown> = {}) => {
+    const savedTimeline = persistedTimeline(timelineClips);
+    const savedAssets = persistedAssets(clipAssets, savedTimeline);
+    const legacyAsset = savedAssets.find((asset) => asset.name === savedTimeline[0]?.assetName) ?? savedAssets[0];
+    return {
+      brief: briefForApi(),
+      assets: savedAssets,
+      timelineClips: savedTimeline,
+      ...(legacyAsset ? { asset: legacyAsset } : {}),
+      scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
+      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, styleId: selectedStyle, position: captionPosition },
+      ...extra,
+    };
+  };
 
-  const ensureProject = async () => {
+  const queueProjectUpdate = (id: string, body: Record<string, unknown>) => {
+    const task = projectSaveChainRef.current
+      .catch(() => undefined)
+      .then(() => localApi.updateProject(id, body));
+    projectSaveChainRef.current = task.then(() => undefined, () => undefined);
+    return task;
+  };
+
+  const ensureProject = async (
+    productOverride?: Record<string, unknown>,
+    titleOverride?: string,
+  ) => {
     if (projectId) return projectId;
-    const result = await localApi.createProject({ title: brief.name || fileName || "โปรเจกต์ใหม่", product: projectProduct() });
+    const result = await localApi.createProject({
+      title: titleOverride || brief.name || fileName || "โปรเจกต์ใหม่",
+      product: productOverride ?? projectProduct(),
+    });
     setProjectId(result.project.id);
+    projectReadyForAutosaveRef.current = true;
     window.history.replaceState(null, "", `/p/${encodeURIComponent(result.project.id)}`);
     return result.project.id;
   };
 
-  const selectFile = async (file?: File) => {
-    if (!file) return;
-    setUploadError("");
-    if (!file.type.startsWith("video/")) {
-      setUploadError("ไฟล์นี้ไม่ใช่วิดีโอ ลองเลือกไฟล์ MP4, MOV หรือ WebM อีกครั้ง");
+  useEffect(() => {
+    if (engineState !== "connected" || !projectId || !projectReadyForAutosaveRef.current) return;
+    if (skipNextTimelineAutosaveRef.current) {
+      skipNextTimelineAutosaveRef.current = false;
       return;
     }
-    if (file.size > 500 * 1024 * 1024) {
-      setUploadError("ไฟล์ใหญ่เกิน 500 MB กรุณาบีบอัดหรือตัดให้สั้นลงก่อน");
-      return;
-    }
-    if (videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
-    setVideoUrl(URL.createObjectURL(file));
-    setFileName(file.name);
-    setFileSize(`${(file.size / 1024 / 1024).toFixed(1)} MB`);
-    setAnalyzing(true);
-    setUploadProgress(0);
+    const timer = window.setTimeout(() => {
+      void queueProjectUpdate(projectId, {
+        product: projectProduct(),
+      }).catch((error) => setUploadError(error instanceof Error ? error.message : "บันทึก Timeline อัตโนมัติไม่สำเร็จ"));
+    }, 450);
+    return () => window.clearTimeout(timer);
+    // Autosave is intentionally scoped to edits that change clip sources, trims, splits, or ordering.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipAssets, timelineClips, projectId, engineState]);
+
+  const saveProject = async (message = "บันทึกโปรเจกต์และ Timeline แล้ว") => {
     if (engineState !== "connected") {
-      window.setTimeout(() => setAnalyzing(false), 1400);
-      return;
+      setToast("โหมดตัวอย่าง: Timeline อยู่เฉพาะในหน้านี้และไม่ได้อัปโหลดไฟล์ออกจากเครื่อง");
+      return true;
     }
     try {
-      setOperationMessage("กำลังอัปโหลดคลิปไว้ในเครื่อง…");
-      const result = await localApi.uploadAsset(file, setUploadProgress);
       const id = await ensureProject();
-      setAssetName(result.asset.name);
-      setVideoUrl(result.asset.url);
-      await localApi.updateProject(id, {
-        title: brief.name || pathlessName(file.name),
-        wizardStep: 1,
-        product: projectProduct({ asset: result.asset }),
+      await queueProjectUpdate(id, {
+        title: brief.name || fileName || "โปรเจกต์ใหม่",
+        wizardStep: activeStep,
+        product: projectProduct(),
       });
-      setUploadProgress(100);
-      setToast("อัปโหลดและตรวจชนิดไฟล์เรียบร้อยแล้ว");
+      setToast(message);
+      return true;
     } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "บันทึกโปรเจกต์ไม่สำเร็จ");
+      return false;
+    }
+  };
+
+  const invalidateRenderedDraft = () => {
+    editRevisionRef.current += 1;
+    activeRenderEditRevisionRef.current = null;
+    stopWatchingRenderRef.current?.();
+    stopWatchingRenderRef.current = null;
+    if (rendering && renderId && engineState === "connected") {
+      void localApi.cancelRender(renderId).catch(() => undefined);
+    }
+    setDraftReady(false);
+    setRenderDone(false);
+    setRenderOutputs({});
+    setRendering(false);
+    setRenderId(null);
+    setRenderProgress(0);
+    setOperationMessage("");
+  };
+
+  const selectFiles = async (incoming?: FileList | File[]) => {
+    const files = Array.from(incoming ?? []);
+    if (!files.length) return;
+    if (uploadLockRef.current || analyzing) return;
+    setUploadError("");
+    if (engineState === "checking") {
+      setUploadError("กำลังตรวจการเชื่อมต่อ ClipPang Local กรุณารอสักครู่แล้วเลือกคลิปอีกครั้ง");
+      return;
+    }
+    if (engineState !== "connected" && engineState !== "unavailable") {
+      setUploadError("ยังไม่พร้อมรับคลิป กรุณารีเฟรชหน้าแล้วลองใหม่");
+      return;
+    }
+    if (clipAssets.length + files.length > MAX_CLIPS) {
+      setUploadError(`อัปโหลดได้สูงสุด ${MAX_CLIPS} คลิปต่อโปรเจกต์ (ตอนนี้มี ${clipAssets.length} คลิป)`);
+      return;
+    }
+    if (timelineClips.length + files.length > MAX_TIMELINE_CLIPS) {
+      setUploadError(`Timeline รองรับได้สูงสุด ${MAX_TIMELINE_CLIPS} ช่วง (ตอนนี้มี ${timelineClips.length} ช่วง)`);
+      return;
+    }
+    const invalidType = files.find((file) => !file.type.startsWith("video/") && !/\.(mp4|mov|webm)$/i.test(file.name));
+    if (invalidType) {
+      setUploadError(`${invalidType.name} ไม่ใช่วิดีโอ รองรับเฉพาะ MP4, MOV หรือ WebM`);
+      return;
+    }
+    const oversized = files.find((file) => file.size > 500 * 1024 * 1024);
+    if (oversized) {
+      setUploadError(`${oversized.name} ใหญ่เกิน 500 MB กรุณาบีบอัดหรือตัดให้สั้นลงก่อน`);
+      return;
+    }
+    uploadLockRef.current = true;
+    setAnalyzing(true);
+    setUploadProgress(0);
+    const newObjectUrls: string[] = [];
+    let assetsCommitted = false;
+    try {
+      setOperationMessage(`กำลังอ่านความยาว ${files.length} คลิป…`);
+      const metadataResults = await Promise.allSettled(files.map(async (file) => {
+        const previewUrl = URL.createObjectURL(file);
+        newObjectUrls.push(previewUrl);
+        objectUrlsRef.current.add(previewUrl);
+        const durationMs = await browserVideoDuration(file, previewUrl);
+        return { file, previewUrl, durationMs };
+      }));
+      const batchErrors: string[] = [];
+      const prepared = metadataResults.flatMap((result, index) => {
+        if (result.status === "fulfilled") return [result.value];
+        batchErrors.push(`${files[index].name}: อ่านความยาวไม่ได้`);
+        const failedUrl = newObjectUrls[index];
+        if (failedUrl) {
+          URL.revokeObjectURL(failedUrl);
+          objectUrlsRef.current.delete(failedUrl);
+        }
+        return [];
+      });
+      if (!prepared.length) throw new Error(batchErrors.join(" · ") || "ไม่พบคลิปที่เปิดอ่านได้");
+
+      let successfulUploads: { prepared: typeof prepared[number]; uploaded: LocalAsset }[];
+      if (engineState === "connected") {
+        setOperationMessage(`กำลังอัปโหลด ${prepared.length} คลิปไว้ในเครื่อง…`);
+        const result = await localApi.uploadAssets(prepared.map((item) => item.file), (progress, current, total) => {
+          setUploadProgress(progress);
+          setOperationMessage(`กำลังอัปโหลดคลิป ${current} จาก ${total}…`);
+        });
+        successfulUploads = result.results.flatMap((uploadResult, index) => {
+          if (uploadResult.asset) return [{ prepared: prepared[index], uploaded: uploadResult.asset }];
+          batchErrors.push(`${uploadResult.fileName}: ${uploadResult.error || "อัปโหลดไม่สำเร็จ"}`);
+          const previewUrl = prepared[index].previewUrl;
+          URL.revokeObjectURL(previewUrl);
+          objectUrlsRef.current.delete(previewUrl);
+          return [];
+        });
+      } else {
+        successfulUploads = prepared.map((item, index) => ({
+          prepared: item,
+          uploaded: {
+            name: `demo-${Date.now()}-${index}-${item.file.name}`,
+            originalName: item.file.name,
+            size: item.file.size,
+            url: item.previewUrl,
+            durationMs: item.durationMs,
+          },
+        }));
+      }
+      if (!successfulUploads.length) throw new Error(batchErrors.join(" · ") || "อัปโหลดคลิปไม่สำเร็จ");
+
+      const nextAssets = [...orderedClipAssets];
+      const newlyAdded: WizardAsset[] = [];
+      successfulUploads.forEach(({ prepared: { file, previewUrl, durationMs: browserDurationMs }, uploaded }) => {
+        const durationMs = typeof uploaded.durationMs === "number" && uploaded.durationMs > 0
+          ? uploaded.durationMs
+          : browserDurationMs;
+        const existingIndex = nextAssets.findIndex((asset) => asset.name === uploaded.name);
+        const nextAsset: WizardAsset = {
+          ...uploaded,
+          originalName: uploaded.originalName || file.name,
+          durationMs,
+          selectedDurationSec: Math.min(durationMs / 1000, 8),
+          order: existingIndex >= 0 ? nextAssets[existingIndex].order : nextAssets.length,
+          clientId: existingIndex >= 0 ? nextAssets[existingIndex].clientId : makeTimelineId(),
+          previewUrl,
+          durationKnown: true,
+        };
+        if (existingIndex >= 0) {
+          const oldPreview = nextAssets[existingIndex].previewUrl;
+          if (oldPreview && oldPreview !== previewUrl && objectUrlsRef.current.has(oldPreview)) {
+            URL.revokeObjectURL(oldPreview);
+            objectUrlsRef.current.delete(oldPreview);
+          }
+          nextAssets[existingIndex] = nextAsset;
+        } else {
+          nextAssets.push(nextAsset);
+        }
+        newlyAdded.push(nextAsset);
+      });
+      const normalizedAssets = nextAssets.map((asset, order) => ({ ...asset, order }));
+      const newTimelineClips = newlyAdded.map((asset, index): LocalTimelineClip => ({
+        id: makeTimelineId(),
+        assetName: asset.name,
+        order: orderedTimelineClips.length + index,
+        trimStartMs: 0,
+        trimEndMs: Math.min(asset.durationMs, 8_000),
+      }));
+      const nextTimeline = persistedTimeline([...orderedTimelineClips, ...newTimelineClips]);
+      const firstNew = newlyAdded[0];
+      invalidateRenderedDraft();
+      setClipAssets(normalizedAssets);
+      setTimelineClips(nextTimeline);
+      setActiveClipId(firstNew.clientId);
+      setSelectedTimelineClipId(newTimelineClips[0]?.id ?? nextTimeline[0]?.id ?? null);
+      setAssetName(normalizedAssets[0]?.name ?? null);
+      setFileName(firstNew.originalName || firstNew.name);
+      setFileSize(`${(firstNew.size / 1024 / 1024).toFixed(1)} MB`);
+      setVideoUrl(firstNew.previewUrl || firstNew.url);
+      setTimelinePlayheadMs(orderedTimelineClips.reduce((sum, clip) => sum + clip.trimEndMs - clip.trimStartMs, 0));
+      setTimelineEditorOpen(true);
+      assetsCommitted = true;
+
+      if (engineState === "connected") {
+        const savedAssets = persistedAssets(normalizedAssets, nextTimeline);
+        const nextProduct = projectProduct({
+          assets: savedAssets,
+          asset: savedAssets[0],
+          timelineClips: nextTimeline,
+        });
+        const nextTitle = brief.name || pathlessName(firstNew.originalName || firstNew.name);
+        const id = await ensureProject(nextProduct, nextTitle);
+        await queueProjectUpdate(id, {
+          title: nextTitle,
+          wizardStep: 1,
+          product: nextProduct,
+        });
+      }
+      setUploadProgress(100);
+      setUploadError(batchErrors.length ? `เพิ่มบางไฟล์ไม่สำเร็จ: ${batchErrors.join(" · ")}` : "");
+      setToast(`เพิ่ม ${newlyAdded.length} คลิปแล้ว จัดลำดับและตัดความยาวบน Timeline ได้เลย`);
+    } catch (error) {
+      if (!assetsCommitted) {
+        for (const url of newObjectUrls) {
+          URL.revokeObjectURL(url);
+          objectUrlsRef.current.delete(url);
+        }
+      }
       setUploadError(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ กรุณาลองใหม่");
     } finally {
+      uploadLockRef.current = false;
       setOperationMessage("");
       setAnalyzing(false);
     }
@@ -471,15 +886,279 @@ export function ProjectWizard() {
 
   const pathlessName = (name: string) => name.replace(/\.[^.]+$/, "").slice(0, 120);
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => { void selectFile(event.target.files?.[0]); };
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    void selectFiles(event.target.files ?? undefined);
+    event.target.value = "";
+  };
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    void selectFile(event.dataTransfer.files?.[0]);
+    void selectFiles(event.dataTransfer.files);
+  };
+
+  const timelineClipStartMs = (clipId: string) => {
+    let elapsed = 0;
+    for (const clip of orderedTimelineClips) {
+      if (clip.id === clipId) return elapsed;
+      elapsed += Math.max(0, clip.trimEndMs - clip.trimStartMs);
+    }
+    return elapsed;
+  };
+
+  const playTimelineVideo = (video: HTMLVideoElement) => {
+    const revision = timelinePlaybackRevisionRef.current;
+    void video.play().catch(() => {
+      if (timelinePlaybackRevisionRef.current === revision) setTimelinePlaying(false);
+    });
+  };
+
+  const seekTimeline = (requestedMs: number, autoplay = false) => {
+    if (!orderedTimelineClips.length) return;
+    timelinePlaybackRevisionRef.current += 1;
+    const targetMs = Math.max(0, Math.min(timelineTotalMs, requestedMs));
+    let elapsed = 0;
+    let targetClip = orderedTimelineClips[orderedTimelineClips.length - 1];
+    let localMs = targetClip.trimEndMs;
+    for (const clip of orderedTimelineClips) {
+      const duration = Math.max(0, clip.trimEndMs - clip.trimStartMs);
+      if (targetMs < elapsed + duration || (targetMs === 0 && elapsed === 0)) {
+        targetClip = clip;
+        localMs = clip.trimStartMs + Math.max(0, targetMs - elapsed);
+        break;
+      }
+      elapsed += duration;
+    }
+    const asset = orderedClipAssets.find((item) => item.name === targetClip.assetName);
+    pendingTimelineSeekRef.current = localMs;
+    setTimelinePlayheadMs(targetMs);
+    setSelectedTimelineClipId(targetClip.id);
+    if (asset) {
+      setActiveClipId(asset.clientId);
+      setFileName(asset.originalName || asset.name);
+      setFileSize(asset.size ? `${(asset.size / 1024 / 1024).toFixed(1)} MB` : "ไฟล์บนเครื่อง");
+    }
+    setTimelinePlaying(autoplay);
+    const video = timelineVideoRef.current;
+    if (video && selectedTimelineClip?.id === targetClip.id && video.readyState >= 1) {
+      video.currentTime = localMs / 1000;
+      pendingTimelineSeekRef.current = null;
+      if (autoplay) playTimelineVideo(video);
+    }
+  };
+
+  useEffect(() => {
+    if (!timelineEditorOpen || !selectedTimelineClip) return;
+    const video = timelineVideoRef.current;
+    if (!video || video.readyState < 1) return;
+    const targetMs = pendingTimelineSeekRef.current ?? selectedTimelineClip.trimStartMs;
+    video.currentTime = Math.max(selectedTimelineClip.trimStartMs, Math.min(selectedTimelineClip.trimEndMs, targetMs)) / 1000;
+    pendingTimelineSeekRef.current = null;
+    if (timelinePlaying) playTimelineVideo(video);
+    // The selected segment controls the source and local seek position.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTimelineClipId, timelinePreviewUrl, timelineEditorOpen]);
+
+  useEffect(() => {
+    const video = timelineVideoRef.current;
+    if (!video) return;
+    if (timelinePlaying) playTimelineVideo(video);
+    else {
+      timelinePlaybackRevisionRef.current += 1;
+      video.pause();
+    }
+  }, [timelinePlaying]);
+
+  const reconcileAssetDuration = (assetNameToUpdate: string, actualDurationMs: number) => {
+    if (!Number.isFinite(actualDurationMs) || actualDurationMs <= 0) return;
+    setClipAssets((current) => current.map((asset) => asset.name === assetNameToUpdate
+      ? { ...asset, durationMs: actualDurationMs, durationKnown: true, selectedDurationSec: Math.min(asset.selectedDurationSec, actualDurationMs / 1000) }
+      : asset));
+    setTimelineClips((current) => current.map((clip) => {
+      if (clip.assetName !== assetNameToUpdate) return clip;
+      const trimStartMs = Math.min(clip.trimStartMs, Math.max(0, actualDurationMs - 100));
+      return { ...clip, trimStartMs, trimEndMs: Math.max(trimStartMs + 100, Math.min(clip.trimEndMs, actualDurationMs)) };
+    }));
+  };
+
+  const handleTimelineLoadedMetadata = () => {
+    const video = timelineVideoRef.current;
+    if (!video || !selectedTimelineClip || !selectedTimelineAsset) return;
+    const actualDurationMs = Math.round(video.duration * 1000);
+    if (Number.isFinite(actualDurationMs) && actualDurationMs > 0 && (!selectedTimelineAsset.durationKnown || Math.abs(selectedTimelineAsset.durationMs - actualDurationMs) > 500)) {
+      reconcileAssetDuration(selectedTimelineAsset.name, actualDurationMs);
+    }
+    const targetMs = pendingTimelineSeekRef.current ?? selectedTimelineClip.trimStartMs;
+    video.currentTime = Math.max(selectedTimelineClip.trimStartMs, Math.min(selectedTimelineClip.trimEndMs, targetMs)) / 1000;
+    pendingTimelineSeekRef.current = null;
+    if (timelinePlaying) playTimelineVideo(video);
+  };
+
+  const handleTimelineTimeUpdate = () => {
+    const video = timelineVideoRef.current;
+    if (!video || !selectedTimelineClip) return;
+    const localMs = video.currentTime * 1000;
+    const clipStart = timelineClipStartMs(selectedTimelineClip.id);
+    const clipDuration = selectedTimelineClip.trimEndMs - selectedTimelineClip.trimStartMs;
+    setTimelinePlayheadMs(Math.min(timelineTotalMs, clipStart + Math.max(0, Math.min(clipDuration, localMs - selectedTimelineClip.trimStartMs))));
+    if (localMs < selectedTimelineClip.trimEndMs - 35) return;
+    video.pause();
+    const currentIndex = orderedTimelineClips.findIndex((clip) => clip.id === selectedTimelineClip.id);
+    const nextClip = orderedTimelineClips[currentIndex + 1];
+    if (timelinePlaying && nextClip) seekTimeline(clipStart + clipDuration, true);
+    else {
+      setTimelinePlaying(false);
+      setTimelinePlayheadMs(nextClip ? clipStart + clipDuration : timelineTotalMs);
+    }
+  };
+
+  const selectTimelineClip = (clip: LocalTimelineClip) => {
+    timelineVideoRef.current?.pause();
+    setTimelinePlaying(false);
+    pendingTimelineSeekRef.current = clip.trimStartMs;
+    setSelectedTimelineClipId(clip.id);
+    setTimelinePlayheadMs(timelineClipStartMs(clip.id));
+    const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
+    if (asset) {
+      setActiveClipId(asset.clientId);
+      setFileName(asset.originalName || asset.name);
+      setFileSize(asset.size ? `${(asset.size / 1024 / 1024).toFixed(1)} MB` : "ไฟล์บนเครื่อง");
+    }
+  };
+
+  const updateTimelineTrim = (clipId: string, edge: "start" | "end", seconds: number) => {
+    const clip = orderedTimelineClips.find((item) => item.id === clipId);
+    if (!clip) return;
+    const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
+    if (!asset) return;
+    const requestedMs = Number.isFinite(seconds) ? Math.round(seconds * 1000) : 0;
+    invalidateRenderedDraft();
+    setTimelinePlaying(false);
+    timelineVideoRef.current?.pause();
+    setTimelineClips((current) => current.map((item) => {
+      if (item.id !== clipId) return item;
+      if (edge === "start") return { ...item, trimStartMs: Math.max(0, Math.min(item.trimEndMs - 100, requestedMs)) };
+      return { ...item, trimEndMs: Math.min(asset.durationMs, Math.max(item.trimStartMs + 100, requestedMs)) };
+    }));
+  };
+
+  const moveTimelineClip = (clipId: string, nextIndex: number) => {
+    const currentIndex = orderedTimelineClips.findIndex((clip) => clip.id === clipId);
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedTimelineClips.length || currentIndex === nextIndex) return;
+    const next = [...orderedTimelineClips];
+    const [moved] = next.splice(currentIndex, 1);
+    next.splice(nextIndex, 0, moved);
+    invalidateRenderedDraft();
+    setTimelinePlaying(false);
+    timelineVideoRef.current?.pause();
+    setTimelineClips(next.map((clip, order) => ({ ...clip, order })));
+    setTimelinePlayheadMs(0);
+  };
+
+  const dropTimelineClip = (targetId: string) => {
+    if (!draggingClipId || draggingClipId === targetId) return;
+    const targetIndex = orderedTimelineClips.findIndex((clip) => clip.id === targetId);
+    moveTimelineClip(draggingClipId, targetIndex);
+    setDraggingClipId(null);
+  };
+
+  const splitTimelineClip = () => {
+    if (!selectedTimelineClip) return;
+    if (orderedTimelineClips.length >= MAX_TIMELINE_CLIPS) {
+      setUploadError(`Timeline รองรับได้สูงสุด ${MAX_TIMELINE_CLIPS} ช่วงคลิป`);
+      return;
+    }
+    const clipStart = timelineClipStartMs(selectedTimelineClip.id);
+    const splitAtMs = selectedTimelineClip.trimStartMs + (timelinePlayheadMs - clipStart);
+    if (splitAtMs <= selectedTimelineClip.trimStartMs + 99 || splitAtMs >= selectedTimelineClip.trimEndMs - 99) {
+      setUploadError("เลื่อนจุดเล่นให้อยู่ด้านในคลิปอย่างน้อย 0.1 วินาที แล้วจึงกดแยกคลิป");
+      return;
+    }
+    const secondId = makeTimelineId();
+    invalidateRenderedDraft();
+    const next: LocalTimelineClip[] = [];
+    for (const clip of orderedTimelineClips) {
+      if (clip.id !== selectedTimelineClip.id) next.push(clip);
+      else {
+        next.push({ ...clip, trimEndMs: Math.round(splitAtMs) });
+        next.push({ ...clip, id: secondId, trimStartMs: Math.round(splitAtMs) });
+      }
+    }
+    setTimelinePlaying(false);
+    timelineVideoRef.current?.pause();
+    setTimelineClips(next.map((clip, order) => ({ ...clip, order })));
+    setSelectedTimelineClipId(secondId);
+    pendingTimelineSeekRef.current = splitAtMs;
+    setUploadError("");
+    setToast("แยกคลิปตรงจุดเล่นแล้ว");
+  };
+
+  const deleteTimelineClip = (clipId: string) => {
+    const index = orderedTimelineClips.findIndex((clip) => clip.id === clipId);
+    if (index < 0) return;
+    invalidateRenderedDraft();
+    const next = orderedTimelineClips.filter((clip) => clip.id !== clipId).map((clip, order) => ({ ...clip, order }));
+    const nextSelected = next[Math.min(index, next.length - 1)] ?? null;
+    setTimelinePlaying(false);
+    timelineVideoRef.current?.pause();
+    setTimelineClips(next);
+    setSelectedTimelineClipId(nextSelected?.id ?? null);
+    setTimelinePlayheadMs(nextSelected ? next.slice(0, Math.min(index, next.length - 1)).reduce((sum, clip) => sum + clip.trimEndMs - clip.trimStartMs, 0) : 0);
+    if (nextSelected) pendingTimelineSeekRef.current = nextSelected.trimStartMs;
+  };
+
+  const addAssetToTimeline = (asset: WizardAsset) => {
+    if (orderedTimelineClips.length >= MAX_TIMELINE_CLIPS) {
+      setUploadError(`Timeline รองรับได้สูงสุด ${MAX_TIMELINE_CLIPS} ช่วงคลิป`);
+      return;
+    }
+    const remainingMs = MAX_TOTAL_DURATION_SEC * 1000 - timelineTotalMs;
+    if (remainingMs < 100) {
+      setUploadError("Timeline เต็ม 60 วินาทีแล้ว กรุณาตัดหรือลบบางช่วงก่อนเพิ่มคลิป");
+      return;
+    }
+    const clip: LocalTimelineClip = {
+      id: makeTimelineId(),
+      assetName: asset.name,
+      order: orderedTimelineClips.length,
+      trimStartMs: 0,
+      trimEndMs: Math.min(asset.durationMs, 8_000, remainingMs),
+    };
+    invalidateRenderedDraft();
+    setTimelinePlaying(false);
+    timelineVideoRef.current?.pause();
+    setTimelineClips([...orderedTimelineClips, clip]);
+    setSelectedTimelineClipId(clip.id);
+    setActiveClipId(asset.clientId);
+    setTimelinePlayheadMs(timelineTotalMs);
+    pendingTimelineSeekRef.current = 0;
+    setUploadError("");
+    setToast(`เพิ่ม ${asset.originalName || asset.name} เข้า Timeline แล้ว`);
+  };
+
+  const finishTimelineEdit = async () => {
+    if (clipSelectionInvalid) {
+      setUploadError(orderedTimelineClips.length === 0
+        ? "Timeline ต้องมีอย่างน้อย 1 ช่วงคลิป"
+        : selectedTotalSec > MAX_TOTAL_DURATION_SEC
+          ? `Timeline ยาว ${selectedTotalSec.toFixed(1)} วินาที กรุณาตัดให้ไม่เกิน 60 วินาที`
+          : "กรุณาตรวจเวลาเริ่มและเวลาจบของคลิปที่เลือก");
+      return;
+    }
+    const saved = await saveProject("บันทึก Timeline เรียบร้อยแล้ว");
+    if (saved) {
+      setTimelinePlaying(false);
+      timelineVideoRef.current?.pause();
+      setTimelineEditorOpen(false);
+      setUploadError("");
+    }
   };
 
   const goNext = async () => {
-    if (engineState === "connected" && activeStep === 1 && !assetName) {
-      setUploadError("กรุณาอัปโหลดคลิปต้นฉบับก่อนเข้าสู่ขั้นถัดไป");
+    if (activeStep === 1 && clipSelectionInvalid) {
+      setUploadError(orderedTimelineClips.length === 0
+        ? "กรุณาอัปโหลดและจัด Timeline อย่างน้อย 1 คลิปก่อนเข้าสู่ขั้นถัดไป"
+        : selectedTotalSec > MAX_TOTAL_DURATION_SEC
+          ? `Timeline ยาว ${selectedTotalSec.toFixed(1)} วินาที กรุณาตัดให้ไม่เกิน 60 วินาที`
+          : "เวลาเริ่ม–จบของบางคลิปไม่ถูกต้อง กรุณาแก้ใน Timeline");
       return;
     }
     setUploadError("");
@@ -498,15 +1177,15 @@ export function ProjectWizard() {
           return;
         }
         setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
-        await localApi.updateProject(id, { title: brief.name, product: projectProduct(), wizardStep: 2 });
-        const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: 28 });
+        await queueProjectUpdate(id, { title: brief.name, product: projectProduct(), wizardStep: 2 });
+        const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: selectedTotalSec });
         if (result.scripts.length) {
           setScriptVariants(result.scripts);
           setSelectedScript(result.scripts[0].id);
           setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
         }
       } else {
-        await localApi.updateProject(id, { title: brief.name, product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
+        await queueProjectUpdate(id, { title: brief.name, product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
       }
       if (activeStep < 4) setActiveStep((activeStep + 1) as WizardStep);
       else if (activeStep === 4) {
@@ -590,6 +1269,8 @@ export function ProjectWizard() {
 
   const beginRender = async (kind: "draft" | "final", knownProjectId?: string) => {
     const id = knownProjectId ?? projectId ?? await ensureProject();
+    const renderEditRevision = editRevisionRef.current;
+    activeRenderEditRevisionRef.current = renderEditRevision;
     setRenderError("");
     setActiveStep(5);
     if (kind === "final") setRenderDone(false);
@@ -598,14 +1279,28 @@ export function ProjectWizard() {
     setRenderKind(kind);
     setOperationMessage(kind === "draft" ? "กำลังเข้าคิวสร้างร่าง" : "กำลังเข้าคิวสร้างคลิปตัวจริง");
     try {
+      // Promotion compares the draft hash with the persisted project. Flush the
+      // latest edit first so a quick trim-then-render can never reuse a stale draft.
+      await queueProjectUpdate(id, {
+        title: brief.name || fileName || "โปรเจกต์ใหม่",
+        wizardStep: 5,
+        product: projectProduct(),
+      });
       const position = captionPosition === "บน" ? "top" : captionPosition === "กลาง" ? "middle" : "bottom";
       const result = kind === "final" && draftReady && renderId
         ? await localApi.promoteRender(renderId, { styleId: selectedStyle, position })
         : await localApi.startRender(id, {
           kind,
           styleId: selectedStyle,
+          assets: persistedAssets(clipAssets, timelineClips),
+          timelineClips: persistedTimeline(timelineClips),
+          targetSec: selectedTotalSec,
           config: {
-            assetName,
+            assetName: orderedTimelineClips[0]?.assetName ?? assetName,
+            assets: persistedAssets(clipAssets, timelineClips),
+            timelineClips: persistedTimeline(timelineClips),
+            targetSec: selectedTotalSec,
+            selectedTotalSec,
             brief: briefForApi(),
             scriptId: selectedScript,
             script: currentChunks,
@@ -617,9 +1312,14 @@ export function ProjectWizard() {
             position,
           },
         });
+      if (editRevisionRef.current !== renderEditRevision) {
+        await localApi.cancelRender(result.renderId).catch(() => undefined);
+        return;
+      }
       setRenderId(result.renderId);
-      observeRender(result.renderId, kind);
+      observeRender(result.renderId, kind, renderEditRevision);
     } catch (error) {
+      if (editRevisionRef.current !== renderEditRevision) return;
       setRendering(false);
       setRenderError(error instanceof Error ? error.message : "เริ่มสร้างคลิปไม่สำเร็จ");
     }
@@ -692,12 +1392,12 @@ export function ProjectWizard() {
             <div>
               <div className="title-line">
                 <h1>{brief.name || "โปรเจกต์ใหม่"}</h1>
-                <span className="autosave"><Check size={13} /> {engineState === "connected" ? "บันทึกบนเครื่อง" : "โหมดตัวอย่าง"}</span>
+                <span className="autosave"><Check size={13} /> {engineState === "connected" ? "Timeline บันทึกอัตโนมัติ" : "โหมดตัวอย่าง"}</span>
               </div>
               <p>โปรเจกต์ใหม่ · สร้างเมื่อสักครู่</p>
             </div>
           </div>
-          <button className="button button-quiet" type="button" onClick={() => setToast("บันทึกโปรเจกต์ล่าสุดแล้ว") }>
+          <button className="button button-quiet" type="button" onClick={() => void saveProject()}>
             <Save size={16} /> บันทึก
           </button>
         </header>
@@ -712,7 +1412,14 @@ export function ProjectWizard() {
                 type="button"
                 key={step.id}
                 className={`${active ? "active" : ""} ${complete ? "complete" : ""}`}
-                onClick={() => setActiveStep(step.id)}
+                disabled={step.id > 1 && clipSelectionInvalid}
+                onClick={() => {
+                  if (step.id > 1 && clipSelectionInvalid) {
+                    setUploadError("จัด Timeline ให้มีความยาว 1–60 วินาทีก่อนเข้าสู่ขั้นถัดไป");
+                    return;
+                  }
+                  setActiveStep(step.id);
+                }}
                 aria-current={active ? "step" : undefined}
               >
                 <span className="step-number">{complete ? <Check size={15} /> : <Icon size={17} />}</span>
@@ -723,58 +1430,186 @@ export function ProjectWizard() {
           })}
         </nav>
 
-        <div className="wizard-workspace">
+        <div className={`wizard-workspace ${timelineEditorOpen && activeStep === 1 ? "timeline-mode" : ""}`}>
           <section className="wizard-card">
             {(uploadError || renderError) && <div className="form-alert error wizard-global-alert"><CircleAlert size={17} />{uploadError || renderError}<button type="button" onClick={() => { setUploadError(""); setRenderError(""); }} aria-label="ปิด"><X size={14} /></button></div>}
             {activeStep === 1 && (
-              <div className="step-panel">
-                <div className="step-panel-heading">
-                  <span className="step-kicker">ขั้นที่ 1 จาก 5</span>
-                  <h2>เริ่มจากคลิปสินค้าของคุณ</h2>
-                  <p>เลือกคลิปแนวตั้งที่เห็นสินค้าได้ชัด เราจะจัดขนาด ตรวจฉาก และเตรียมพรีวิวให้เอง</p>
-                </div>
+              <div className={`step-panel ${timelineEditorOpen ? "timeline-editor-panel" : ""}`}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm"
+                  multiple
+                  disabled={analyzing || engineState === "checking"}
+                  onChange={handleFileChange}
+                  hidden
+                />
 
-                <div
-                  className="upload-zone"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={handleDrop}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => fileInputRef.current?.click()}
-                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") fileInputRef.current?.click(); }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/mp4,video/quicktime,video/webm"
-                    onChange={handleFileChange}
-                    hidden
-                  />
-                  <span className="upload-illustration"><UploadCloud size={28} /></span>
-                  <h3>ลากคลิปมาวางตรงนี้</h3>
-                  <p>หรือ <span>เลือกไฟล์จากเครื่อง</span></p>
-                  <small>รองรับ MP4, MOV, WebM · สูงสุด 500 MB</small>
-                </div>
-                {hasChosenClip && <div className="asset-card">
-                  <div className="asset-poster"><img src="/clippang-sample-poster.jpg" alt="ภาพตัวอย่างคลิปที่เลือก" /><Film size={17} /></div>
-                  <div className="asset-info">
-                    <h3>{fileName}</h3>
-                    <p>{fileSize} · 720 × 1280 · 00:29</p>
-                    <div className="asset-tags">
-                      <span><CheckCircle2 size={13} /> แนวตั้ง 9:16</span>
-                      <span><CheckCircle2 size={13} /> เสียงชัด</span>
-                      <span className="warning"><CircleAlert size={13} /> พบซับเดิมบางช่วง</span>
+                {!timelineEditorOpen ? (
+                  <>
+                    <div className="step-panel-heading inline-heading clip-step-heading">
+                      <div>
+                        <span className="step-kicker">ขั้นที่ 1 จาก 5</span>
+                        <h2>{hasChosenClip ? "คลิปและ Timeline ของคุณ" : "อัปโหลดคลิปสินค้าของคุณ"}</h2>
+                        <p>เลือกพร้อมกันได้หลายคลิป แล้วเรียง ตัด และต่อให้เป็นวิดีโอเดียว ความยาวรวม 1–60 วินาที</p>
+                      </div>
+                      {hasChosenClip && <button type="button" className="button button-outline" onClick={() => {
+                        setTimelineEditorOpen(true);
+                        const clip = selectedTimelineClip ?? orderedTimelineClips[0];
+                        if (clip) selectTimelineClip(clip);
+                      }}><Film size={16} /> แก้ไข Timeline</button>}
                     </div>
-                  </div>
-                  <button type="button" className="icon-button" onClick={() => fileInputRef.current?.click()} aria-label="เปลี่ยนคลิป"><RotateCcw size={17} /></button>
-                </div>}
 
-                {analyzing ? (
-                  <div className="analysis-box"><LoaderCircle size={18} className="spin" /><div><b>{operationMessage || "กำลังตรวจคลิป..."}</b><span>{uploadProgress > 0 && uploadProgress < 100 ? `อัปโหลดแล้ว ${uploadProgress}%` : "กำลังดูชนิดไฟล์ ฉาก แสง และซับที่ติดมากับวิดีโอ"}</span></div></div>
+                    {clipAssets.length < MAX_CLIPS && <div
+                      className={`upload-zone upload-zone-multiple ${analyzing || engineState === "checking" ? "disabled" : ""}`}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={handleDrop}
+                      role="button"
+                      tabIndex={0}
+                      aria-disabled={analyzing || engineState === "checking"}
+                      onClick={() => { if (!analyzing && engineState !== "checking") fileInputRef.current?.click(); }}
+                      onKeyDown={(event) => { if (!analyzing && engineState !== "checking" && (event.key === "Enter" || event.key === " ")) fileInputRef.current?.click(); }}
+                    >
+                      <span className="upload-illustration"><UploadCloud size={28} /></span>
+                      <h3>{hasChosenClip ? "เพิ่มคลิปเข้า Timeline" : "ลากหลายคลิปมาวางตรงนี้"}</h3>
+                      <p>หรือ <span>เลือกหลายไฟล์จากเครื่องพร้อมกัน</span></p>
+                      <small>MP4, MOV, WebM · ไฟล์ละไม่เกิน 500 MB · สูงสุด {MAX_CLIPS} คลิป</small>
+                    </div>}
+
+                    {analyzing && (
+                      <div className="analysis-box"><LoaderCircle size={18} className="spin" /><div><b>{operationMessage || "กำลังตรวจคลิป..."}</b><span>{uploadProgress > 0 && uploadProgress < 100 ? `อัปโหลดรวมแล้ว ${uploadProgress}%` : "กำลังอ่านความยาวและเตรียมภาพตัวอย่างของแต่ละคลิป"}</span></div></div>
+                    )}
+
+                    {hasChosenClip && !analyzing && <div className="timeline-summary-card">
+                      <div className="timeline-summary-head">
+                        <div><span><BadgeCheck size={16} /> พร้อมนำไปต่อคลิป</span><h3>{orderedTimelineClips.length} ช่วง จาก {orderedClipAssets.length} ไฟล์ต้นฉบับ</h3></div>
+                        <div className={`timeline-total ${clipSelectionInvalid ? "invalid" : "valid"}`}><small>ความยาวรวม</small><b>{formatDuration(selectedTotalSec)}</b><span>สูงสุด 01:00</span></div>
+                      </div>
+                      <div className="timeline-summary-list" aria-label="ลำดับคลิปใน Timeline">
+                        {orderedTimelineClips.map((clip, index) => {
+                          const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
+                          return <button type="button" key={clip.id} onClick={() => { selectTimelineClip(clip); setTimelineEditorOpen(true); }}>
+                            <span className="summary-order">{index + 1}</span>
+                            <span className="summary-thumb">{asset && <video src={asset.previewUrl || asset.url} preload="metadata" muted playsInline />}</span>
+                            <span className="summary-copy"><b>{asset?.originalName || asset?.name || "คลิป"}</b><small>{(clip.trimStartMs / 1000).toFixed(1)}s–{(clip.trimEndMs / 1000).toFixed(1)}s · ใช้ {((clip.trimEndMs - clip.trimStartMs) / 1000).toFixed(1)}s</small></span>
+                            <ArrowRight size={15} />
+                          </button>;
+                        })}
+                      </div>
+                      {clipSelectionInvalid && <div className="timeline-validation"><CircleAlert size={15} />{orderedTimelineClips.length === 0 ? "Timeline ต้องมีอย่างน้อย 1 ช่วงคลิป" : selectedTotalSec > 60 ? `เกินกำหนด ${(selectedTotalSec - 60).toFixed(1)} วินาที — เปิด Timeline เพื่อตัดให้สั้นลง` : "มีช่วงคลิปที่เวลาเริ่ม–จบไม่ถูกต้อง"}</div>}
+                    </div>}
+
+                    {engineState === "unavailable" && <div className="demo-editor-note"><CircleAlert size={15} /><span><b>โหมดตัวอย่าง</b> คลิปจะอยู่เฉพาะในเบราว์เซอร์หน้านี้ ไม่ถูกอัปโหลดหรือบันทึกถาวร</span></div>}
+                    <div className="copyright-note"><CircleAlert size={16} /><p>ใช้เฉพาะคลิปที่คุณมีสิทธิ์เผยแพร่ เพื่อป้องกันปัญหาลิขสิทธิ์และเนื้อหาซ้ำบนแพลตฟอร์ม</p></div>
+                  </>
                 ) : (
-                  hasChosenClip ? <div className="analysis-box ready"><BadgeCheck size={18} /><div><b>คลิปพร้อมใช้งาน</b><span>{engineState === "connected" ? "ผ่านการตรวจชนิดไฟล์แล้ว · ระบบจะวิเคราะห์ฉากและซับเดิมตอนสร้างร่าง" : "พบ 8 ฉาก · ความสว่างดี · จะครอปเป็น 1080 × 1920 อัตโนมัติ"}</span></div></div> : null
+                  <>
+                    <div className="timeline-editor-heading">
+                      <div><span className="step-kicker">Timeline Editor</span><h2>เรียงและตัดคลิปให้ลงตัว</h2><p>ลากช่วงคลิปเพื่อเรียงใหม่ เลื่อนจุดเล่นเพื่อพรีวิวต่อเนื่อง และตัดรวมไม่เกิน 60 วินาที</p></div>
+                      <div className={`timeline-total timeline-total-editor ${clipSelectionInvalid ? "invalid" : "valid"}`}><small>ความยาวรวม</small><b>{formatDuration(selectedTotalSec)}</b><span>กำหนด 00:01–01:00</span></div>
+                    </div>
+
+                    <div className="timeline-editor-shell">
+                      <section className="timeline-preview-column" aria-label="พรีวิว Timeline">
+                        <div className="timeline-video-stage">
+                          {selectedTimelineClip ? <video
+                            ref={timelineVideoRef}
+                            key={timelinePreviewUrl}
+                            src={timelinePreviewUrl}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            onLoadedMetadata={handleTimelineLoadedMetadata}
+                            onTimeUpdate={handleTimelineTimeUpdate}
+                            onEnded={handleTimelineTimeUpdate}
+                          /> : <div className="timeline-video-empty"><Film size={32} /><span>เพิ่มคลิปลง Timeline</span></div>}
+                          {selectedTimelineClip && <span className="timeline-preview-label">คลิป {orderedTimelineClips.findIndex((clip) => clip.id === selectedTimelineClip.id) + 1} · {selectedTimelineAsset?.originalName || selectedTimelineAsset?.name}</span>}
+                          <button type="button" className="timeline-stage-play" onClick={() => timelinePlaying ? setTimelinePlaying(false) : seekTimeline(timelinePlayheadMs >= timelineTotalMs ? 0 : timelinePlayheadMs, true)} aria-label={timelinePlaying ? "หยุด Timeline" : "เล่น Timeline ต่อเนื่อง"}>{timelinePlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}</button>
+                        </div>
+                        <div className="timeline-transport">
+                          <button type="button" onClick={() => timelinePlaying ? setTimelinePlaying(false) : seekTimeline(timelinePlayheadMs >= timelineTotalMs ? 0 : timelinePlayheadMs, true)} aria-label={timelinePlaying ? "หยุด" : "เล่น"}>{timelinePlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}</button>
+                          <b>{formatDuration(timelinePlayheadMs / 1000)}</b>
+                          <input type="range" min="0" max={Math.max(1, timelineTotalMs)} step="50" value={Math.min(timelinePlayheadMs, timelineTotalMs)} onChange={(event) => { timelineVideoRef.current?.pause(); seekTimeline(Number(event.target.value), false); }} aria-label="ตำแหน่งจุดเล่นใน Timeline" />
+                          <span>{formatDuration(selectedTotalSec)}</span>
+                        </div>
+                      </section>
+
+                      <aside className="timeline-inspector" aria-label="ตั้งค่าช่วงคลิปที่เลือก">
+                        {selectedTimelineClip && selectedTimelineAsset ? <>
+                          <div className="timeline-inspector-head"><span><GripVertical size={15} /></span><div><small>ช่วงที่ {orderedTimelineClips.findIndex((clip) => clip.id === selectedTimelineClip.id) + 1} · {fileSize}</small><b>{selectedTimelineAsset.originalName || selectedTimelineAsset.name}</b></div></div>
+                          <div className="trim-duration-readout"><span>เวลาที่ใช้</span><b>{((selectedTimelineClip.trimEndMs - selectedTimelineClip.trimStartMs) / 1000).toFixed(1)} วินาที</b></div>
+                          <div className="trim-fields">
+                            <label><span>เริ่มที่</span><div><input type="number" min="0" max={Math.max(0, selectedTimelineClip.trimEndMs / 1000 - 0.1)} step="0.1" value={(selectedTimelineClip.trimStartMs / 1000).toFixed(1)} onChange={(event) => updateTimelineTrim(selectedTimelineClip.id, "start", event.target.valueAsNumber)} /><small>วินาที</small></div></label>
+                            <label><span>จบที่</span><div><input type="number" min={selectedTimelineClip.trimStartMs / 1000 + 0.1} max={selectedTimelineAsset.durationMs / 1000} step="0.1" value={(selectedTimelineClip.trimEndMs / 1000).toFixed(1)} onChange={(event) => updateTimelineTrim(selectedTimelineClip.id, "end", event.target.valueAsNumber)} /><small>วินาที</small></div></label>
+                          </div>
+                          <div className="dual-trim-control" style={{ "--trim-start": `${selectedTimelineClip.trimStartMs / selectedTimelineAsset.durationMs * 100}%`, "--trim-end": `${selectedTimelineClip.trimEndMs / selectedTimelineAsset.durationMs * 100}%` } as CSSProperties}>
+                            <span className="trim-source-rail"><i /></span>
+                            <input className="trim-start-range" type="range" min="0" max={Math.max(100, selectedTimelineAsset.durationMs)} step="100" value={selectedTimelineClip.trimStartMs} onChange={(event) => updateTimelineTrim(selectedTimelineClip.id, "start", Number(event.target.value) / 1000)} aria-label="ตัดหัวคลิป" />
+                            <input className="trim-end-range" type="range" min="0" max={Math.max(100, selectedTimelineAsset.durationMs)} step="100" value={selectedTimelineClip.trimEndMs} onChange={(event) => updateTimelineTrim(selectedTimelineClip.id, "end", Number(event.target.value) / 1000)} aria-label="ตัดท้ายคลิป" />
+                            <div><span>00:00</span><span>{formatDuration(selectedTimelineAsset.durationMs / 1000)}</span></div>
+                          </div>
+                          <div className="timeline-inspector-actions">
+                            <button type="button" onClick={splitTimelineClip}><Captions size={15} /> แยกที่จุดเล่น</button>
+                            <button type="button" className="danger" onClick={() => deleteTimelineClip(selectedTimelineClip.id)}><Trash2 size={15} /> ลบช่วงนี้</button>
+                          </div>
+                        </> : <div className="timeline-inspector-empty"><Film size={25} /><span>เลือกช่วงคลิปบน Timeline เพื่อปรับเวลา</span></div>}
+                      </aside>
+                    </div>
+
+                    <div className="timeline-toolbar">
+                      <div><b>Timeline</b><span>{orderedTimelineClips.length}/{MAX_TIMELINE_CLIPS} ช่วง · ลากเพื่อเรียงลำดับ</span></div>
+                      <button type="button" className="button button-outline button-small" disabled={clipAssets.length >= MAX_CLIPS || analyzing || engineState === "checking"} onClick={() => fileInputRef.current?.click()}><UploadCloud size={15} /> เพิ่มคลิป</button>
+                    </div>
+                    <div className="timeline-source-bin" aria-label="คลิปต้นฉบับในโปรเจกต์">
+                      <div className="timeline-source-bin-head"><div><b>คลิปต้นฉบับ</b><span>กด + เพื่อเพิ่มซ้ำหรือใส่ช่วงที่ลบกลับเข้า Timeline</span></div><small>{orderedClipAssets.length}/{MAX_CLIPS} ไฟล์</small></div>
+                      <div className="timeline-source-list">
+                        {orderedClipAssets.map((asset) => <div className="timeline-source-card" key={asset.clientId}>
+                          <video src={asset.previewUrl || asset.url} preload="metadata" muted playsInline />
+                          <span><b>{asset.originalName || asset.name}</b><small>{formatDuration(asset.durationMs / 1000)} · {(asset.size / 1024 / 1024).toFixed(1)} MB</small></span>
+                          <button type="button" onClick={() => addAssetToTimeline(asset)} disabled={orderedTimelineClips.length >= MAX_TIMELINE_CLIPS || timelineTotalMs >= MAX_TOTAL_DURATION_SEC * 1000 - 99} aria-label={`เพิ่ม ${asset.originalName || asset.name} เข้า Timeline`}><Plus size={15} /></button>
+                        </div>)}
+                      </div>
+                    </div>
+                    <div className="timeline-scroll" aria-label="Timeline คลิป">
+                      <div className="timeline-canvas" style={{ width: `${Math.max(720, selectedTotalSec * 34)}px` }}>
+                        <div className="timeline-ruler" aria-hidden="true">{Array.from({ length: 7 }).map((_, index) => <span key={index} style={{ left: `${index / 6 * 100}%` }}>{formatDuration(selectedTotalSec * index / 6)}</span>)}</div>
+                        <div className="timeline-blocks" role="listbox" aria-label="เรียงลำดับช่วงคลิป">
+                          {orderedTimelineClips.map((clip, index) => {
+                            const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
+                            const durationMs = clip.trimEndMs - clip.trimStartMs;
+                            return <div
+                              key={clip.id}
+                              role="option"
+                              aria-selected={selectedTimelineClip?.id === clip.id}
+                              tabIndex={0}
+                              draggable
+                              className={`timeline-block ${selectedTimelineClip?.id === clip.id ? "selected" : ""} ${draggingClipId === clip.id ? "dragging" : ""}`}
+                              style={{ width: `${Math.max(2, durationMs / Math.max(1, timelineTotalMs) * 100)}%` }}
+                              onDragStart={() => setDraggingClipId(clip.id)}
+                              onDragEnd={() => setDraggingClipId(null)}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => dropTimelineClip(clip.id)}
+                              onClick={() => selectTimelineClip(clip)}
+                              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") selectTimelineClip(clip); }}
+                            >
+                              <span className="timeline-block-grip"><GripVertical size={14} /></span>
+                              <span className="timeline-block-number">{index + 1}</span>
+                              <span className="timeline-block-thumb">{asset && <video src={asset.previewUrl || asset.url} preload="metadata" muted playsInline />}</span>
+                              <span className="timeline-block-copy"><b>{asset?.originalName || asset?.name || "คลิป"}</b><small>{(durationMs / 1000).toFixed(1)}s</small></span>
+                              <span className="timeline-block-accessible-actions">
+                                <button type="button" disabled={index === 0} onClick={(event) => { event.stopPropagation(); moveTimelineClip(clip.id, index - 1); }} aria-label={`ย้ายคลิป ${index + 1} ไปทางซ้าย`}><ArrowUp size={12} /></button>
+                                <button type="button" disabled={index === orderedTimelineClips.length - 1} onClick={(event) => { event.stopPropagation(); moveTimelineClip(clip.id, index + 1); }} aria-label={`ย้ายคลิป ${index + 1} ไปทางขวา`}><ArrowDown size={12} /></button>
+                              </span>
+                            </div>;
+                          })}
+                        </div>
+                        {timelineTotalMs > 0 && <span className="timeline-playhead" style={{ left: `${Math.min(100, timelinePlayheadMs / timelineTotalMs * 100)}%` }} aria-hidden="true"><i /></span>}
+                      </div>
+                    </div>
+                    {clipSelectionInvalid && <div className="timeline-validation timeline-editor-validation"><CircleAlert size={15} />{orderedTimelineClips.length === 0 ? "Timeline ต้องมีอย่างน้อย 1 ช่วงคลิป" : selectedTotalSec > 60 ? `ความยาวรวมเกิน 60 วินาทีอยู่ ${(selectedTotalSec - 60).toFixed(1)} วินาที — ตัดหรือลบบางช่วงก่อนเสร็จสิ้น` : "เวลาเริ่ม–จบของบางช่วงไม่ถูกต้อง"}</div>}
+                    {analyzing && <div className="analysis-box"><LoaderCircle size={18} className="spin" /><div><b>{operationMessage}</b><span>อัปโหลดรวมแล้ว {uploadProgress}%</span></div></div>}
+                  </>
                 )}
-                <div className="copyright-note"><CircleAlert size={16} /><p>ใช้เฉพาะคลิปที่คุณมีสิทธิ์เผยแพร่ เพื่อป้องกันปัญหาลิขสิทธิ์และเนื้อหาซ้ำบนแพลตฟอร์ม</p></div>
               </div>
             )}
 
@@ -854,7 +1689,7 @@ export function ProjectWizard() {
                   ))}
                 </div>
                 <div className="script-editor">
-                  <div className="editor-head"><div><span className="script-rank"><Sparkles size={14} /> AI แนะนำ</span><h3>{selectedScriptData.name}</h3></div><span>ประมาณ 27 วินาที</span></div>
+                  <div className="editor-head"><div><span className="script-rank"><Sparkles size={14} /> AI แนะนำ</span><h3>{selectedScriptData.name}</h3></div><span>เป้าหมาย {formatDuration(selectedTotalSec)}</span></div>
                   <div className="chunk-list">
                     {currentChunks.map((chunk, index) => (
                       <div className="chunk" key={`${selectedScript}-${index}`}>
@@ -900,7 +1735,7 @@ export function ProjectWizard() {
                       {captionStyles.slice(0, 3).map((style, index) => (
                         <button type="button" className={`draft-card ${selectedDraft === index ? "selected" : ""}`} onClick={() => { setSelectedDraft(index); setSelectedStyle(style.id); }} key={style.id}>
                           <span className="draft-video"><img src="/clippang-sample-poster.jpg" alt="" /><b className={style.className}>{style.label}</b><i><Play size={16} fill="currentColor" /></i></span>
-                          <span><b>ร่าง {index + 1}</b><small>{style.name} · 00:29</small></span>
+                          <span><b>ร่าง {index + 1}</b><small>{style.name} · {formatDuration(selectedTotalSec)}</small></span>
                           {selectedDraft === index && <em><Check size={13} /> เลือกแล้ว</em>}
                         </button>
                       ))}
@@ -934,32 +1769,41 @@ export function ProjectWizard() {
             )}
 
             <footer className="wizard-card-footer">
-              <button type="button" className="button button-quiet" disabled={activeStep === 1} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
-              {activeStep < 5 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้คลิปนี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : "สร้างร่างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> {draftReady ? "สร้างคลิปตัวจริง" : "สร้างร่างที่เลือก"}</button> : null}
+              {activeStep === 1 && timelineEditorOpen ? <>
+                <button type="button" className="button button-quiet" onClick={() => { setTimelinePlaying(false); timelineVideoRef.current?.pause(); setTimelineEditorOpen(false); }}><ArrowLeft size={16} /> กลับไปดูสรุป</button>
+                <button type="button" className="button button-primary" disabled={clipSelectionInvalid || analyzing || Boolean(operationMessage)} onClick={() => void finishTimelineEdit()}><Check size={17} /> เสร็จสิ้นการตัดต่อ</button>
+              </> : <>
+                <button type="button" className="button button-quiet" disabled={activeStep === 1} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                {activeStep < 5 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || (activeStep === 1 && clipSelectionInvalid)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : "สร้างร่างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> {draftReady ? "สร้างคลิปตัวจริง" : "สร้างร่างที่เลือก"}</button> : null}
+              </>}
             </footer>
           </section>
 
-          <aside className="live-preview-panel">
+          {!(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
             <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>อัปเดตตามที่คุณเลือก</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">
               <div className="editor-phone">
-                <video ref={videoRef} src={videoUrl} poster="/clippang-sample-poster.jpg" muted playsInline loop onEnded={() => setIsPlaying(false)} />
+                <video ref={videoRef} src={previewVideoUrl} poster="/clippang-sample-poster.jpg" muted playsInline loop onLoadedMetadata={(event) => {
+                  if (!activeClip) return;
+                  const durationMs = Math.round(event.currentTarget.duration * 1000);
+                  if (!activeClip.durationKnown || Math.abs(activeClip.durationMs - durationMs) > 500) reconcileAssetDuration(activeClip.name, durationMs);
+                }} onEnded={() => setIsPlaying(false)} />
                 <button className="video-toggle" type="button" onClick={toggleVideo} aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"}>{isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button>
                 <div className={`live-caption ${selectedStyleData.className} position-${captionPosition}`}>{currentChunks[0]}</div>
                 <div className="video-safe-zone" aria-hidden="true"><span>safe area</span></div>
               </div>
             </div>
             <div className="preview-timeline">
-              <div className="timeline-head"><span>00:00</span><b>00:29</b></div>
+              <div className="timeline-head"><span>00:00</span><b>{formatDuration(selectedTotalSec || 29)}</b></div>
               <div className="timeline-track"><span className="scene s1"/><span className="scene s2"/><span className="scene s3"/><span className="scene s4"/><i /></div>
               <div className="waveform" aria-hidden="true">{Array.from({length:32}).map((_,index) => <i key={index} style={{ height: `${8 + (index * 7 % 18)}px` }} />)}</div>
             </div>
             <div className="preview-config">
               <div><span className="config-icon" style={{background:selectedVoiceData.color}}><Mic2 size={15}/></span><p><small>เสียงพากย์</small><b>{selectedVoiceData.name} · {speed.toFixed(1)}×</b></p></div>
               <div><span className="config-icon yellow"><Captions size={15}/></span><p><small>สไตล์ซับ</small><b>{selectedStyleData.name}</b></p></div>
-              <div><span className="config-icon blue"><Gauge size={15}/></span><p><small>ความยาวโดยประมาณ</small><b>00:27–00:30</b></p></div>
+              <div><span className="config-icon blue"><Gauge size={15}/></span><p><small>ความยาว Timeline</small><b>{hasChosenClip ? formatDuration(selectedTotalSec) : "ยังไม่เลือกคลิป"}</b></p></div>
             </div>
-          </aside>
+          </aside>}
         </div>
       </div>
       {toast && <div className="toast"><CheckCircle2 size={18} />{toast}<button type="button" onClick={() => setToast("")} aria-label="ปิด"><X size={15}/></button></div>}

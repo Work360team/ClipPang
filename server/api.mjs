@@ -27,10 +27,16 @@ import {
   generateScripts,
   listStyles,
   listVoices,
+  probe,
   regenerateChunk,
   synthesizePreview,
 } from "../pipeline/index.mjs";
 import { isTerminalRenderState, renderLaneForStyle } from "./queue.mjs";
+import {
+  normalizeAssetCatalog,
+  normalizeTimelineClips,
+  resolveMediaPlan,
+} from "./sources.mjs";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const MIME = new Map([
@@ -162,6 +168,25 @@ function normalizeScriptsForPipeline(input) {
   }));
 }
 
+function normalizeProductMedia(product) {
+  if (!product || typeof product !== "object" || Array.isArray(product)) return product;
+  const result = { ...product };
+  if (result.assets != null) result.assets = normalizeAssetCatalog(result.assets);
+  if (result.timelineClips != null) {
+    if (!Array.isArray(result.assets)) {
+      const error = new Error("ไทม์ไลน์ต้องมีรายการไฟล์ต้นฉบับของโปรเจกต์");
+      error.status = 400;
+      error.code = "ASSET_CATALOG_REQUIRED";
+      throw error;
+    }
+    const timeline = normalizeTimelineClips(result.timelineClips, {
+      assetNames: result.assets.map((asset) => asset.name),
+    });
+    result.timelineClips = timeline.clips;
+  }
+  return result;
+}
+
 function settingValue(value) {
   if (value == null || typeof value === "string") return value;
   return typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -252,18 +277,27 @@ function openLocalPath(target) {
   child.unref();
 }
 
-export function createApiHandler({ store, queue, version = "0.2.0", services = {} }) {
+export function createApiHandler({ store, queue, version = "0.3.0", services = {} }) {
   if (!store || !queue) throw new TypeError("API requires store and queue");
   ensureDirectories();
   let ffmpegInstall = null;
   const generateScriptsImpl = services.generateScripts ?? generateScripts;
   const regenerateChunkImpl = services.regenerateChunk ?? regenerateChunk;
   const getSetupStatusImpl = services.getSetupStatus ?? getSetupStatus;
+  const probeVideoImpl = services.probeVideo ?? probe;
 
   return async function handleApi(request) {
     const url = new URL(request.url);
-    const pathname = decodeURIComponent(url.pathname);
     const method = request.method.toUpperCase();
+    let pathname;
+    try {
+      // Decode exactly once so Thai/space filenames retain their real Unicode
+      // name. Malformed percent escapes are a client error, never a process
+      // crash outside the API error boundary.
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      return apiError(400, "INVALID_URL_ENCODING", "ชื่อไฟล์หรือ URL มีรูปแบบไม่ถูกต้อง");
+    }
 
     try {
       if (method === "GET" && pathname === "/api/health") {
@@ -317,14 +351,46 @@ export function createApiHandler({ store, queue, version = "0.2.0", services = {
         const original = safeFilename(assetMatch[1]);
         const ext = path.extname(original).toLowerCase();
         const base = path.basename(original, ext);
-        const filename = safeFilename(`${base}-${Date.now().toString(36)}${ext}`);
+        const uniqueSuffix = `-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+        const reservedLength = Array.from(`${uniqueSuffix}${ext}`).length;
+        const shortBase = Array.from(base).slice(0, Math.max(1, 160 - reservedLength)).join("");
+        const filename = safeFilename(`${shortBase}${uniqueSuffix}${ext}`);
         const destination = resolveUnderRoot(PATHS.input, filename);
         const temporary = resolveUnderRoot(PATHS.input, `.${filename}.${randomUUID()}.upload`);
         try {
           const size = await streamUpload(request, temporary);
           await validateUploadedFile({ path: temporary, size, filename: original });
-          await fsp.rename(temporary, destination);
-          return json({ ok: true, asset: { name: filename, originalName: original, size, url: `/api/assets/${encodeURIComponent(filename)}` } }, { status: 201 });
+          let media;
+          try {
+            media = await probeVideoImpl(temporary, { signal: request.signal, timeoutMs: 30_000 });
+          } catch (error) {
+            if (error?.name === "AbortError" || error?.code === "PROCESS_TIMEOUT") throw error;
+            throw Object.assign(
+              new Error("อ่านข้อมูลวิดีโอไม่สำเร็จ กรุณาแปลงไฟล์เป็น MP4, MOV หรือ WebM แล้วลองใหม่"),
+              { status: 415, code: "VIDEO_PROBE_FAILED" },
+            );
+          }
+          // link() is same-volume, atomic and refuses EEXIST. Unlike rename on
+          // Windows it can never overwrite an existing upload on collision.
+          try {
+            await fsp.link(temporary, destination);
+          } catch (error) {
+            if (!new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP"]).has(error?.code)) throw error;
+            await fsp.copyFile(temporary, destination, fs.constants.COPYFILE_EXCL);
+          }
+          await fsp.unlink(temporary);
+          return json({
+            ok: true,
+            asset: {
+              name: filename,
+              originalName: original,
+              size,
+              durationMs: media.durationMs,
+              width: media.width,
+              height: media.height,
+              url: `/api/assets/${encodeURIComponent(filename)}`,
+            },
+          }, { status: 201 });
         } finally {
           await fsp.rm(temporary, { force: true }).catch(() => {});
         }
@@ -337,11 +403,12 @@ export function createApiHandler({ store, queue, version = "0.2.0", services = {
       if (method === "POST" && pathname === "/api/projects") {
         const body = await readJson(request, { optional: true });
         const id = projectId(body.title || body.product?.name || "โปรเจกต์ใหม่");
+        const product = normalizeProductMedia(body.product ?? body.product_json ?? {});
         const project = store.createProject({
           id,
           title: String(body.title || body.product?.name || "โปรเจกต์ใหม่").slice(0, 140),
-          product: body.product ?? body.product_json ?? {},
-          product_json: body.product ?? body.product_json ?? {},
+          product,
+          product_json: product,
           wizard_step: Number(body.wizardStep ?? body.wizard_step ?? 1),
         });
         for (const folder of ["src", "voice", "out", "work"]) await fsp.mkdir(safeProjectPath(id, folder), { recursive: true });
@@ -365,7 +432,7 @@ export function createApiHandler({ store, queue, version = "0.2.0", services = {
           delete patch.updated_at;
           if (body.title != null) patch.title = String(body.title).slice(0, 140);
           if (body.product != null || body.product_json != null) {
-            patch.product = body.product ?? body.product_json;
+            patch.product = normalizeProductMedia(body.product ?? body.product_json);
             delete patch.product_json;
           }
           if (body.wizardStep != null || body.wizard_step != null) {
@@ -450,6 +517,17 @@ export function createApiHandler({ store, queue, version = "0.2.0", services = {
         const lane = renderLaneForStyle(styleId);
         const config = { ...body.config, ...body, kind: body.kind, styleId };
         delete config.config;
+        const product = parseMaybeJson(project.product ?? project.product_json, {});
+        const mediaPlan = resolveMediaPlan(config, product, { requireTimeline: true });
+        if (mediaPlan) {
+          // Freeze the exact edit decision list into the render. Later project
+          // edits cannot silently change an already queued draft/final.
+          config.assets = mediaPlan.assets;
+          config.timelineClips = mediaPlan.timelineClips;
+          config.selectedTotalMs = mediaPlan.selectedTotalMs;
+          config.targetSec = mediaPlan.selectedTotalMs / 1000;
+          config.editPlanHash = mediaPlan.editPlanHash;
+        }
         const render = store.createRender({
           id: randomUUID(),
           projectId: project.id,
@@ -477,6 +555,22 @@ export function createApiHandler({ store, queue, version = "0.2.0", services = {
         const draft = normalizeRender(store.getRender(promoteMatch[1]));
         if (!draft || draft.kind !== "draft") return apiError(404, "DRAFT_NOT_FOUND", "ไม่พบร่างที่เลือก");
         if (draft.state !== "ready") return apiError(409, "DRAFT_NOT_READY", "ร่างนี้ยังสร้างไม่เสร็จ กรุณารอให้พร้อมก่อน");
+        const project = store.getProject(draft.projectId);
+        const product = parseMaybeJson(project?.product ?? project?.product_json, {});
+        let currentPlan = null;
+        try {
+          currentPlan = resolveMediaPlan({}, product, { requireTimeline: true });
+        } catch (error) {
+          if (draft.config?.editPlanHash) {
+            return apiError(409, "STALE_DRAFT", "ไทม์ไลน์เปลี่ยนไปแล้ว กรุณาสร้างร่างใหม่ก่อนสร้างตัวจริง");
+          }
+          throw error;
+        }
+        const draftPlanHash = draft.config?.editPlanHash ?? null;
+        const currentPlanHash = currentPlan?.editPlanHash ?? null;
+        if (draftPlanHash !== currentPlanHash) {
+          return apiError(409, "STALE_DRAFT", "ไทม์ไลน์เปลี่ยนไปแล้ว กรุณาสร้างร่างใหม่ก่อนสร้างตัวจริง");
+        }
         const body = await readJson(request, { optional: true });
         const styleId = String(body.styleId ?? draft.config?.styleId ?? draft.styleId ?? "kanit-hf");
         const position = body.position ?? body.captionPosition ?? draft.config?.position;

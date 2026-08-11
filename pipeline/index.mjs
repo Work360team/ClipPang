@@ -15,10 +15,12 @@ import {
 import {
   ANCHORS,
   buildChunkTimeline,
+  buildOrderedSourcePlan,
   buildPieces,
   chunkText,
   fitToDuration,
   normalizeAnchor,
+  padNarrationTimeline,
 } from "./core.mjs";
 import {
   detectBurnedCaptions as detectBurnedCaptionsInFile,
@@ -399,7 +401,8 @@ function createEmitter(callback, signal) {
 /**
  * Complete local render pipeline used by the persistent queue.
  *
- * options: { projectDir, sourceFiles/sourceFile, brief, variant/script,
+ * options: { projectDir, sourceFiles/sourceFile, sourceSelections, clipPlan,
+ * brief, variant/script,
  * voice:{provider,id,speed,tone}, styleId, position, kind, mockTts, signal,
  * onProgress }
  */
@@ -410,7 +413,26 @@ export async function runPipeline(options = {}) {
   const { signal } = options;
   throwIfAborted(signal);
 
-  const rawSources = options.sourceFiles || (options.sourceFile ? [options.sourceFile] : []);
+  const orderedEdit = Array.isArray(options.sourceSelections) && options.sourceSelections.length > 0;
+  const sourceSelections = orderedEdit
+    ? options.sourceSelections
+      .map((selection, index) => ({ ...selection, _inputIndex: index }))
+      .sort((a, b) => {
+        const left = Number.isFinite(Number(a.order)) ? Number(a.order) : a._inputIndex;
+        const right = Number.isFinite(Number(b.order)) ? Number(b.order) : b._inputIndex;
+        return left - right || a._inputIndex - b._inputIndex;
+      })
+      .map((entry) => {
+        const selection = { ...entry };
+        delete selection._inputIndex;
+        selection.file = path.resolve(projectDir, selection.file);
+        return selection;
+      })
+    : null;
+  const rawSources = options.sourceFiles
+    || (options.sourceFile ? [options.sourceFile] : orderedEdit
+      ? [...new Set(sourceSelections.map((selection) => selection.file))]
+      : []);
   const sourceFiles = rawSources.map((file) => path.resolve(projectDir, file));
   if (!sourceFiles.length) throw new Error("ต้องมี sourceFiles/sourceFile อย่างน้อยหนึ่งไฟล์");
   for (const file of sourceFiles) {
@@ -424,7 +446,7 @@ export async function runPipeline(options = {}) {
   const width = Number(options.width || 1080);
   const height = Number(options.height || 1920);
   const fps = Number(options.fps || 30);
-  const targetSec = Number(options.targetSec || options.durationSec || 28);
+  const configuredTargetSec = Number(options.targetSec || options.durationSec || 28);
   const runName = createRunName(`${brief.name || "clip"}-${kind}`);
   const workRoot = ensureDir(path.join(projectDir, "work"));
   const outDir = ensureDir(path.join(projectDir, "out"));
@@ -478,7 +500,11 @@ export async function runPipeline(options = {}) {
       const values = [];
       for (const [index, meta] of metas.entries()) {
         throwIfAborted(signal);
-        const cuts = await detectScenes(meta.file, Number(options.sceneThreshold ?? 0.32), processOptions);
+        // An explicit edit timeline is authoritative: scene detection must not
+        // promote/reorder any shot. Legacy one-file projects keep auto-cut.
+        const cuts = orderedEdit
+          ? []
+          : await detectScenes(meta.file, Number(options.sceneThreshold ?? 0.32), processOptions);
         const burned = options.detectBurnedCaptions === false
           ? { likely: false, ratio: 0, band: 0, atSec: 0 }
           : await detectBurnedCaptionsInFile(meta.file, meta, processOptions);
@@ -487,13 +513,28 @@ export async function runPipeline(options = {}) {
         await emit(
           "analyze",
           8 + ((index + 1) / metas.length) * 10,
-          `วิเคราะห์ฉาก ${index + 1}/${metas.length}`,
+          `${orderedEdit ? "ตรวจคลิปตามไทม์ไลน์" : "วิเคราะห์ฉาก"} ${index + 1}/${metas.length}`,
           index + 1,
           metas.length,
         );
       }
       return values;
     });
+
+    const sourcePlan = orderedEdit
+      ? buildOrderedSourcePlan(assets, sourceSelections)
+      : null;
+    if (
+      sourcePlan
+      && options.selectedTotalMs != null
+      && Math.round(Number(options.selectedTotalMs)) !== sourcePlan.totalMs
+    ) {
+      const error = new Error("ความยาวไทม์ไลน์ที่ส่งมาไม่ตรงกับช่วงตัดจริง กรุณาบันทึกไทม์ไลน์แล้วลองใหม่");
+      error.code = "EDIT_PLAN_DURATION_MISMATCH";
+      error.status = 400;
+      throw error;
+    }
+    const targetSec = sourcePlan ? sourcePlan.totalMs / 1000 : configuredTargetSec;
 
     const anchor = normalizeAnchor(style.params.position.anchor);
     const hasBurnedCaptions = assets.some((asset) => asset.burned.likely);
@@ -591,18 +632,41 @@ export async function runPipeline(options = {}) {
       timeline.width = width;
       timeline.height = height;
       timeline.fps = fps;
+      if (sourcePlan && (!timeline.editPlanHash || timeline.editPlanHash !== options.editPlanHash)) {
+        const error = new Error("ร่างเดิมใช้ลำดับหรือช่วงตัดคนละเวอร์ชัน กรุณาสร้างร่างใหม่ก่อนสร้างตัวจริง");
+        error.code = "STALE_DRAFT";
+        error.status = 409;
+        throw error;
+      }
+      if (sourcePlan && Math.round(Number(timeline.durationMs)) !== sourcePlan.totalMs) {
+        const error = new Error("ร่างเดิมใช้ไทม์ไลน์คนละเวอร์ชัน กรุณาสร้างร่างใหม่ก่อนสร้างตัวจริง");
+        error.code = "STALE_DRAFT";
+        error.status = 409;
+        throw error;
+      }
       stageMs.timeline = 0;
     } else {
       timeline = await timeStage("timeline", async () => {
-        const value = buildChunkTimeline(variant.chunks.map((chunk, index) => ({
+        let value = buildChunkTimeline(variant.chunks.map((chunk, index) => ({
           ...chunk,
           audioFile: takes[index].file,
           durationMs: takes[index].durationMs,
         })), options.timing);
-        const pieces = buildPieces(assets, options.pieces);
-        const fitted = fitToDuration(pieces, value.durationMs);
-        value.segments = fitted.segments;
-        value.fit = { mode: fitted.mode, ratio: fitted.ratio };
+        if (sourcePlan) {
+          value = padNarrationTimeline(value, sourcePlan.totalMs);
+          value.editPlanHash = options.editPlanHash || null;
+          value.segments = sourcePlan.segments;
+          value.fit = {
+            mode: sourcePlan.mode,
+            ratio: sourcePlan.ratio,
+            selectedTotalMs: sourcePlan.totalMs,
+          };
+        } else {
+          const pieces = buildPieces(assets, options.pieces);
+          const fitted = fitToDuration(pieces, value.durationMs);
+          value.segments = fitted.segments;
+          value.fit = { mode: fitted.mode, ratio: fitted.ratio };
+        }
         value.width = width;
         value.height = height;
         value.fps = fps;
@@ -682,6 +746,7 @@ export async function runPipeline(options = {}) {
     });
     await emit("mix", 87, reuse ? "ใช้เสียงพากย์เดิมเรียบร้อย" : "ปรับเสียงพากย์เรียบร้อย");
 
+    let outputMeta = null;
     await emit("package", 88, "กำลังประกอบภาพ เสียง และซับ");
     await timeStage("package", async () => {
       await burnAndMux(timeline, runDir, "final.mp4", {
@@ -692,6 +757,19 @@ export async function runPipeline(options = {}) {
         signal,
         timeoutMs: options.processTimeoutMs,
       });
+      outputMeta = await probe(path.join(runDir, "final.mp4"), processOptions);
+      if (sourcePlan) {
+        const frameMs = 1000 / fps;
+        const deltaMs = Math.abs(outputMeta.durationMs - sourcePlan.totalMs);
+        if (deltaMs > frameMs + 2) {
+          const error = new Error(
+            `วิดีโอที่ประกอบแล้วคลาดจากไทม์ไลน์ ${Math.round(deltaMs)}ms กรุณาลองเรนเดอร์ใหม่`,
+          );
+          error.code = "OUTPUT_DURATION_MISMATCH";
+          error.status = 500;
+          throw error;
+        }
+      }
       await poster(
         "final.mp4",
         "poster.jpg",
@@ -746,14 +824,26 @@ export async function runPipeline(options = {}) {
         sourceRenderId: reuse?.renderId || null,
       },
       durationMs: timeline.durationMs,
+      selectedTotalMs: sourcePlan?.totalMs ?? null,
+      outputDurationMs: outputMeta?.durationMs ?? null,
       fit: timeline.fit,
       dimensions: { width, height, fps },
       sources: assets.map((asset) => ({
         name: asset.meta.name,
+        durationMs: asset.meta.durationMs,
         cuts: asset.cuts.length,
         score: asset.score,
         burnedCaptions: asset.burned,
       })),
+      timelineClips: sourcePlan?.segments.map((segment) => ({
+        id: segment.id,
+        assetName: segment.assetName,
+        order: segment.order,
+        trimStartMs: segment.inMs,
+        trimEndMs: segment.trimEndMs,
+        durationMs: segment.srcDurMs,
+        startMs: segment.startMs,
+      })) ?? null,
       stageMs,
       warnings,
       estimatedCostUsd: {

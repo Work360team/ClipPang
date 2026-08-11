@@ -74,3 +74,13 @@ test("local app navigation avoids Vinext RSC prefetch transitions", async () => 
   const hardLink = await readFile(new URL("../app/components/HardLink.tsx", import.meta.url), "utf8");
   assert.match(hardLink, /return <a href=\{href\}[^>]*>\{children\}<\/a>/);
 });
+
+test("Thai project routes are decoded exactly once before API requests", async () => {
+  const [wizard, localApi] = await Promise.all([
+    readFile(new URL("../app/components/ProjectWizard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/local-api.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(wizard, /decodeURIComponent\(rawRouteId\)/);
+  assert.match(localApi, /api\/projects\/\$\{encodeURIComponent\(id\)\}/);
+});

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   mkdtempSync,
   rmSync,
@@ -9,8 +10,16 @@ import path from "node:path";
 import test from "node:test";
 
 import { createApiHandler } from "../server/api.mjs";
+import { PATHS } from "../server/config.mjs";
 import { createLocalRuntime, pickScript } from "../server/index.mjs";
 import { RenderQueue } from "../server/queue.mjs";
+import {
+  MAX_SOURCE_ASSETS,
+  MAX_TIMELINE_CLIPS,
+  normalizeAssetCatalog,
+  normalizeTimelineClips,
+  prepareSources,
+} from "../server/sources.mjs";
 import { createStore } from "../server/store/index.mjs";
 
 function fixture(t) {
@@ -363,4 +372,174 @@ test("API exposes string script chunks and converts them back for regeneration",
     ).map((chunk) => chunk.text),
     ["หนึ่ง", "สอง"],
   );
+});
+
+test("media validators cap uploads/clips and require canonical contiguous order", () => {
+  assert.throws(
+    () => normalizeAssetCatalog(Array.from({ length: MAX_SOURCE_ASSETS + 1 }, (_, index) => ({ name: `v${index}.mp4` }))),
+    (error) => error.code === "TOO_MANY_SOURCE_ASSETS",
+  );
+  const assetNames = ["a.mp4"];
+  assert.throws(
+    () => normalizeTimelineClips([
+      { id: "one", assetName: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 1_000 },
+      { id: "two", assetName: "a.mp4", order: 0, trimStartMs: 1_000, trimEndMs: 2_000 },
+    ], { assetNames }),
+    (error) => error.code === "INVALID_TIMELINE_ORDER",
+  );
+  assert.throws(
+    () => normalizeTimelineClips(Array.from({ length: MAX_TIMELINE_CLIPS + 1 }, (_, index) => ({
+      id: `clip-${index}`,
+      assetName: "a.mp4",
+      order: index,
+      trimStartMs: index * 10,
+      trimEndMs: index * 10 + 10,
+    })), { assetNames }),
+    (error) => error.code === "TOO_MANY_TIMELINE_CLIPS",
+  );
+  assert.throws(
+    () => normalizeTimelineClips([
+      { id: "long", assetName: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 60_001 },
+    ], { assetNames }),
+    (error) => error.code === "TIMELINE_DURATION_LIMIT",
+  );
+});
+
+test("upload probes duration, preserves Unicode names, and generates collision-safe names", async (t) => {
+  const { store, closeWith } = fixture(t);
+  const queue = new RenderQueue({ store, processor: async () => ({}) });
+  closeWith(() => queue.close());
+  const api = createApiHandler({
+    store,
+    queue,
+    services: {
+      probeVideo: async (file) => ({ file, durationMs: 12_345, width: 1080, height: 1920 }),
+    },
+  });
+  const created = [];
+  t.after(() => {
+    for (const name of created) fs.rmSync(path.join(PATHS.input, name), { force: true });
+  });
+  const body = Buffer.alloc(64);
+  body.write("ftyp", 4, "ascii");
+  body.write("isom", 8, "ascii");
+  const upload = async (name = "คลิป สินค้า.mp4") => api(new Request(
+    `http://127.0.0.1/api/assets/${encodeURIComponent(name)}`,
+    { method: "PUT", body, duplex: "half" },
+  ));
+
+  const first = await responseJson(await upload());
+  const second = await responseJson(await upload());
+  created.push(first.asset.name, second.asset.name);
+  assert.equal(first.asset.originalName, "คลิป สินค้า.mp4");
+  assert.equal(first.asset.durationMs, 12_345);
+  assert.match(first.asset.name, /^คลิป สินค้า-[a-z0-9]+-[a-f0-9]{8}\.mp4$/u);
+  assert.notEqual(first.asset.name, second.asset.name);
+  assert.ok(fs.existsSync(path.join(PATHS.input, first.asset.name)));
+  assert.ok(fs.existsSync(path.join(PATHS.input, second.asset.name)));
+
+  const longOriginal = `${"ก".repeat(156)}.mp4`;
+  const longFirst = await responseJson(await upload(longOriginal));
+  const longSecond = await responseJson(await upload(longOriginal));
+  created.push(longFirst.asset.name, longSecond.asset.name);
+  assert.equal(longFirst.asset.originalName, longOriginal);
+  assert.ok(Array.from(longFirst.asset.name).length <= 160);
+  assert.notEqual(longFirst.asset.name, longSecond.asset.name);
+  assert.match(longFirst.asset.name, /-[a-z0-9]+-[a-f0-9]{8}\.mp4$/u);
+
+  const malformed = await api(new Request("http://127.0.0.1/api/assets/%E0%A4%A"));
+  assert.equal(malformed.status, 400);
+  assert.equal((await malformed.json()).error.code, "INVALID_URL_ENCODING");
+});
+
+test("prepareSources probes unique assets once and preserves repeated split clips", async (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "clippang-sources-"));
+  const inputDir = path.join(root, "input");
+  const projectSourceDir = path.join(root, "project", "src");
+  fs.mkdirSync(inputDir, { recursive: true });
+  writeFileSync(path.join(inputDir, "a.mp4"), "fixture-a");
+  writeFileSync(path.join(inputDir, "b.mp4"), "fixture-b");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const probed = [];
+  const product = {
+    assets: [{ name: "a.mp4" }, { name: "b.mp4" }],
+    timelineClips: [
+      { id: "a-tail", assetName: "a.mp4", order: 2, trimStartMs: 5_000, trimEndMs: 7_000 },
+      { id: "a-head", assetName: "a.mp4", order: 0, trimStartMs: 500, trimEndMs: 2_000 },
+      { id: "b-mid", assetName: "b.mp4", order: 1, trimStartMs: 1_000, trimEndMs: 2_500 },
+    ],
+  };
+  const result = await prepareSources({ id: "test-project" }, {}, product, {
+    inputDir,
+    projectSourceDir,
+    probeVideo: async (file) => {
+      probed.push(path.basename(file));
+      return { file, name: path.basename(file), durationMs: path.basename(file) === "a.mp4" ? 10_000 : 8_000 };
+    },
+  });
+  assert.deepEqual(probed, ["a.mp4", "b.mp4"]);
+  assert.equal(result.sourceFiles.length, 2);
+  assert.deepEqual(result.sourceSelections.map((clip) => clip.id), ["a-head", "b-mid", "a-tail"]);
+  assert.deepEqual(result.sourceSelections.map((clip) => clip.selectedDurationMs), [1_500, 1_500, 2_000]);
+  assert.equal(result.selectedTotalMs, 5_000);
+  assert.match(result.editPlanHash, /^[a-f0-9]{64}$/);
+  assert.ok(fs.existsSync(path.join(projectSourceDir, "a.mp4")));
+  assert.ok(fs.existsSync(path.join(projectSourceDir, "b.mp4")));
+
+  await assert.rejects(
+    prepareSources({ id: "test-project" }, {}, {
+      assets: [{ name: "a.mp4" }],
+      timelineClips: [{ id: "bad", assetName: "a.mp4", order: 0, trimStartMs: 9_000, trimEndMs: 10_001 }],
+    }, {
+      inputDir,
+      projectSourceDir,
+      probeVideo: async (file) => ({ file, name: path.basename(file), durationMs: 10_000 }),
+    }),
+    (error) => error.code === "CLIP_TRIM_OUT_OF_RANGE",
+  );
+});
+
+test("render rejects overlong plans before enqueue and promotion rejects stale draft hash", async (t) => {
+  const { store, closeWith } = fixture(t);
+  const initialProduct = {
+    assets: [{ name: "a.mp4", durationMs: 90_000 }],
+    timelineClips: [{ id: "clip-a", assetName: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 4_000 }],
+  };
+  const project = store.createProject({ id: "edit-plan-project", title: "Edit plan", product: initialProduct });
+  const queue = new RenderQueue({
+    store,
+    processor: async () => ({ timeline: { durationMs: 4_000 }, outputs: { video: "out/draft.mp4" } }),
+  });
+  closeWith(() => queue.close());
+  const api = createApiHandler({ store, queue });
+
+  const overlong = await apiRequest(api, `/api/projects/${project.id}/renders`, {
+    method: "POST",
+    body: {
+      kind: "draft",
+      assets: initialProduct.assets,
+      timelineClips: [{ id: "too-long", assetName: "a.mp4", order: 0, trimStartMs: 0, trimEndMs: 60_001 }],
+    },
+  });
+  assert.equal(overlong.status, 400);
+  assert.equal((await overlong.json()).error.code, "TIMELINE_DURATION_LIMIT");
+  assert.equal(store.listProjectRenders(project.id).length, 0);
+
+  const draftPayload = await responseJson(await apiRequest(api, `/api/projects/${project.id}/renders`, {
+    method: "POST",
+    body: { kind: "draft" },
+  }));
+  const draft = await waitForRender(store, draftPayload.renderId, (item) => item.state === "ready");
+  assert.match(draft.config.editPlanHash, /^[a-f0-9]{64}$/);
+  store.updateProject(project.id, {
+    product: {
+      ...initialProduct,
+      // Same total duration, different trim: duration equality alone must not
+      // allow reuse of the old visual timeline.
+      timelineClips: [{ id: "clip-a", assetName: "a.mp4", order: 0, trimStartMs: 1_000, trimEndMs: 5_000 }],
+    },
+  });
+  const stale = await apiRequest(api, `/api/renders/${draft.id}/promote`, { method: "POST", body: {} });
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).error.code, "STALE_DRAFT");
 });
