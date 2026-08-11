@@ -38,4 +38,9 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+/data/
+/input/
+/projects/
+/fonts/
+/.cache/
 *.tsbuildinfo

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,7 +18,6 @@ import {
   Film,
   FolderOpen,
   Gauge,
-  Image as ImageIcon,
   LoaderCircle,
   Mic2,
   PackageCheck,
@@ -40,6 +40,16 @@ import {
   type DragEvent,
 } from "react";
 import { AppShell } from "./AppShell";
+import {
+  detectLocalEngine,
+  localApi,
+  watchRender,
+  type LocalEngineState,
+  type LocalOutput,
+  type LocalRender,
+  type LocalScript,
+  type LocalVoice,
+} from "../lib/local-api";
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
 
@@ -52,12 +62,12 @@ const steps: { id: WizardStep; label: string; helper: string; icon: typeof Film 
 ];
 
 const voices = [
-  { id: "mesa", name: "เมษา", gender: "หญิง", tone: "สดใส เป็นกันเอง", color: "#ffd6a6", initials: "ม" },
-  { id: "nammon", name: "น้ำมนต์", gender: "หญิง", tone: "นุ่มนวล น่าเชื่อถือ", color: "#d9d4ff", initials: "น" },
-  { id: "tonkla", name: "ต้นกล้า", gender: "ชาย", tone: "พลังดี กระชับ", color: "#c9eddc", initials: "ต" },
-  { id: "prim", name: "พริม", gender: "หญิง", tone: "หรูหรา มีระดับ", color: "#ffd8df", initials: "พ" },
-  { id: "kin", name: "คิน", gender: "ชาย", tone: "อบอุ่น เป็นธรรมชาติ", color: "#cde5f5", initials: "ค" },
-  { id: "aim", name: "เอม", gender: "หญิง", tone: "มั่นใจ ขายเก่ง", color: "#f2e4b8", initials: "อ" },
+  { id: "Kore", name: "เมษา", gender: "หญิง", tone: "หนักแน่น น่าเชื่อถือ", color: "#ffd6a6", initials: "ม", provider: "gemini" },
+  { id: "Aoede", name: "น้ำมนต์", gender: "หญิง", tone: "นุ่มนวล โปร่งใส", color: "#d9d4ff", initials: "น", provider: "gemini" },
+  { id: "Puck", name: "ต้นกล้า", gender: "ชาย", tone: "สดใส กระฉับกระเฉง", color: "#c9eddc", initials: "ต", provider: "gemini" },
+  { id: "Zephyr", name: "พริม", gender: "หญิง", tone: "สว่าง เป็นมิตร", color: "#ffd8df", initials: "พ", provider: "gemini" },
+  { id: "Charon", name: "คิน", gender: "ชาย", tone: "ชัดถ้อยชัดคำ", color: "#cde5f5", initials: "ค", provider: "gemini" },
+  { id: "Leda", name: "เอม", gender: "หญิง", tone: "อ่อนเยาว์ สดใส", color: "#f2e4b8", initials: "อ", provider: "gemini" },
 ];
 
 const initialScripts = [
@@ -124,10 +134,10 @@ const initialScripts = [
 ];
 
 const captionStyles = [
-  { id: "pop", name: "ป๊อปขายดี", note: "เด่น อ่านไว", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว" },
-  { id: "clean", name: "คลีนมินิมอล", note: "สะอาด ดูแพง", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว" },
-  { id: "boxed", name: "กล่องครีเอเตอร์", note: "ชัดบนทุกพื้นหลัง", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว" },
-  { id: "karaoke", name: "คาราโอเกะพรีเมียม", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด" },
+  { id: "karaoke-pop", name: "ป๊อปขายดี", note: "เด่น อ่านไว", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว" },
+  { id: "reveal-clean", name: "คลีนมินิมอล", note: "สะอาด ดูแพง", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว" },
+  { id: "box-bold", name: "กล่องครีเอเตอร์", note: "ชัดบนทุกพื้นหลัง", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว" },
+  { id: "kanit-hf", name: "คาราโอเกะพรีเมียม", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด" },
 ];
 
 const replacementLines = [
@@ -137,7 +147,35 @@ const replacementLines = [
   "ใครใช้มือถือทำงานหรือถ่ายคลิปบ่อย ตัวนี้ตอบโจทย์มาก",
 ];
 
+type ProductBrief = {
+  name: string;
+  category: string;
+  price: string;
+  features: string;
+  audience: string;
+  tone: string;
+  cta: string;
+};
+
+const initialBrief: ProductBrief = {
+  name: "หัวชาร์จพกพาแม่เหล็ก 5,000 mAh",
+  category: "มือถือและอุปกรณ์เสริม",
+  price: "399 บาท จากปกติ 590 บาท",
+  features: "ชาร์จไร้สายแบบแม่เหล็ก, ติดแน่น, น้ำหนักเบา, ใช้เป็นห่วงจับมือถือได้, พกขึ้นเครื่องได้",
+  audience: "คนทำงาน ครีเอเตอร์ และคนเดินทางบ่อย",
+  tone: "เหมือนเพื่อนแนะนำ",
+  cta: "กดรับโปรที่ตะกร้าได้เลยค่ะ",
+};
+
 export function ProjectWizard() {
+  const params = useParams<{ id?: string }>();
+  const router = useRouter();
+  const routeId = typeof params?.id === "string" && params.id !== "new" ? params.id : null;
+  const [engineState, setEngineState] = useState<LocalEngineState>("checking");
+  const [projectId, setProjectId] = useState<string | null>(routeId);
+  const [assetName, setAssetName] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [operationMessage, setOperationMessage] = useState("");
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
   const [videoUrl, setVideoUrl] = useState("/clippang-sample.mp4");
@@ -145,43 +183,210 @@ export function ProjectWizard() {
   const [fileSize, setFileSize] = useState("4.1 MB");
   const [uploadError, setUploadError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState("mesa");
+  const [voiceLibrary, setVoiceLibrary] = useState(voices);
+  const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [voiceFilter, setVoiceFilter] = useState("ทั้งหมด");
   const [voicePlaying, setVoicePlaying] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [tone, setTone] = useState("เป็นกันเอง");
+  const [scriptVariants, setScriptVariants] = useState<LocalScript[]>(initialScripts);
   const [selectedScript, setSelectedScript] = useState("hook");
   const [scriptTexts, setScriptTexts] = useState(() =>
     Object.fromEntries(initialScripts.map((script) => [script.id, [...script.chunks]])),
   );
-  const [selectedStyle, setSelectedStyle] = useState("pop");
+  const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
   const [captionPosition, setCaptionPosition] = useState("ล่าง");
   const [selectedDraft, setSelectedDraft] = useState(1);
   const [rendering, setRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderDone, setRenderDone] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [renderId, setRenderId] = useState<string | null>(null);
+  const [renderKind, setRenderKind] = useState<"draft" | "final">("draft");
+  const [renderError, setRenderError] = useState("");
+  const [renderOutputs, setRenderOutputs] = useState<Record<string, LocalOutput>>({});
+  const [brief, setBrief] = useState<ProductBrief>(initialBrief);
   const [toast, setToast] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const stopWatchingRenderRef = useRef<(() => void) | null>(null);
 
-  const selectedScriptData = initialScripts.find((item) => item.id === selectedScript) ?? initialScripts[0];
+  const selectedScriptData = scriptVariants.find((item) => item.id === selectedScript) ?? scriptVariants[0] ?? initialScripts[0];
   const selectedStyleData = captionStyles.find((item) => item.id === selectedStyle) ?? captionStyles[0];
-  const selectedVoiceData = voices.find((item) => item.id === selectedVoice) ?? voices[0];
+  const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData.chunks;
 
-  const filteredVoices = voices.filter((voice) => voiceFilter === "ทั้งหมด" || voice.gender === voiceFilter);
+  const filteredVoices = voiceLibrary.filter((voice) => voiceFilter === "ทั้งหมด" || voice.tone.includes(voiceFilter));
+  const hasChosenClip = engineState !== "connected" || Boolean(assetName) || videoUrl.startsWith("blob:");
+  const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
+  const downloadableOutputs = Object.entries(renderOutputs).filter(([, output]) => output?.url && output?.filename);
 
   const renderStage = useMemo(() => {
+    if (operationMessage) return operationMessage;
     if (renderProgress < 20) return "กำลังเตรียมคลิปและจับจังหวะภาพ";
     if (renderProgress < 52) return "กำลังพากย์ท่อนที่ 5 จาก 12";
     if (renderProgress < 78) return "กำลังวางซับให้ตรงกับเสียง";
     if (renderProgress < 96) return "กำลังรวมภาพ เสียง และซับ";
     return "กำลังตรวจไฟล์รอบสุดท้าย";
-  }, [renderProgress]);
+  }, [operationMessage, renderProgress]);
+
+  function applyProject(project: { id: string; title: string; wizard_step?: number; product?: Record<string, unknown>; renders?: LocalRender[] }) {
+    setProjectId(project.id);
+    const product = project.product ?? {};
+    const savedBrief = (product.brief ?? product) as Partial<ProductBrief>;
+    setBrief((current) => ({
+      ...current,
+      ...savedBrief,
+      features: Array.isArray(savedBrief.features) ? savedBrief.features.join(", ") : savedBrief.features ?? current.features,
+    }));
+    const asset = product.asset as { name?: string; url?: string; size?: number; originalName?: string } | undefined;
+    if (asset?.name) {
+      setAssetName(asset.name);
+      setFileName(asset.originalName || asset.name);
+      setFileSize(asset.size ? `${(asset.size / 1024 / 1024).toFixed(1)} MB` : "ไฟล์บนเครื่อง");
+      setVideoUrl(asset.url || `/api/assets/${encodeURIComponent(asset.name)}`);
+    }
+    const savedScripts = product.scripts as LocalScript[] | undefined;
+    if (savedScripts?.length) {
+      setScriptVariants(savedScripts);
+      setSelectedScript(savedScripts[0].id);
+      setScriptTexts(Object.fromEntries(savedScripts.map((script) => [script.id, [...script.chunks]])));
+    }
+    const config = (product.config ?? {}) as Record<string, unknown>;
+    if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
+    if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
+    if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
+    if (typeof config.speed === "number") setSpeed(config.speed);
+    setActiveStep(Math.max(1, Math.min(5, Number(project.wizard_step ?? 1))) as WizardStep);
+    const latest = project.renders?.[0];
+    if (latest) restoreRender(latest);
+  }
+
+  function chooseVideoOutput(outputs: Record<string, LocalOutput> | null | undefined) {
+    if (!outputs) return null;
+    const preferred = outputs.final ?? outputs.video ?? outputs.mp4;
+    return preferred?.url ?? Object.values(outputs).find((output) => output.filename?.toLowerCase().endsWith(".mp4"))?.url ?? null;
+  }
+
+  async function completeRender(id: string, kind: "draft" | "final") {
+    try {
+      const result = await localApi.getRender(id);
+      const record = result.render;
+      setRenderOutputs(record.outputs ?? {});
+      const outputUrl = chooseVideoOutput(record.outputs);
+      if (outputUrl) setVideoUrl(outputUrl);
+      setRendering(false);
+      setRenderProgress(100);
+      if (kind === "draft") {
+        setDraftReady(true);
+        setToast("ร่างพร้อมแล้ว กดสร้างคลิปตัวจริงได้โดยไม่ยิงเสียงซ้ำ");
+      } else {
+        setRenderDone(true);
+        setToast("คลิปตัวจริงพร้อมดาวน์โหลดแล้ว");
+      }
+    } catch (error) {
+      setRenderError(error instanceof Error ? error.message : "อ่านผลลัพธ์ไม่สำเร็จ");
+      setRendering(false);
+    }
+  }
+
+  function observeRender(id: string, kind: "draft" | "final") {
+    stopWatchingRenderRef.current?.();
+    stopWatchingRenderRef.current = watchRender(id, (event) => {
+      setRenderProgress(Number(event.progress ?? 0));
+      setOperationMessage(event.message || "กำลังประมวลผล");
+      if (event.state === "ready") void completeRender(id, kind);
+      else if (event.state === "failed") {
+        setRendering(false);
+        setRenderError(event.error?.message || "สร้างคลิปไม่สำเร็จ กรุณาตรวจ FFmpeg และ API key แล้วลองใหม่");
+      } else if (event.state === "canceled") {
+        setRendering(false);
+        setRenderProgress(0);
+        setOperationMessage("");
+      }
+    }, () => {
+      window.setTimeout(async () => {
+        try {
+          const result = await localApi.getRender(id);
+          if (result.render.state === "ready") await completeRender(id, kind);
+          else if (result.render.state === "failed") {
+            setRendering(false);
+            setRenderError(result.render.error?.message || "สร้างคลิปไม่สำเร็จ");
+          }
+        } catch {
+          setRenderError("อ่านสถานะงานไม่สำเร็จ กรุณารีเฟรชหน้านี้อีกครั้ง");
+        }
+      }, 900);
+    });
+  }
+
+  function restoreRender(render: LocalRender) {
+    setRenderId(render.id);
+    setRenderKind(render.kind);
+    setRenderProgress(Number(render.progress ?? 0));
+    setOperationMessage(render.message || "");
+    if (render.state === "ready") {
+      void completeRender(render.id, render.kind);
+    } else if (["queued", "running", "ingesting", "processing", "retrying"].includes(render.state)) {
+      setActiveStep(5);
+      setRendering(true);
+      observeRender(render.id, render.kind);
+    } else if (render.state === "failed") setRenderError(render.error?.message || "งานครั้งล่าสุดไม่สำเร็จ");
+  }
 
   useEffect(() => {
-    if (!rendering) return;
+    if (routeId) return;
+    const requestedStyle = new URLSearchParams(window.location.search).get("style");
+    if (!requestedStyle || !captionStyles.some((style) => style.id === requestedStyle)) return;
+    const timer = window.setTimeout(() => setSelectedStyle(requestedStyle), 0);
+    return () => window.clearTimeout(timer);
+  }, [routeId]);
+
+  useEffect(() => {
+    let active = true;
+    detectLocalEngine().then(async (engine) => {
+      if (!active) return;
+      if (!engine) {
+        setEngineState("unavailable");
+        return;
+      }
+      setEngineState("connected");
+      try {
+        const voiceResult = await localApi.voices();
+        const geminiVoices = voiceResult.voices.filter((voice) => !voice.provider || voice.provider === "gemini");
+        if (active && geminiVoices.length) {
+          const colors = ["#ffd6a6", "#d9d4ff", "#c9eddc", "#ffd8df", "#cde5f5", "#f2e4b8"];
+          setVoiceLibrary(geminiVoices.map((voice: LocalVoice, index) => ({
+            id: voice.id,
+            name: voice.name || voice.id,
+            gender: voice.gender || "Gemini",
+            tone: voice.tone || voice.label || "เป็นธรรมชาติ",
+            color: voice.color || colors[index % colors.length],
+            initials: voice.initials || (voice.name || voice.id).slice(0, 1),
+            provider: voice.provider || "gemini",
+          })));
+        }
+        if (routeId) {
+          const result = await localApi.getProject(routeId);
+          if (active) applyProject(result.project);
+        }
+      } catch (error) {
+        if (active) setUploadError(error instanceof Error ? error.message : "โหลดข้อมูลโปรเจกต์ไม่สำเร็จ");
+      }
+    });
+    return () => {
+      active = false;
+      stopWatchingRenderRef.current?.();
+      previewAudioRef.current?.pause();
+    };
+    // routeId is stable for the lifetime of this editor; router.replace should not reset in-flight state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!rendering || engineState === "connected") return;
     const timer = window.setInterval(() => {
       setRenderProgress((current) => {
         const next = Math.min(100, current + (current < 70 ? 3 : 2));
@@ -194,7 +399,7 @@ export function ProjectWizard() {
       });
     }, 170);
     return () => window.clearInterval(timer);
-  }, [rendering]);
+  }, [engineState, rendering]);
 
   useEffect(() => {
     if (!toast) return;
@@ -202,7 +407,28 @@ export function ProjectWizard() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const selectFile = (file?: File) => {
+  const briefForApi = () => ({
+    ...brief,
+    features: brief.features.split(/[,\n]/).map((item) => item.trim()).filter(Boolean),
+  });
+
+  const projectProduct = (extra: Record<string, unknown> = {}) => ({
+    brief: briefForApi(),
+    ...(assetName ? { asset: { name: assetName, originalName: fileName, url: `/api/assets/${encodeURIComponent(assetName)}` } } : {}),
+    scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
+    config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, styleId: selectedStyle, position: captionPosition },
+    ...extra,
+  });
+
+  const ensureProject = async () => {
+    if (projectId) return projectId;
+    const result = await localApi.createProject({ title: brief.name || fileName || "โปรเจกต์ใหม่", product: projectProduct() });
+    setProjectId(result.project.id);
+    router.replace(`/p/${encodeURIComponent(result.project.id)}`);
+    return result.project.id;
+  };
+
+  const selectFile = async (file?: File) => {
     if (!file) return;
     setUploadError("");
     if (!file.type.startsWith("video/")) {
@@ -218,33 +444,111 @@ export function ProjectWizard() {
     setFileName(file.name);
     setFileSize(`${(file.size / 1024 / 1024).toFixed(1)} MB`);
     setAnalyzing(true);
-    window.setTimeout(() => setAnalyzing(false), 1400);
+    setUploadProgress(0);
+    if (engineState !== "connected") {
+      window.setTimeout(() => setAnalyzing(false), 1400);
+      return;
+    }
+    try {
+      setOperationMessage("กำลังอัปโหลดคลิปไว้ในเครื่อง…");
+      const result = await localApi.uploadAsset(file, setUploadProgress);
+      const id = await ensureProject();
+      setAssetName(result.asset.name);
+      setVideoUrl(result.asset.url);
+      await localApi.updateProject(id, {
+        title: brief.name || pathlessName(file.name),
+        wizardStep: 1,
+        product: projectProduct({ asset: result.asset }),
+      });
+      setUploadProgress(100);
+      setToast("อัปโหลดและตรวจชนิดไฟล์เรียบร้อยแล้ว");
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setOperationMessage("");
+      setAnalyzing(false);
+    }
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => selectFile(event.target.files?.[0]);
+  const pathlessName = (name: string) => name.replace(/\.[^.]+$/, "").slice(0, 120);
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => { void selectFile(event.target.files?.[0]); };
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    selectFile(event.dataTransfer.files?.[0]);
+    void selectFile(event.dataTransfer.files?.[0]);
   };
 
-  const goNext = () => {
+  const goNext = async () => {
+    if (engineState === "connected" && activeStep === 1 && !assetName) {
+      setUploadError("กรุณาอัปโหลดคลิปต้นฉบับก่อนเข้าสู่ขั้นถัดไป");
+      return;
+    }
+    setUploadError("");
     setCompletedSteps((current) =>
       current.includes(activeStep) ? current : [...current, activeStep],
     );
-    if (activeStep < 5) setActiveStep((activeStep + 1) as WizardStep);
+    if (engineState !== "connected") {
+      if (activeStep < 5) setActiveStep((activeStep + 1) as WizardStep);
+      return;
+    }
+    try {
+      const id = await ensureProject();
+      if (activeStep === 2) {
+        if (!brief.name.trim() || !brief.features.trim()) {
+          setUploadError("กรุณากรอกชื่อสินค้าและจุดขายหลักก่อนสร้างสคริปต์");
+          return;
+        }
+        setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
+        await localApi.updateProject(id, { title: brief.name, product: projectProduct(), wizardStep: 2 });
+        const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: 28 });
+        if (result.scripts.length) {
+          setScriptVariants(result.scripts);
+          setSelectedScript(result.scripts[0].id);
+          setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
+        }
+      } else {
+        await localApi.updateProject(id, { title: brief.name, product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
+      }
+      if (activeStep < 4) setActiveStep((activeStep + 1) as WizardStep);
+      else if (activeStep === 4) {
+        setActiveStep(5);
+        await beginRender("draft", id);
+      }
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "บันทึกขั้นตอนนี้ไม่สำเร็จ");
+    } finally {
+      setOperationMessage("");
+    }
   };
 
-  const previewVoice = (voiceId: string) => {
+  const previewVoice = async (voiceId: string) => {
+    previewAudioRef.current?.pause();
+    if (voicePlaying === voiceId) {
+      setVoicePlaying(null);
+      return;
+    }
+    if (engineState === "connected") {
+      try {
+        setVoicePlaying(voiceId);
+        const audioBlob = await localApi.previewVoice(voiceId, { speed, tone });
+        const url = URL.createObjectURL(audioBlob);
+        const audio = new Audio(url);
+        previewAudioRef.current = audio;
+        audio.onended = () => { setVoicePlaying(null); URL.revokeObjectURL(url); };
+        audio.onerror = () => { setVoicePlaying(null); URL.revokeObjectURL(url); setToast("เล่นเสียงตัวอย่างไม่สำเร็จ"); };
+        await audio.play();
+      } catch (error) {
+        setVoicePlaying(null);
+        setToast(error instanceof Error ? error.message : "สร้างเสียงตัวอย่างไม่สำเร็จ");
+      }
+      return;
+    }
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setToast("เบราว์เซอร์นี้ยังไม่รองรับการฟังตัวอย่างเสียง");
       return;
     }
     window.speechSynthesis.cancel();
-    if (voicePlaying === voiceId) {
-      setVoicePlaying(null);
-      return;
-    }
-    const voice = voices.find((item) => item.id === voiceId) ?? voices[0];
+    const voice = voiceLibrary.find((item) => item.id === voiceId) ?? voiceLibrary[0] ?? voices[0];
     const utterance = new SpeechSynthesisUtterance(
       `สวัสดีค่ะ ฉัน${voice.name} พร้อมช่วยเล่าเรื่องสินค้าของคุณให้น่าฟังขึ้น`,
     );
@@ -255,7 +559,26 @@ export function ProjectWizard() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const regenerateChunk = (index: number) => {
+  const regenerateChunk = async (index: number) => {
+    if (engineState === "connected" && projectId) {
+      try {
+        setOperationMessage(`กำลังเขียนท่อนที่ ${index + 1} ใหม่…`);
+        const result = await localApi.regenerateChunk(projectId, selectedScript, index, {
+          brief: briefForApi(),
+          scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
+        });
+        setScriptTexts((current) => ({
+          ...current,
+          [selectedScript]: current[selectedScript].map((line, lineIndex) => lineIndex === index ? result.chunk : line),
+        }));
+        setToast(`เขียนท่อนที่ ${index + 1} ใหม่แล้ว โดยไม่กระทบท่อนอื่น`);
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : "เขียนท่อนใหม่ไม่สำเร็จ");
+      } finally {
+        setOperationMessage("");
+      }
+      return;
+    }
     const replacement = replacementLines[(index + selectedScript.length) % replacementLines.length];
     setScriptTexts((current) => ({
       ...current,
@@ -266,11 +589,61 @@ export function ProjectWizard() {
     setToast(`เขียนท่อนที่ ${index + 1} ใหม่แล้ว โดยไม่กระทบท่อนอื่น`);
   };
 
+  const beginRender = async (kind: "draft" | "final", knownProjectId?: string) => {
+    const id = knownProjectId ?? projectId ?? await ensureProject();
+    setRenderError("");
+    setActiveStep(5);
+    if (kind === "final") setRenderDone(false);
+    setRenderProgress(4);
+    setRendering(true);
+    setRenderKind(kind);
+    setOperationMessage(kind === "draft" ? "กำลังเข้าคิวสร้างร่าง" : "กำลังเข้าคิวสร้างคลิปตัวจริง");
+    try {
+      const position = captionPosition === "บน" ? "top" : captionPosition === "กลาง" ? "middle" : "bottom";
+      const result = kind === "final" && draftReady && renderId
+        ? await localApi.promoteRender(renderId, { styleId: selectedStyle, position })
+        : await localApi.startRender(id, {
+          kind,
+          styleId: selectedStyle,
+          config: {
+            assetName,
+            brief: briefForApi(),
+            scriptId: selectedScript,
+            script: currentChunks,
+            voiceId: selectedVoice,
+            provider: selectedVoiceData.provider || "gemini",
+            speed,
+            tone,
+            styleId: selectedStyle,
+            position,
+          },
+        });
+      setRenderId(result.renderId);
+      observeRender(result.renderId, kind);
+    } catch (error) {
+      setRendering(false);
+      setRenderError(error instanceof Error ? error.message : "เริ่มสร้างคลิปไม่สำเร็จ");
+    }
+  };
+
   const startRender = () => {
+    if (engineState === "connected") {
+      void beginRender(draftReady ? "final" : "draft");
+      return;
+    }
     setActiveStep(5);
     setRenderDone(false);
     setRenderProgress(4);
     setRendering(true);
+  };
+
+  const cancelRender = async () => {
+    if (engineState === "connected" && renderId) {
+      try { await localApi.cancelRender(renderId); } catch (error) { setToast(error instanceof Error ? error.message : "ยกเลิกงานไม่สำเร็จ"); }
+    }
+    setRendering(false);
+    setRenderProgress(0);
+    setOperationMessage("");
   };
 
   const downloadText = (type: "srt" | "json") => {
@@ -319,8 +692,8 @@ export function ProjectWizard() {
             <Link href="/" className="back-link" aria-label="กลับหน้าภาพรวม"><ArrowLeft size={18} /></Link>
             <div>
               <div className="title-line">
-                <h1>หัวชาร์จพกพาแม่เหล็ก</h1>
-                <span className="autosave"><Check size={13} /> บันทึกแล้ว</span>
+                <h1>{brief.name || "โปรเจกต์ใหม่"}</h1>
+                <span className="autosave"><Check size={13} /> {engineState === "connected" ? "บันทึกบนเครื่อง" : "โหมดตัวอย่าง"}</span>
               </div>
               <p>โปรเจกต์ใหม่ · สร้างเมื่อสักครู่</p>
             </div>
@@ -353,6 +726,7 @@ export function ProjectWizard() {
 
         <div className="wizard-workspace">
           <section className="wizard-card">
+            {(uploadError || renderError) && <div className="form-alert error wizard-global-alert"><CircleAlert size={17} />{uploadError || renderError}<button type="button" onClick={() => { setUploadError(""); setRenderError(""); }} aria-label="ปิด"><X size={14} /></button></div>}
             {activeStep === 1 && (
               <div className="step-panel">
                 <div className="step-panel-heading">
@@ -382,9 +756,7 @@ export function ProjectWizard() {
                   <p>หรือ <span>เลือกไฟล์จากเครื่อง</span></p>
                   <small>รองรับ MP4, MOV, WebM · สูงสุด 500 MB</small>
                 </div>
-                {uploadError && <div className="form-alert error"><CircleAlert size={17} />{uploadError}</div>}
-
-                <div className="asset-card">
+                {hasChosenClip && <div className="asset-card">
                   <div className="asset-poster"><img src="/clippang-sample-poster.jpg" alt="ภาพตัวอย่างคลิปที่เลือก" /><Film size={17} /></div>
                   <div className="asset-info">
                     <h3>{fileName}</h3>
@@ -396,12 +768,12 @@ export function ProjectWizard() {
                     </div>
                   </div>
                   <button type="button" className="icon-button" onClick={() => fileInputRef.current?.click()} aria-label="เปลี่ยนคลิป"><RotateCcw size={17} /></button>
-                </div>
+                </div>}
 
                 {analyzing ? (
-                  <div className="analysis-box"><LoaderCircle size={18} className="spin" /><div><b>กำลังตรวจคลิป...</b><span>กำลังดูฉาก แสง และซับที่ติดมากับวิดีโอ</span></div></div>
+                  <div className="analysis-box"><LoaderCircle size={18} className="spin" /><div><b>{operationMessage || "กำลังตรวจคลิป..."}</b><span>{uploadProgress > 0 && uploadProgress < 100 ? `อัปโหลดแล้ว ${uploadProgress}%` : "กำลังดูชนิดไฟล์ ฉาก แสง และซับที่ติดมากับวิดีโอ"}</span></div></div>
                 ) : (
-                  <div className="analysis-box ready"><BadgeCheck size={18} /><div><b>คลิปพร้อมใช้งาน</b><span>พบ 8 ฉาก · ความสว่างดี · จะครอปเป็น 1080 × 1920 อัตโนมัติ</span></div></div>
+                  hasChosenClip ? <div className="analysis-box ready"><BadgeCheck size={18} /><div><b>คลิปพร้อมใช้งาน</b><span>{engineState === "connected" ? "ผ่านการตรวจชนิดไฟล์แล้ว · ระบบจะวิเคราะห์ฉากและซับเดิมตอนสร้างร่าง" : "พบ 8 ฉาก · ความสว่างดี · จะครอปเป็น 1080 × 1920 อัตโนมัติ"}</span></div></div> : null
                 )}
                 <div className="copyright-note"><CircleAlert size={16} /><p>ใช้เฉพาะคลิปที่คุณมีสิทธิ์เผยแพร่ เพื่อป้องกันปัญหาลิขสิทธิ์และเนื้อหาซ้ำบนแพลตฟอร์ม</p></div>
               </div>
@@ -415,13 +787,13 @@ export function ProjectWizard() {
                   <p>ยิ่งบอกชัด สคริปต์ยิ่งพูดเหมือนคุณขายเอง ไม่ต้องเขียนเป็นประโยคสวย ๆ</p>
                 </div>
                 <div className="brief-grid">
-                  <label className="field field-span-2"><span>ชื่อสินค้า <b>*</b></span><input defaultValue="หัวชาร์จพกพาแม่เหล็ก 5,000 mAh" /></label>
-                  <label className="field"><span>หมวดหมู่</span><select defaultValue="mobile"><option value="mobile">มือถือและอุปกรณ์เสริม</option><option>บ้านและไลฟ์สไตล์</option><option>บิวตี้และสกินแคร์</option></select><ChevronDown size={15} /></label>
-                  <label className="field"><span>ราคา / โปรโมชัน</span><input defaultValue="399 บาท จากปกติ 590 บาท" /></label>
-                  <label className="field field-span-2"><span>จุดขายหลัก <b>*</b></span><textarea rows={4} defaultValue="ชาร์จไร้สายแบบแม่เหล็ก ติดแน่น น้ำหนักเบา ใช้เป็นห่วงจับมือถือได้ และพกขึ้นเครื่องได้" /><small>แยกแต่ละข้อด้วยเครื่องหมายจุลภาคได้</small></label>
-                  <label className="field"><span>กลุ่มลูกค้า</span><input defaultValue="คนทำงาน ครีเอเตอร์ และคนเดินทางบ่อย" /></label>
-                  <label className="field"><span>โทนที่อยากได้</span><select defaultValue="friend"><option value="friend">เหมือนเพื่อนแนะนำ</option><option>ขายเก่ง จังหวะไว</option><option>รีวิวจริงใจ</option><option>พรีเมียม ดูแพง</option></select><ChevronDown size={15} /></label>
-                  <label className="field field-span-2"><span>คำที่อยากให้พูดปิดท้าย</span><input defaultValue="กดรับโปรที่ตะกร้าได้เลยค่ะ" /></label>
+                  <label className="field field-span-2"><span>ชื่อสินค้า <b>*</b></span><input value={brief.name} onChange={(event) => setBrief((current) => ({ ...current, name: event.target.value }))} /></label>
+                  <label className="field"><span>หมวดหมู่</span><select value={brief.category} onChange={(event) => setBrief((current) => ({ ...current, category: event.target.value }))}><option>มือถือและอุปกรณ์เสริม</option><option>บ้านและไลฟ์สไตล์</option><option>บิวตี้และสกินแคร์</option></select><ChevronDown size={15} /></label>
+                  <label className="field"><span>ราคา / โปรโมชัน</span><input value={brief.price} onChange={(event) => setBrief((current) => ({ ...current, price: event.target.value }))} /></label>
+                  <label className="field field-span-2"><span>จุดขายหลัก <b>*</b></span><textarea rows={4} value={brief.features} onChange={(event) => setBrief((current) => ({ ...current, features: event.target.value }))} /><small>แยกแต่ละข้อด้วยเครื่องหมายจุลภาคได้</small></label>
+                  <label className="field"><span>กลุ่มลูกค้า</span><input value={brief.audience} onChange={(event) => setBrief((current) => ({ ...current, audience: event.target.value }))} /></label>
+                  <label className="field"><span>โทนที่อยากได้</span><select value={brief.tone} onChange={(event) => setBrief((current) => ({ ...current, tone: event.target.value }))}><option>เหมือนเพื่อนแนะนำ</option><option>ขายเก่ง จังหวะไว</option><option>รีวิวจริงใจ</option><option>พรีเมียม ดูแพง</option></select><ChevronDown size={15} /></label>
+                  <label className="field field-span-2"><span>คำที่อยากให้พูดปิดท้าย</span><input value={brief.cta} onChange={(event) => setBrief((current) => ({ ...current, cta: event.target.value }))} /></label>
                 </div>
                 <div className="ai-tip"><span><Sparkles size={18} /></span><p><b>ไม่ต้องคิดให้ครบทุกคำ</b> ClipPang จะสร้างสคริปต์ให้เลือก 5 แนว และคุณแก้ทีละท่อนได้ในขั้นถัดไป</p></div>
               </div>
@@ -431,10 +803,10 @@ export function ProjectWizard() {
               <div className="step-panel">
                 <div className="step-panel-heading inline-heading">
                   <div><span className="step-kicker">ขั้นที่ 3 จาก 5</span><h2>เลือกเสียงที่เป็นตัวคุณ</h2><p>กดฟังตัวอย่างได้ทันที แล้วปรับความเร็วให้เข้ากับจังหวะคลิป</p></div>
-                  <span className="library-count">30 เสียง</span>
+                  <span className="library-count">{voiceLibrary.length} เสียง</span>
                 </div>
                 <div className="filter-row">
-                  {['ทั้งหมด','หญิง','ชาย'].map((filter) => <button type="button" key={filter} className={voiceFilter === filter ? "active" : ""} onClick={() => setVoiceFilter(filter)}>{filter}</button>)}
+                  {['ทั้งหมด','สดใส','นุ่ม','หนักแน่น'].map((filter) => <button type="button" key={filter} className={voiceFilter === filter ? "active" : ""} onClick={() => setVoiceFilter(filter)}>{filter}</button>)}
                 </div>
                 <div className="voice-grid">
                   {filteredVoices.map((voice) => (
@@ -453,7 +825,7 @@ export function ProjectWizard() {
                     </button>
                   ))}
                 </div>
-                <button className="show-more" type="button">ดูเสียงทั้งหมด 30 แบบ <ChevronDown size={15} /></button>
+                <button className="show-more" type="button" onClick={() => setVoiceFilter("ทั้งหมด")}>ดูเสียงทั้งหมด {voiceLibrary.length} แบบ <ChevronDown size={15} /></button>
 
                 <div className="voice-controls">
                   <div className="control-block">
@@ -476,9 +848,9 @@ export function ProjectWizard() {
                   <button type="button" className="button button-quiet"><WandSparkles size={16} /> สร้างใหม่ทั้งหมด</button>
                 </div>
                 <div className="script-tabs" role="tablist" aria-label="สคริปต์ 5 เวอร์ชัน">
-                  {initialScripts.map((script, index) => (
+                  {scriptVariants.map((script, index) => (
                     <button type="button" role="tab" aria-selected={selectedScript === script.id} className={selectedScript === script.id ? "active" : ""} onClick={() => setSelectedScript(script.id)} key={script.id}>
-                      <span>แบบ {index + 1}</span><b>{script.name}</b><small>{script.tag}</small><em>{script.score}% เข้ากับคลิป</em>
+                      <span>แบบ {index + 1}</span><b>{script.name || `สคริปต์ ${index + 1}`}</b><small>{script.tag || "AI สร้างให้"}</small><em>{script.score ?? Math.max(78, 96 - index * 3)}% เข้ากับคลิป</em>
                     </button>
                   ))}
                 </div>
@@ -494,7 +866,7 @@ export function ProjectWizard() {
                           aria-label={`สคริปต์ท่อนที่ ${index + 1}`}
                           onChange={(event) => setScriptTexts((current) => ({ ...current, [selectedScript]: current[selectedScript].map((line, lineIndex) => lineIndex === index ? event.target.value : line) }))}
                         />
-                        <button type="button" onClick={() => regenerateChunk(index)} title="เขียนท่อนนี้ใหม่"><RotateCcw size={15} /></button>
+                        <button type="button" onClick={() => void regenerateChunk(index)} title="เขียนท่อนนี้ใหม่"><RotateCcw size={15} /></button>
                         <small>{index * 6}:00–{(index + 1) * 6}:00</small>
                       </div>
                     ))}
@@ -519,7 +891,7 @@ export function ProjectWizard() {
             {activeStep === 5 && (
               <div className="step-panel results-panel">
                 <div className="step-panel-heading inline-heading">
-                  <div><span className="step-kicker">ขั้นที่ 5 จาก 5</span><h2>{renderDone ? "คลิปของคุณพร้อมแล้ว 🎉" : "เลือกร่างที่ชอบที่สุด"}</h2><p>{renderDone ? "ตรวจดูแล้ว ดาวน์โหลดไฟล์ได้ทันที หรือเปิดโฟลเดอร์ผลงานบนเครื่อง" : "ร่างใช้เสียงและจังหวะจริง เลือกหนึ่งแบบก่อนสร้างไฟล์คุณภาพเต็ม"}</p></div>
+                  <div><span className="step-kicker">ขั้นที่ 5 จาก 5</span><h2>{renderDone ? "คลิปของคุณพร้อมแล้ว 🎉" : draftReady ? "ร่างพร้อมแล้ว—สร้างตัวจริงได้เลย" : "เลือกร่างที่ชอบที่สุด"}</h2><p>{renderDone ? "ตรวจดูแล้ว ดาวน์โหลดไฟล์ได้ทันที หรือเปิดโฟลเดอร์ผลงานบนเครื่อง" : draftReady ? "ระบบจะใช้เสียงและ timeline เดิม จึงไม่ยิง TTS ซ้ำ" : "ร่างใช้เสียงและจังหวะจริง เลือกหนึ่งแบบก่อนสร้างไฟล์คุณภาพเต็ม"}</p></div>
                   {renderDone && <span className="ready-large"><CheckCircle2 size={17} /> พร้อมดาวน์โหลด</span>}
                 </div>
 
@@ -534,25 +906,27 @@ export function ProjectWizard() {
                         </button>
                       ))}
                     </div>
-                    <div className="render-summary"><div><span><Mic2 size={15} /> เสียง {selectedVoiceData.name}</span><span><Captions size={15} /> {selectedStyleData.name}</span><span><Clock3 size={15} /> ประมาณ 1–2 นาที</span></div><button className="button button-primary" type="button" onClick={startRender}><Zap size={17} /> สร้างคลิปตัวจริง</button></div>
+                    {draftReady && renderedVideoUrl && <div className="draft-ready-preview"><video src={renderedVideoUrl} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video><span><CheckCircle2 size={15} /> ร่างที่ใช้ timeline และเสียงจริง</span></div>}
+                    <div className="render-summary"><div><span><Mic2 size={15} /> เสียง {selectedVoiceData.name}</span><span><Captions size={15} /> {selectedStyleData.name}</span><span><Clock3 size={15} /> {draftReady ? "ตัวจริงประมาณ 1–3 นาที" : "ร่างประมาณ 25–40 วินาที"}</span></div><button className="button button-primary" type="button" onClick={startRender}><Zap size={17} /> {draftReady ? "สร้างคลิปตัวจริง" : "สร้างร่างที่เลือก"}</button></div>
                   </>
                 )}
 
                 {rendering && (
                   <div className="render-progress-card">
                     <div className="render-orbit"><span>{renderProgress}%</span></div>
-                    <div className="render-copy"><span className="live-pill dark"><i /> กำลังสร้างคลิปตัวจริง</span><h3>{renderStage}</h3><p>คุณปิดหน้านี้ได้ งานจะทำต่อและกลับมาดูความคืบหน้าได้เสมอ</p><div className="render-bar"><span style={{ width: `${renderProgress}%` }} /></div><div className="render-time"><span>ผ่านไป 00:{String(Math.round(renderProgress * .8)).padStart(2,'0')}</span><span>เหลือประมาณ {Math.max(1, Math.round((100-renderProgress)*.8))} วินาที</span></div><button type="button" onClick={() => { setRendering(false); setRenderProgress(0); }}>ยกเลิกงาน</button></div>
+                    <div className="render-copy"><span className="live-pill dark"><i /> กำลังสร้าง{renderKind === "draft" ? "ร่าง" : "คลิปตัวจริง"}</span><h3>{renderStage}</h3><p>คุณปิดหน้านี้ได้ งานจะทำต่อและกลับมาดูความคืบหน้าได้เสมอ</p><div className="render-bar"><span style={{ width: `${renderProgress}%` }} /></div><div className="render-time"><span>{renderProgress}% แล้ว</span><span>{operationMessage || "กำลังประมวลผลบนเครื่อง"}</span></div><button type="button" onClick={() => void cancelRender()}>ยกเลิกงาน</button></div>
                   </div>
                 )}
 
                 {renderDone && (
                   <div className="final-result">
-                    <div className="final-video"><video src={videoUrl} poster="/clippang-sample-poster.jpg" controls playsInline /><span className={`final-caption ${selectedStyleData.className}`}>{currentChunks[1]}</span></div>
+                    <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster="/clippang-sample-poster.jpg" controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video><span className={`final-caption ${selectedStyleData.className}`}>{currentChunks[1]}</span></div>
                     <div className="output-list">
-                      <div className="output-head"><span className="output-icon"><Film size={20} /></span><div><h3>final.mp4</h3><p>1080 × 1920 · H.264 · 29 วินาที · 8.7 MB</p></div><a className="button button-primary button-small" href="/clippang-sample.mp4" download><Download size={15} /> MP4</a></div>
-                      <button type="button" className="output-row" onClick={() => downloadText('srt')}><span><FileText size={17} /></span><div><b>captions.srt</b><small>ไฟล์ซับมาตรฐาน</small></div><Download size={16} /></button>
-                      <button type="button" className="output-row" onClick={() => downloadText('json')}><span><FileAudio size={17} /></span><div><b>project.json</b><small>การตั้งค่าและสคริปต์ทั้งหมด</small></div><Download size={16} /></button>
-                      <button type="button" className="button button-outline output-folder" onClick={() => setToast("ใน ClipPang Local ปุ่มนี้จะเปิดโฟลเดอร์ projects/.../out ให้ทันที") }><FolderOpen size={17} /> เปิดโฟลเดอร์ผลงาน</button>
+                      <div className="output-head"><span className="output-icon"><Film size={20} /></span><div><h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3><p>1080 × 1920 · H.264 · พร้อมโพสต์</p></div><a className="button button-primary button-small" href={renderedVideoUrl || "/clippang-sample.mp4"} download><Download size={15} /> MP4</a></div>
+                      {engineState === "connected" ? downloadableOutputs.filter(([, output]) => !output.filename.toLowerCase().endsWith(".mp4")).map(([key, output]) => (
+                        <a className="output-row" href={output.url} download key={key}><span>{output.filename.endsWith(".wav") ? <FileAudio size={17} /> : <FileText size={17} />}</span><div><b>{output.filename}</b><small>ไฟล์ประกอบจาก ClipPang</small></div><Download size={16} /></a>
+                      )) : <><button type="button" className="output-row" onClick={() => downloadText('srt')}><span><FileText size={17} /></span><div><b>captions.srt</b><small>ไฟล์ซับตัวอย่าง</small></div><Download size={16} /></button><button type="button" className="output-row" onClick={() => downloadText('json')}><span><FileAudio size={17} /></span><div><b>project.json</b><small>การตั้งค่าตัวอย่าง</small></div><Download size={16} /></button></>}
+                      <button type="button" className="button button-outline output-folder" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้") }><FolderOpen size={17} /> เปิดโฟลเดอร์ผลงาน</button>
                       <button type="button" className="text-button" onClick={() => { setRenderDone(false); setRenderProgress(0); }}>กลับไปแก้แล้วสร้างใหม่</button>
                     </div>
                   </div>
@@ -562,7 +936,7 @@ export function ProjectWizard() {
 
             <footer className="wizard-card-footer">
               <button type="button" className="button button-quiet" disabled={activeStep === 1} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
-              {activeStep < 5 ? <button type="button" className="button button-primary" onClick={goNext}>{activeStep === 1 ? "ใช้คลิปนี้" : activeStep === 2 ? "สร้างสคริปต์" : activeStep === 3 ? "เลือกเสียงนี้" : "ดูร่างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิปตัวจริง</button> : null}
+              {activeStep < 5 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้คลิปนี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : "สร้างร่างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> {draftReady ? "สร้างคลิปตัวจริง" : "สร้างร่างที่เลือก"}</button> : null}
             </footer>
           </section>
 

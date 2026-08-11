@@ -11,11 +11,13 @@ import {
   LayoutDashboard,
   Menu,
   Plus,
+  Radio,
   Settings,
   Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
 
 const navItems = [
   { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
@@ -33,8 +35,34 @@ const pageTitles: Record<string, string> = {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [engineState, setEngineState] = useState<LocalEngineState>("checking");
+  const [setupReady, setSetupReady] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<LocalProject[]>([]);
 
-  useEffect(() => setMenuOpen(false), [pathname]);
+  useEffect(() => {
+    let active = true;
+    detectLocalEngine().then(async (engine) => {
+      if (!active) return;
+      if (!engine) {
+        setEngineState("unavailable");
+        return;
+      }
+      setEngineState("connected");
+      try {
+        const [status, projects] = await Promise.all([
+          localApi.setupStatus(),
+          localApi.listProjects(),
+        ]);
+        if (active) {
+          setSetupReady(Boolean(status.ready));
+          setRecentProjects(projects.projects.slice(0, 2));
+        }
+      } catch {
+        if (active) setSetupReady(false);
+      }
+    });
+    return () => { active = false; };
+  }, []);
 
   const currentTitle = pathname.startsWith("/p/")
     ? "สร้างคลิปใหม่"
@@ -96,30 +124,54 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ChevronRight size={15} />
             </Link>
           </div>
-          <Link href="/p/charger" className="mini-project">
-            <span className="mini-project-thumb thumb-peach" aria-hidden="true" />
-            <span>
-              <b>หัวชาร์จพกพา</b>
-              <small>พร้อมดาวน์โหลด</small>
-            </span>
-          </Link>
-          <Link href="/p/serum" className="mini-project">
-            <span className="mini-project-thumb thumb-mint" aria-hidden="true" />
-            <span>
-              <b>เซรั่มผิวโกลว์</b>
-              <small>ร่าง 3 เวอร์ชัน</small>
-            </span>
-          </Link>
+          {engineState === "connected" ? (
+            recentProjects.length ? recentProjects.map((project, index) => {
+              const latest = project.renders?.[0];
+              const status = latest?.state === "ready"
+                ? (latest.kind === "final" ? "ตัวจริงพร้อมดาวน์โหลด" : "ร่างพร้อมให้เลือก")
+                : latest && ["queued", "running", "processing"].includes(latest.state)
+                  ? latest.message || `กำลังทำ ${latest.progress ?? 0}%`
+                  : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`;
+              return (
+                <Link href={`/p/${project.id}`} className="mini-project" key={project.id}>
+                  <span className={`mini-project-thumb ${index % 2 ? "thumb-mint" : "thumb-peach"}`} aria-hidden="true" />
+                  <span>
+                    <b>{project.title || "โปรเจกต์ไม่มีชื่อ"}</b>
+                    <small>{status}</small>
+                  </span>
+                </Link>
+              );
+            }) : (
+              <Link href="/p/new" className="mini-project">
+                <span className="mini-project-thumb thumb-mint" aria-hidden="true" />
+                <span>
+                  <b>สร้างโปรเจกต์แรก</b>
+                  <small>เริ่มจากคลิปสินค้าของคุณ</small>
+                </span>
+              </Link>
+            )
+          ) : (
+            <>
+              <Link href="/p/charger" className="mini-project">
+                <span className="mini-project-thumb thumb-peach" aria-hidden="true" />
+                <span><b>หัวชาร์จพกพา</b><small>ตัวอย่างพร้อมดาวน์โหลด</small></span>
+              </Link>
+              <Link href="/p/serum" className="mini-project">
+                <span className="mini-project-thumb thumb-mint" aria-hidden="true" />
+                <span><b>เซรั่มผิวโกลว์</b><small>ตัวอย่างร่าง 3 เวอร์ชัน</small></span>
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="sidebar-bottom">
-          <div className="system-ready">
+          <div className={`system-ready engine-${engineState}`}>
             <span className="status-orbit" aria-hidden="true">
               <span />
             </span>
             <div>
-              <b>เครื่องนี้พร้อมใช้งาน</b>
-              <small>Gemini และ FFmpeg เชื่อมต่อแล้ว</small>
+              <b>{engineState === "connected" ? (setupReady ? "เครื่องนี้พร้อมใช้งาน" : "เชื่อมต่อ Local แล้ว") : engineState === "checking" ? "กำลังตรวจ ClipPang Local" : "เว็บตัวอย่าง ClipPang"}</b>
+              <small>{engineState === "connected" ? (setupReady ? "Gemini และ FFmpeg พร้อมแล้ว" : "ตั้งค่าอีกเล็กน้อยก่อนเรนเดอร์") : engineState === "checking" ? "รอสักครู่…" : "เปิดด้วย เริ่มโปรแกรม.bat เพื่อใช้งานจริง"}</small>
             </div>
           </div>
           <Link href="/setup" className="help-link">
@@ -157,15 +209,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="topbar-actions">
+            <Link href={engineState === "connected" ? "/setup" : "/setup"} className={`engine-chip engine-${engineState}`} title={engineState === "connected" ? "ClipPang Local เชื่อมต่ออยู่" : "หน้านี้เป็นเว็บตัวอย่าง"}>
+              <Radio size={14} />
+              {engineState === "connected" ? "LOCAL เชื่อมต่อแล้ว" : engineState === "checking" ? "กำลังเชื่อมต่อ" : "WEB DEMO"}
+            </Link>
             <button className="icon-button notification-button" type="button" aria-label="การแจ้งเตือน">
               <Bell size={19} />
               <span aria-hidden="true" />
             </button>
             <div className="profile-chip">
-              <span className="avatar">ป</span>
+              <span className="avatar">C</span>
               <span className="profile-copy">
-                <b>ปังปอนด์</b>
-                <small>Creator</small>
+                <b>ClipPang Local</b>
+                <small>ไม่ต้องมีบัญชี</small>
               </span>
             </div>
           </div>

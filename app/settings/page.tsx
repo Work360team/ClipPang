@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Check,
   CheckCircle2,
@@ -16,7 +16,6 @@ import {
   LoaderCircle,
   LockKeyhole,
   RefreshCw,
-  Save,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -24,43 +23,179 @@ import {
   X,
 } from "lucide-react";
 import { AppShell } from "../components/AppShell";
+import {
+  detectLocalEngine,
+  localApi,
+  type LocalEngineState,
+  type SetupStatus,
+} from "../lib/local-api";
 
 type KeyStatus = "idle" | "testing" | "success" | "error";
+const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
+
+type DetailedSetupStatus = Omit<SetupStatus, "node" | "ffmpeg"> & {
+  node?: boolean | { ready?: boolean; version?: string };
+  ffmpeg?: boolean | { ready?: boolean; version?: string; libass?: boolean; reason?: string };
+};
+
+function statusReady(value: boolean | { ready?: boolean } | undefined) {
+  return typeof value === "boolean" ? value : Boolean(value?.ready);
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export default function SettingsPage() {
-  const [geminiKey, setGeminiKey] = useState("AIzaSyB7wQn5tR8pX2kL9mF4aC1b");
+  const [engineState, setEngineState] = useState<LocalEngineState>("checking");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [setupStatus, setSetupStatus] = useState<DetailedSetupStatus | null>(null);
+  const [appVersion, setAppVersion] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
+  const [savedLast4, setSavedLast4] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [keyStatus, setKeyStatus] = useState<KeyStatus>("idle");
-  const [inputFolder, setInputFolder] = useState("D:\\ClipPang\\input");
-  const [projectFolder, setProjectFolder] = useState("D:\\ClipPang\\projects");
-  const [folderSaved, setFolderSaved] = useState(false);
+  const [keyMessage, setKeyMessage] = useState("");
+  const [previewingVoice, setPreviewingVoice] = useState(false);
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
+  const [voicePreviewError, setVoicePreviewError] = useState("");
+  const [inputFolder, setInputFolder] = useState("");
+  const [projectFolder, setProjectFolder] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const [cacheCleared, setCacheCleared] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
+  const [clearedCount, setClearedCount] = useState<number | null>(null);
+  const [cacheError, setCacheError] = useState("");
 
-  const maskedHint = useMemo(() => {
-    if (geminiKey.length < 4) return "ยังไม่ได้ใส่คีย์";
-    return `บันทึกอย่างปลอดภัย ••••${geminiKey.slice(-4)}`;
-  }, [geminiKey]);
+  const loadLocalSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    setEngineState("checking");
 
-  function testKey() {
-    if (!geminiKey.trim()) {
+    const engine = await detectLocalEngine();
+    if (!engine) {
+      setEngineState("unavailable");
+      setLoading(false);
+      setSetupStatus(null);
+      setInputFolder("");
+      setProjectFolder("");
+      return;
+    }
+
+    setEngineState("connected");
+    try {
+      const [settingsResponse, statusResponse] = await Promise.all([
+        localApi.settings(),
+        localApi.setupStatus(),
+      ]);
+      const settings = settingsResponse.settings;
+      const status = statusResponse as DetailedSetupStatus;
+      const key = status.key ?? status.gemini ?? (
+        typeof settings.key === "object" && settings.key
+          ? settings.key as { configured?: boolean; last4?: string }
+          : undefined
+      );
+
+      setSetupStatus(status);
+      setInputFolder(typeof settings.inputFolder === "string" ? settings.inputFolder : status.paths?.input ?? "");
+      setProjectFolder(typeof settings.projectFolder === "string" ? settings.projectFolder : status.paths?.projects ?? "");
+      setAppVersion(typeof settings.version === "string" ? settings.version : "");
+      setSavedLast4(key?.configured ? key.last4 ?? "" : "");
+    } catch (error) {
+      setLoadError(errorMessage(error, "อ่านการตั้งค่าจาก ClipPang Local ไม่สำเร็จ"));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadLocalSettings(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadLocalSettings]);
+
+  useEffect(() => {
+    return () => {
+      if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+    };
+  }, [voicePreviewUrl]);
+
+  async function playVoicePreview() {
+    if (engineState !== "connected") {
+      setVoicePreviewError("กรุณาเปิด ClipPang Local ก่อนทดสอบเสียง");
+      return false;
+    }
+    setPreviewingVoice(true);
+    setVoicePreviewError("");
+    try {
+      const blob = await localApi.previewVoice("Kore", {
+        text: "สวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น",
+        speed: 1,
+        tone: "เป็นกันเอง",
+      });
+      setVoicePreviewUrl(URL.createObjectURL(blob));
+      return true;
+    } catch (error) {
+      setVoicePreviewError(errorMessage(error, "สร้างเสียงทดสอบไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง"));
+      return false;
+    } finally {
+      setPreviewingVoice(false);
+    }
+  }
+
+  async function testKey() {
+    const cleanKey = geminiKey.trim();
+    if (cleanKey.length < 16) {
       setKeyStatus("error");
+      setKeyMessage("กรุณาวาง API key ตัวเต็มจาก Google AI Studio");
+      return;
+    }
+
+    if (engineState !== "connected") {
+      setKeyStatus("error");
+      setKeyMessage("เว็บตัวอย่างบันทึกคีย์ไม่ได้ กรุณาเปิด ClipPang Local ก่อน");
       return;
     }
 
     setKeyStatus("testing");
-    window.setTimeout(() => setKeyStatus("success"), 1100);
+    setKeyMessage("");
+    try {
+      const result = await localApi.saveKey(cleanKey);
+      setSavedLast4(result.key.last4);
+      setGeminiKey("");
+      setShowKey(false);
+      setKeyStatus("success");
+      const previewReady = await playVoicePreview();
+      setKeyMessage(previewReady
+        ? "เชื่อมต่อสำเร็จ บันทึกคีย์แล้ว และสร้างเสียงทดสอบด้านล่าง"
+        : "บันทึกคีย์แล้ว แต่เสียงทดสอบยังไม่สำเร็จ ดูรายละเอียดด้านล่าง");
+    } catch (error) {
+      setKeyStatus("error");
+      setKeyMessage(errorMessage(error, "ทดสอบ API key ไม่สำเร็จ กรุณาตรวจคีย์และอินเทอร์เน็ต"));
+    }
   }
 
-  function saveFolders() {
-    setFolderSaved(true);
-    window.setTimeout(() => setFolderSaved(false), 2200);
+  async function clearCache() {
+    if (engineState !== "connected") return;
+    setClearingCache(true);
+    setCacheError("");
+    try {
+      const result = await localApi.clearCache();
+      setClearedCount(Number(result.removed ?? 0));
+      setCacheCleared(true);
+      setConfirmClear(false);
+    } catch (error) {
+      setCacheError(errorMessage(error, "ล้างแคชไม่สำเร็จ กรุณาลองอีกครั้ง"));
+    } finally {
+      setClearingCache(false);
+    }
   }
 
-  function clearCache() {
-    setCacheCleared(true);
-    setConfirmClear(false);
-  }
+  const nodeInfo = typeof setupStatus?.node === "object" ? setupStatus.node : null;
+  const ffmpegInfo = typeof setupStatus?.ffmpeg === "object" ? setupStatus.ffmpeg : null;
+  const ffmpegReady = statusReady(setupStatus?.ffmpeg) && (
+    typeof setupStatus?.ffmpeg === "boolean" || setupStatus?.ffmpeg?.libass !== false
+  );
 
   return (
     <AppShell>
@@ -71,8 +206,26 @@ export default function SettingsPage() {
             <h1>จัดการการเชื่อมต่อและไฟล์</h1>
             <p>การตั้งค่าทั้งหมดบันทึกไว้บนเครื่องนี้เท่านั้น เปลี่ยนได้ทุกเมื่อ</p>
           </div>
-          <div className="settings-local-badge"><WifiOff size={14} /> ทำงานแบบ Local</div>
+          <div className="settings-local-badge" data-connected={engineState === "connected"}>
+            {engineState === "connected" ? <CheckCircle2 size={14} /> : <WifiOff size={14} />}
+            {engineState === "connected" ? "Local เชื่อมต่อแล้ว" : engineState === "checking" ? "กำลังตรวจ Local" : "เว็บตัวอย่าง"}
+          </div>
         </header>
+
+        {engineState === "unavailable" && (
+          <div className="settings-hosted-note" role="status">
+            <WifiOff size={20} aria-hidden="true" />
+            <div>
+              <strong>หน้านี้กำลังแสดงในโหมดเว็บตัวอย่าง</strong>
+              <span>เปิด ClipPang ด้วย “เริ่มโปรแกรม.bat” เพื่อบันทึกคีย์ ดูพาธจริง และล้างแคชบนคอมเครื่องนี้</span>
+            </div>
+            <button type="button" onClick={() => void loadLocalSettings()}><RefreshCw size={14} /> ตรวจอีกครั้ง</button>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="settings-error-note" role="alert"><CircleHelp size={17} /> {loadError}</div>
+        )}
 
         <div className="settings-layout">
           <div className="settings-main-column">
@@ -97,10 +250,13 @@ export default function SettingsPage() {
                     onChange={(event) => {
                       setGeminiKey(event.target.value);
                       setKeyStatus("idle");
+                      setKeyMessage("");
                     }}
+                    placeholder={savedLast4 ? `ใส่คีย์ใหม่เพื่อเปลี่ยนคีย์ ••••${savedLast4}` : "วาง Gemini API key ตัวเต็ม"}
                     autoComplete="off"
                     spellCheck={false}
                     aria-describedby="gemini-key-hint"
+                    disabled={engineState !== "connected" || loading || keyStatus === "testing"}
                   />
                   <button
                     type="button"
@@ -112,14 +268,31 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 <div className="settings-key-assist" id="gemini-key-hint">
-                  <span className={keyStatus === "success" ? "settings-hint-success" : ""}>
+                  <span className={keyStatus === "success" ? "settings-hint-success" : keyStatus === "error" ? "settings-hint-error" : ""}>
                     {keyStatus === "success" && <CheckCircle2 size={13} />}
-                    {keyStatus === "error" ? "กรุณาใส่ API key ก่อนทดสอบ" : keyStatus === "success" ? "เชื่อมต่อสำเร็จ พร้อมสร้างเสียงพากย์" : maskedHint}
+                    {keyMessage || (savedLast4 ? `คีย์ที่บันทึกไว้ ••••${savedLast4}` : "ยังไม่ได้บันทึก API key")}
                   </span>
                   <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">
                     ขอ API key ฟรี <ChevronRight size={13} />
                   </a>
                 </div>
+                {(voicePreviewUrl || voicePreviewError || previewingVoice) && (
+                  <div className="settings-voice-preview" aria-live="polite">
+                    <div>
+                      <span>เสียงทดสอบ · Kore</span>
+                      <button type="button" onClick={() => void playVoicePreview()} disabled={previewingVoice || engineState !== "connected"}>
+                        {previewingVoice ? <LoaderCircle className="settings-spin" size={13} /> : <Sparkles size={13} />}
+                        {previewingVoice ? "กำลังสร้างเสียง…" : "ฟังอีกครั้ง"}
+                      </button>
+                    </div>
+                    {voicePreviewUrl && (
+                      <audio controls autoPlay src={voicePreviewUrl} aria-label="เสียงทดสอบ Gemini TTS">
+                        <track kind="captions" src={VOICE_TEST_CAPTIONS} srcLang="th" label="คำพูดภาษาไทย" default />
+                      </audio>
+                    )}
+                    {voicePreviewError && <p role="alert">บันทึกคีย์แล้ว แต่เสียงทดสอบไม่สำเร็จ: {voicePreviewError}</p>}
+                  </div>
+                )}
               </div>
 
               <div className="settings-key-actions">
@@ -127,12 +300,12 @@ export default function SettingsPage() {
                   type="button"
                   className="settings-button settings-button-primary"
                   onClick={testKey}
-                  disabled={keyStatus === "testing"}
+                  disabled={keyStatus === "testing" || !geminiKey.trim() || engineState !== "connected"}
                 >
                   {keyStatus === "testing" ? <LoaderCircle className="settings-spin" size={16} /> : keyStatus === "success" ? <Check size={16} strokeWidth={3} /> : <RefreshCw size={15} />}
-                  {keyStatus === "testing" ? "กำลังทดสอบ…" : keyStatus === "success" ? "เชื่อมต่อแล้ว" : "ทดสอบการเชื่อมต่อ"}
+                  {keyStatus === "testing" ? "กำลังทดสอบ…" : keyStatus === "success" ? "บันทึกแล้ว" : "บันทึกและทดสอบคีย์"}
                 </button>
-                <div className="settings-security-note"><LockKeyhole size={14} /> คีย์ไม่ถูกส่งไปที่เซิร์ฟเวอร์ของ ClipPang</div>
+                <div className="settings-security-note"><LockKeyhole size={14} /> หลังบันทึก หน้านี้จะเห็นเพียง 4 ตัวท้าย</div>
               </div>
             </section>
 
@@ -141,7 +314,7 @@ export default function SettingsPage() {
                 <div className="settings-section-icon settings-icon-folder"><FolderOpen size={20} /></div>
                 <div>
                   <h2 id="folder-title">โฟลเดอร์ที่ใช้</h2>
-                  <p>เลือกที่รับคลิปต้นฉบับ และที่เก็บโปรเจกต์ทั้งหมด</p>
+                  <p>ตำแหน่งจริงที่ ClipPang Local ใช้รับคลิปและเก็บโปรเจกต์</p>
                 </div>
               </div>
 
@@ -152,8 +325,8 @@ export default function SettingsPage() {
                     <div><label htmlFor="input-folder">คลิปต้นฉบับ</label><small>วางคลิปใหม่ไว้ในโฟลเดอร์นี้</small></div>
                   </div>
                   <div className="settings-folder-control">
-                    <input id="input-folder" value={inputFolder} onChange={(event) => setInputFolder(event.target.value)} spellCheck={false} />
-                    <button type="button" aria-label="เลือกโฟลเดอร์คลิปต้นฉบับ" onClick={() => setInputFolder("D:\\ClipPang\\input")}>เลือก</button>
+                    <input id="input-folder" value={inputFolder} placeholder={loading ? "กำลังอ่านจาก Local…" : "เชื่อมต่อ Local เพื่อดูพาธ"} readOnly aria-readonly="true" spellCheck={false} />
+                    <span className="settings-readonly-badge"><LockKeyhole size={12} /> อ่านอย่างเดียว</span>
                   </div>
                 </div>
 
@@ -163,18 +336,14 @@ export default function SettingsPage() {
                     <div><label htmlFor="project-folder">โปรเจกต์และไฟล์ผลลัพธ์</label><small>รวมไฟล์เสียง ซับ และวิดีโอที่เสร็จแล้ว</small></div>
                   </div>
                   <div className="settings-folder-control">
-                    <input id="project-folder" value={projectFolder} onChange={(event) => setProjectFolder(event.target.value)} spellCheck={false} />
-                    <button type="button" aria-label="เลือกโฟลเดอร์โปรเจกต์" onClick={() => setProjectFolder("D:\\ClipPang\\projects")}>เลือก</button>
+                    <input id="project-folder" value={projectFolder} placeholder={loading ? "กำลังอ่านจาก Local…" : "เชื่อมต่อ Local เพื่อดูพาธ"} readOnly aria-readonly="true" spellCheck={false} />
+                    <span className="settings-readonly-badge"><LockKeyhole size={12} /> อ่านอย่างเดียว</span>
                   </div>
                 </div>
               </div>
 
               <div className="settings-folder-actions">
-                <button type="button" className="settings-button settings-button-dark" onClick={saveFolders}>
-                  {folderSaved ? <Check size={16} strokeWidth={3} /> : <Save size={15} />}
-                  {folderSaved ? "บันทึกแล้ว" : "บันทึกตำแหน่งโฟลเดอร์"}
-                </button>
-                <span><CircleHelp size={13} /> โปรแกรมจะสร้างโฟลเดอร์ให้ หากยังไม่มี</span>
+                <span><CircleHelp size={13} /> ตำแหน่งนี้กำหนดโดย ClipPang Local เพื่อป้องกันการเปิดพาธนอกพื้นที่งาน</span>
               </div>
             </section>
           </div>
@@ -189,11 +358,13 @@ export default function SettingsPage() {
                 </div>
               </div>
               <dl className="settings-status-list">
-                <div><dt>ClipPang</dt><dd>v1.0.0 <span>ล่าสุด</span></dd></div>
-                <div><dt>FFmpeg</dt><dd><i /> พร้อมใช้</dd></div>
-                <div><dt>พื้นที่ว่าง</dt><dd>84.6 GB</dd></div>
+                <div><dt>ClipPang</dt><dd>{appVersion ? `v${appVersion}` : engineState === "connected" ? "Local" : "Web Demo"}</dd></div>
+                <div><dt>FFmpeg</dt><dd><i className="settings-status-dot" data-ready={ffmpegReady} /> {loading ? "กำลังตรวจ" : ffmpegReady ? ffmpegInfo?.version ?? "พร้อมใช้" : "ยังไม่พร้อม"}</dd></div>
+                <div><dt>Node.js</dt><dd>{nodeInfo?.version ? `v${nodeInfo.version}` : loading ? "กำลังตรวจ" : "—"}</dd></div>
               </dl>
-              <button type="button" className="settings-text-button"><RefreshCw size={14} /> ตรวจสอบเวอร์ชันใหม่</button>
+              <button type="button" className="settings-text-button" onClick={() => void loadLocalSettings()} disabled={loading}>
+                <RefreshCw className={loading ? "settings-spin" : ""} size={14} /> ตรวจสถานะอีกครั้ง
+              </button>
             </section>
 
             <section className="settings-privacy-card" aria-labelledby="privacy-title">
@@ -207,24 +378,24 @@ export default function SettingsPage() {
               <div className="settings-cache-head">
                 <div>
                   <h2 id="cache-title">แคชเสียงพากย์</h2>
-                  <p>{cacheCleared ? "ล้างแล้ว พร้อมเริ่มสะสมใหม่" : "ช่วยให้ประโยคเดิมใช้ซ้ำได้ทันที"}</p>
+                  <p>{cacheCleared ? `ล้างแล้ว${clearedCount ? ` ${clearedCount} รายการ` : ""} พร้อมเริ่มสะสมใหม่` : "ช่วยให้ประโยคเดิมใช้ซ้ำได้ทันที"}</p>
                 </div>
-                <strong>{cacheCleared ? "0 MB" : "186 MB"}</strong>
+                <strong>{cacheCleared ? "ล้างแล้ว" : engineState === "connected" ? "LOCAL" : "OFFLINE"}</strong>
               </div>
-              <div className="settings-cache-track"><span style={{ width: cacheCleared ? "0%" : "38%" }} /></div>
               {!confirmClear ? (
-                <button type="button" className="settings-danger-button" onClick={() => setConfirmClear(true)} disabled={cacheCleared}>
-                  <Trash2 size={14} /> {cacheCleared ? "ล้างแคชแล้ว" : "ล้างแคช"}
+                <button type="button" className="settings-danger-button" onClick={() => setConfirmClear(true)} disabled={cacheCleared || clearingCache || engineState !== "connected"}>
+                  <Trash2 size={14} /> {cacheCleared ? "ล้างแคชแล้ว" : engineState !== "connected" ? "เปิด Local เพื่อล้างแคช" : "ล้างแคช"}
                 </button>
               ) : (
                 <div className="settings-confirm-clear">
                   <span>ล้างไฟล์เสียงที่จำไว้ทั้งหมด?</span>
                   <div>
-                    <button type="button" onClick={clearCache}><Check size={13} /> ล้างเลย</button>
-                    <button type="button" onClick={() => setConfirmClear(false)} aria-label="ยกเลิก"><X size={14} /></button>
+                    <button type="button" onClick={() => void clearCache()} disabled={clearingCache}>{clearingCache ? <LoaderCircle className="settings-spin" size={13} /> : <Check size={13} />} {clearingCache ? "กำลังล้าง" : "ล้างเลย"}</button>
+                    <button type="button" onClick={() => setConfirmClear(false)} aria-label="ยกเลิก" disabled={clearingCache}><X size={14} /></button>
                   </div>
                 </div>
               )}
+              {cacheError && <p className="settings-cache-error" role="alert">{cacheError}</p>}
             </section>
           </aside>
         </div>
@@ -291,6 +462,55 @@ export default function SettingsPage() {
           background: #fff8dd;
           font-size: 11px;
           font-weight: 600;
+        }
+
+        .settings-local-badge[data-connected="true"] {
+          border-color: #cfe4d5;
+          color: #2c6c4b;
+          background: #edf8f0;
+        }
+
+        .settings-hosted-note,
+        .settings-error-note {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          margin: -10px 0 20px;
+          padding: 12px 14px;
+          border: 1px solid #eadca6;
+          border-radius: 12px;
+          color: #765f18;
+          background: #fff9e7;
+          font-size: 10.5px;
+        }
+
+        .settings-hosted-note > div {
+          min-width: 0;
+          flex: 1;
+          display: grid;
+          gap: 2px;
+        }
+
+        .settings-hosted-note strong { color: #413913; font-size: 11.5px; }
+        .settings-hosted-note button {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 6px 9px;
+          border: 1px solid #ddcb88;
+          border-radius: 8px;
+          color: #66530d;
+          background: #fff;
+          font: inherit;
+          font-size: 9px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .settings-error-note {
+          border-color: #efc9c3;
+          color: #874c44;
+          background: #fff2ef;
         }
 
         .settings-layout {
@@ -437,6 +657,22 @@ export default function SettingsPage() {
         }
         .settings-key-assist a:hover { text-decoration: underline; }
         .settings-key-assist .settings-hint-success { color: #26724e; }
+        .settings-key-assist .settings-hint-error { color: #a34c43; }
+
+        .settings-voice-preview {
+          display: grid;
+          gap: 7px;
+          margin-top: 11px;
+          padding: 10px;
+          border: 1px solid #e1e4dc;
+          border-radius: 10px;
+          background: #fafbf8;
+        }
+        .settings-voice-preview > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #70766e; font-size: 9px; }
+        .settings-voice-preview button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #d9dcd4; border-radius: 7px; color: #50584f; background: #fff; font: inherit; font-size: 8.5px; cursor: pointer; }
+        .settings-voice-preview button:disabled { cursor: wait; opacity: .7; }
+        .settings-voice-preview audio { width: 100%; height: 31px; }
+        .settings-voice-preview p { margin: 0; color: #a34c43; font-size: 8.5px; line-height: 1.5; }
 
         .settings-key-actions,
         .settings-folder-actions {
@@ -536,6 +772,19 @@ export default function SettingsPage() {
           font-family: ui-monospace, "Cascadia Code", monospace;
           font-size: 9.5px;
         }
+        .settings-folder-control input[readonly] { cursor: default; }
+        .settings-readonly-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          flex: 0 0 auto;
+          padding: 0 9px;
+          border-left: 1px solid #e1e3dd;
+          color: #737a72;
+          background: #f3f4f0;
+          font-size: 8.5px;
+          white-space: nowrap;
+        }
         .settings-folder-control button {
           padding: 0 11px;
           border: 0;
@@ -573,6 +822,7 @@ export default function SettingsPage() {
         .settings-status-list dd { display: flex; align-items: center; gap: 5px; margin: 0; color: #343a33; font-weight: 600; }
         .settings-status-list dd span { padding: 2px 5px; border-radius: 999px; color: #347051; background: #e5f4e9; font-size: 7.5px; }
         .settings-status-list dd i { width: 6px; height: 6px; border-radius: 50%; background: #49a16f; box-shadow: 0 0 0 3px #e5f4e9; }
+        .settings-status-list dd i[data-ready="false"] { background: #c9786d; box-shadow: 0 0 0 3px #fae7e4; }
 
         .settings-text-button {
           display: inline-flex;
@@ -588,6 +838,7 @@ export default function SettingsPage() {
           font-weight: 600;
           cursor: pointer;
         }
+        .settings-text-button:disabled { color: #91978f; cursor: wait; }
 
         .settings-privacy-card {
           position: relative;
@@ -656,6 +907,8 @@ export default function SettingsPage() {
         .settings-confirm-clear > div { display: flex; gap: 4px; }
         .settings-confirm-clear button { display: inline-flex; align-items: center; gap: 3px; height: 25px; padding: 0 7px; border: 0; border-radius: 7px; color: #fff; background: #a65349; font: inherit; font-size: 8px; font-weight: 600; cursor: pointer; }
         .settings-confirm-clear button:last-child { padding: 0 6px; color: #7e453e; background: #ffe1dc; }
+        .settings-confirm-clear button:disabled { cursor: wait; opacity: .7; }
+        .settings-cache-error { margin: 9px 0 0; color: #a34c43; font-size: 8.5px; }
 
         .settings-page button:focus-visible,
         .settings-page a:focus-visible,
@@ -674,6 +927,8 @@ export default function SettingsPage() {
           .settings-page { padding: 26px 18px 42px; }
           .settings-heading { align-items: flex-start; flex-direction: column; gap: 13px; }
           .settings-local-badge { display: none; }
+          .settings-hosted-note { align-items: flex-start; flex-wrap: wrap; }
+          .settings-hosted-note button { margin-left: 31px; }
           .settings-card { padding: 18px; }
           .settings-folder-row { grid-template-columns: 1fr; gap: 10px; }
           .settings-key-assist, .settings-key-actions, .settings-folder-actions { align-items: flex-start; flex-direction: column; }

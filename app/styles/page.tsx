@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import {
   Check,
@@ -183,6 +184,9 @@ export default function StylesPage() {
             <strong>{selected.name}</strong>
           </div>
           <p>คุณยังเปลี่ยนสไตล์และตำแหน่งซับได้อีกครั้งก่อนเริ่มเรนเดอร์</p>
+          <Link className="style-use-link" href={`/p/new?style=${encodeURIComponent(selected.id)}`}>
+            ใช้กับคลิปใหม่ <ChevronRight size={16} />
+          </Link>
         </aside>
       </div>
 
@@ -474,7 +478,7 @@ export default function StylesPage() {
 
         .style-selection-summary {
           display: grid;
-          grid-template-columns: auto auto minmax(180px, 1fr);
+          grid-template-columns: auto auto minmax(180px, 1fr) auto;
           align-items: center;
           gap: 12px;
           margin-top: 18px;
@@ -498,6 +502,24 @@ export default function StylesPage() {
         .style-selection-summary strong { display: block; margin-top: 1px; font-size: 13px; }
         .style-selection-summary p { justify-self: end; margin: 0; color: var(--style-muted); font-size: 11px; }
 
+        .style-use-link {
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 0 13px;
+          border-radius: 10px;
+          background: var(--style-ink);
+          color: white;
+          font-size: 11px;
+          font-weight: 650;
+          white-space: nowrap;
+        }
+
+        .style-use-link:hover { background: #343a33; }
+        .style-use-link:focus-visible { outline: 3px solid rgba(206,163,0,.24); outline-offset: 2px; }
+
         @media (max-width: 1120px) {
           .style-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .style-video-frame { aspect-ratio: 9 / 10; }
@@ -516,6 +538,7 @@ export default function StylesPage() {
           .style-video-frame { aspect-ratio: 9 / 10.5; }
           .style-selection-summary { grid-template-columns: auto 1fr; }
           .style-selection-summary p { grid-column: 1 / -1; justify-self: start; padding-top: 2px; }
+          .style-use-link { grid-column: 1 / -1; width: 100%; }
         }
 
         @media (prefers-reduced-motion: reduce) {
