@@ -1702,7 +1702,11 @@ select:focus-visible,
 .upload-zone.disabled {
   opacity: 0.58;
   cursor: wait;
-  pointer-events: none;
+}
+
+.upload-zone.checking {
+  opacity: 0.78;
+  cursor: progress;
 }
 
 .upload-illustration {

@@ -11,7 +11,7 @@ import test from "node:test";
 
 import { createApiHandler } from "../server/api.mjs";
 import { PATHS } from "../server/config.mjs";
-import { createLocalRuntime, pickScript } from "../server/index.mjs";
+import { createLocalRuntime, createWebWorkerLoader, pickScript } from "../server/index.mjs";
 import { RenderQueue } from "../server/queue.mjs";
 import {
   MAX_SOURCE_ASSETS,
@@ -45,6 +45,30 @@ function fixture(t) {
     },
   };
 }
+
+test("web worker loader switches to a rebuilt server bundle without restarting", async (t) => {
+  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clippang-worker-reload-"));
+  const sourceDir = path.join(rootDir, "source");
+  fs.mkdirSync(sourceDir);
+  const entry = path.join(sourceDir, "worker.mjs");
+  const dependency = path.join(sourceDir, "build-value.mjs");
+  const buildId = path.join(sourceDir, "BUILD_ID");
+  let getWebWorker;
+  t.after(async () => {
+    await getWebWorker?.close();
+    rmSync(rootDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+  });
+
+  writeFileSync(entry, "import { build } from './build-value.mjs'; export default { build, fetch() {} };\n");
+  writeFileSync(dependency, "export const build = 'one';\n");
+  writeFileSync(buildId, "build-one\n");
+  getWebWorker = await createWebWorkerLoader({ entry, snapshotBase: path.join(rootDir, "snapshots") });
+  assert.equal((await getWebWorker()).build, "one");
+
+  writeFileSync(dependency, "export const build = 'two-after-rebuild';\n");
+  writeFileSync(buildId, "build-two\n");
+  assert.equal((await getWebWorker()).build, "two-after-rebuild");
+});
 
 function apiRequest(handler, pathname, { method = "GET", body } = {}) {
   const init = { method, headers: {} };

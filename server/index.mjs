@@ -144,16 +144,104 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
   };
 }
 
-async function loadWebWorker() {
-  await fsp.access(WORKER_ENTRY).catch(() => {
+async function webWorkerBuildSignature(entry) {
+  const stat = await fsp.stat(entry).catch(() => {
     const error = new Error("ยังไม่พบหน้าเว็บที่ build แล้ว กรุณารัน `npm run build` ก่อนเปิด ClipPang Local");
     error.code = "WEB_BUILD_MISSING";
     throw error;
   });
-  const moduleUrl = pathToFileURL(WORKER_ENTRY);
-  moduleUrl.searchParams.set("local", String(Date.now()));
-  const workerModule = await import(moduleUrl.href);
-  return workerModule.default;
+  const buildId = await fsp.readFile(path.join(path.dirname(entry), "BUILD_ID"), "utf8")
+    .then((value) => value.trim())
+    .catch(() => "");
+  return `${buildId}:${stat.mtimeMs}:${stat.size}`;
+}
+
+async function loadWebWorkerSnapshot(entry, cacheKey, loaderRoot) {
+  const snapshotRoot = await fsp.mkdtemp(path.join(loaderRoot, "build-"));
+  const snapshotServerRoot = path.join(snapshotRoot, "server");
+  try {
+    await fsp.cp(path.dirname(entry), snapshotServerRoot, { recursive: true });
+  } catch (error) {
+    await fsp.rm(snapshotRoot, { recursive: true, force: true });
+    throw error;
+  }
+  const snapshotEntry = path.join(snapshotServerRoot, path.basename(entry));
+  const moduleUrl = pathToFileURL(snapshotEntry);
+  moduleUrl.searchParams.set("local", `${cacheKey}:${Date.now()}:${Math.random()}`);
+  try {
+    const workerModule = await import(moduleUrl.href);
+    return { worker: workerModule.default, snapshotRoot };
+  } catch (error) {
+    await fsp.rm(snapshotRoot, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export async function createWebWorkerLoader({
+  entry = WORKER_ENTRY,
+  snapshotBase = path.join(PATHS.cache, "web-workers"),
+} = {}) {
+  await fsp.mkdir(snapshotBase, { recursive: true });
+  const loaderRoot = await fsp.mkdtemp(path.join(snapshotBase, "session-"));
+  const snapshots = new Set();
+  let currentSignature = null;
+  let currentWorker = null;
+  let refreshPromise = null;
+
+  const loadCurrentBuild = async () => {
+    let lastError;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const expectedSignature = await webWorkerBuildSignature(entry);
+      try {
+        const loaded = await loadWebWorkerSnapshot(entry, expectedSignature, loaderRoot);
+        const settledSignature = await webWorkerBuildSignature(entry);
+        if (settledSignature !== expectedSignature) {
+          await fsp.rm(loaded.snapshotRoot, { recursive: true, force: true });
+          continue;
+        }
+        snapshots.add(loaded.snapshotRoot);
+        return { signature: settledSignature, worker: loaded.worker };
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+    }
+    const error = new Error("หน้าเว็บกำลังอัปเดต กรุณาลองใหม่อีกครั้ง", { cause: lastError });
+    error.code = "WEB_BUILD_CHANGING";
+    throw error;
+  };
+
+  const initial = await loadCurrentBuild().catch(async (error) => {
+    await fsp.rm(loaderRoot, { recursive: true, force: true });
+    throw error;
+  });
+  currentSignature = initial.signature;
+  currentWorker = initial.worker;
+
+  async function getWebWorker() {
+    const nextSignature = await webWorkerBuildSignature(entry);
+    if (nextSignature === currentSignature) return currentWorker;
+
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        const loaded = await loadCurrentBuild();
+        currentWorker = loaded.worker;
+        currentSignature = loaded.signature;
+        return currentWorker;
+      })().finally(() => {
+        refreshPromise = null;
+      });
+    }
+
+    return refreshPromise;
+  }
+
+  getWebWorker.close = async () => {
+    if (refreshPromise) await refreshPromise.catch(() => undefined);
+    await fsp.rm(loaderRoot, { recursive: true, force: true });
+    snapshots.clear();
+  };
+  return getWebWorker;
 }
 
 async function assetFetch(request) {
@@ -239,7 +327,7 @@ function openBrowser(url) {
 }
 
 export async function startLocalServer({ port: requestedPort } = {}) {
-  const [runtime, webWorker] = await Promise.all([createLocalRuntime(), loadWebWorker()]);
+  const [runtime, getWebWorker] = await Promise.all([createLocalRuntime(), createWebWorkerLoader()]);
   const port = requestedPort ?? await availablePort(DEFAULT_PORT);
   const server = http.createServer({ requestTimeout: 0, headersTimeout: 30_000 }, async (req, res) => {
     try {
@@ -252,9 +340,10 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       if (url.pathname.startsWith("/api/")) response = await runtime.api(request);
       else {
         const directAsset = await assetFetch(request);
-        response = directAsset.status !== 404
-          ? directAsset
-          : await webWorker.fetch(request, {
+        if (directAsset.status !== 404) response = directAsset;
+        else {
+          const webWorker = await getWebWorker();
+          response = await webWorker.fetch(request, {
             ASSETS: { fetch: assetFetch },
             IMAGES: {
               input() {
@@ -262,6 +351,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
               },
             },
           }, { waitUntil(promise) { promise.catch(console.error); }, passThroughOnException() {} });
+        }
       }
       await sendWebResponse(res, response, request.method);
     } catch (error) {
@@ -292,6 +382,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   const close = async () => {
     await new Promise((resolve) => server.close(resolve));
     await runtime.close();
+    await getWebWorker.close?.();
   };
   return { server, runtime, port, url, launchUrl, close };
 }

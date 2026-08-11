@@ -312,6 +312,7 @@ export function ProjectWizard() {
   const pendingTimelineSeekRef = useRef<number | null>(null);
   const timelinePlaybackRevisionRef = useRef(0);
   const uploadLockRef = useRef(false);
+  const pendingUploadFilesRef = useRef<File[]>([]);
   const editRevisionRef = useRef(0);
   const activeRenderEditRevisionRef = useRef<number | null>(null);
   const projectSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -587,6 +588,7 @@ export function ProjectWizard() {
       active = false;
       stopWatchingRenderRef.current?.();
       previewAudioRef.current?.pause();
+      pendingUploadFilesRef.current = [];
       for (const url of objectUrls) URL.revokeObjectURL(url);
       objectUrls.clear();
     };
@@ -712,16 +714,33 @@ export function ProjectWizard() {
     setOperationMessage("");
   };
 
-  const selectFiles = async (incoming?: FileList | File[]) => {
+  const selectFiles = async (
+    incoming?: FileList | File[],
+    resolvedEngineState: LocalEngineState = engineState,
+  ) => {
     const files = Array.from(incoming ?? []);
-    if (!files.length) return;
-    if (uploadLockRef.current || analyzing) return;
-    setUploadError("");
-    if (engineState === "checking") {
-      setUploadError("กำลังตรวจการเชื่อมต่อ ClipPang Local กรุณารอสักครู่แล้วเลือกคลิปอีกครั้ง");
+    if (!files.length) {
+      setUploadError("ไม่พบไฟล์วิดีโอจากรายการที่ลากมา หากลากจากหน้าต่างดาวน์โหลดของ Chrome ให้เปิดโฟลเดอร์ดาวน์โหลดแล้วลากจาก File Explorer หรือกดเลือกไฟล์จากเครื่อง");
       return;
     }
-    if (engineState !== "connected" && engineState !== "unavailable") {
+    if (uploadLockRef.current || analyzing) {
+      setUploadError("กำลังเพิ่มคลิปชุดก่อนหน้า กรุณารอให้เสร็จก่อนเพิ่มคลิปอีกครั้ง");
+      return;
+    }
+    setUploadError("");
+    if (resolvedEngineState === "checking") {
+      const queuedFiles = [...pendingUploadFilesRef.current, ...files].filter((file, index, all) => (
+        index === all.findIndex((candidate) => (
+          candidate.name === file.name
+          && candidate.size === file.size
+          && candidate.lastModified === file.lastModified
+        ))
+      ));
+      pendingUploadFilesRef.current = queuedFiles;
+      setUploadError(`รับคลิป ${queuedFiles.length} ไฟล์แล้ว กำลังตรวจการเชื่อมต่อ ClipPang Local และจะเริ่มเพิ่มคลิปให้อัตโนมัติ`);
+      return;
+    }
+    if (resolvedEngineState !== "connected" && resolvedEngineState !== "unavailable") {
       setUploadError("ยังไม่พร้อมรับคลิป กรุณารีเฟรชหน้าแล้วลองใหม่");
       return;
     }
@@ -771,7 +790,7 @@ export function ProjectWizard() {
       if (!prepared.length) throw new Error(batchErrors.join(" · ") || "ไม่พบคลิปที่เปิดอ่านได้");
 
       let successfulUploads: { prepared: typeof prepared[number]; uploaded: LocalAsset }[];
-      if (engineState === "connected") {
+      if (resolvedEngineState === "connected") {
         setOperationMessage(`กำลังอัปโหลด ${prepared.length} คลิปไว้ในเครื่อง…`);
         const result = await localApi.uploadAssets(prepared.map((item) => item.file), (progress, current, total) => {
           setUploadProgress(progress);
@@ -851,7 +870,7 @@ export function ProjectWizard() {
       setTimelineEditorOpen(true);
       assetsCommitted = true;
 
-      if (engineState === "connected") {
+      if (resolvedEngineState === "connected") {
         const savedAssets = persistedAssets(normalizedAssets, nextTimeline);
         const nextProduct = projectProduct({
           assets: savedAssets,
@@ -890,10 +909,32 @@ export function ProjectWizard() {
     void selectFiles(event.target.files ?? undefined);
     event.target.value = "";
   };
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (Array.from(event.dataTransfer.types).includes("Files")) event.dataTransfer.dropEffect = "copy";
+  };
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    void selectFiles(event.dataTransfer.files);
+    event.stopPropagation();
+    const fileList = Array.from(event.dataTransfer.files);
+    const itemFiles = fileList.length
+      ? []
+      : Array.from(event.dataTransfer.items)
+        .filter((item) => item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file));
+    void selectFiles(fileList.length ? fileList : itemFiles);
   };
+
+  useEffect(() => {
+    if (engineState === "checking" || pendingUploadFilesRef.current.length === 0) return;
+    const queuedFiles = pendingUploadFilesRef.current;
+    pendingUploadFilesRef.current = [];
+    void selectFiles(queuedFiles, engineState);
+    // Process each queued batch exactly once when the Local availability check settles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineState]);
 
   const timelineClipStartMs = (clipId: string) => {
     let elapsed = 0;
@@ -1432,7 +1473,7 @@ export function ProjectWizard() {
 
         <div className={`wizard-workspace ${timelineEditorOpen && activeStep === 1 ? "timeline-mode" : ""}`}>
           <section className="wizard-card">
-            {(uploadError || renderError) && <div className="form-alert error wizard-global-alert"><CircleAlert size={17} />{uploadError || renderError}<button type="button" onClick={() => { setUploadError(""); setRenderError(""); }} aria-label="ปิด"><X size={14} /></button></div>}
+            {(uploadError || renderError) && <div className="form-alert error wizard-global-alert" role="alert"><CircleAlert size={17} />{uploadError || renderError}<button type="button" onClick={() => { setUploadError(""); setRenderError(""); }} aria-label="ปิด"><X size={14} /></button></div>}
             {activeStep === 1 && (
               <div className={`step-panel ${timelineEditorOpen ? "timeline-editor-panel" : ""}`}>
                 <input
@@ -1440,7 +1481,7 @@ export function ProjectWizard() {
                   type="file"
                   accept="video/mp4,video/quicktime,video/webm"
                   multiple
-                  disabled={analyzing || engineState === "checking"}
+                  disabled={analyzing}
                   onChange={handleFileChange}
                   hidden
                 />
@@ -1461,14 +1502,15 @@ export function ProjectWizard() {
                     </div>
 
                     {clipAssets.length < MAX_CLIPS && <div
-                      className={`upload-zone upload-zone-multiple ${analyzing || engineState === "checking" ? "disabled" : ""}`}
-                      onDragOver={(event) => event.preventDefault()}
+                      className={`upload-zone upload-zone-multiple ${analyzing ? "disabled" : ""} ${engineState === "checking" ? "checking" : ""}`}
+                      onDragOver={handleDragOver}
                       onDrop={handleDrop}
                       role="button"
                       tabIndex={0}
-                      aria-disabled={analyzing || engineState === "checking"}
-                      onClick={() => { if (!analyzing && engineState !== "checking") fileInputRef.current?.click(); }}
-                      onKeyDown={(event) => { if (!analyzing && engineState !== "checking" && (event.key === "Enter" || event.key === " ")) fileInputRef.current?.click(); }}
+                      aria-disabled={analyzing}
+                      aria-busy={analyzing || engineState === "checking"}
+                      onClick={() => { if (!analyzing) fileInputRef.current?.click(); }}
+                      onKeyDown={(event) => { if (!analyzing && (event.key === "Enter" || event.key === " ")) fileInputRef.current?.click(); }}
                     >
                       <span className="upload-illustration"><UploadCloud size={28} /></span>
                       <h3>{hasChosenClip ? "เพิ่มคลิปเข้า Timeline" : "ลากหลายคลิปมาวางตรงนี้"}</h3>

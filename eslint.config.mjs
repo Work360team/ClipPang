@@ -20,6 +20,7 @@ const eslintConfig = defineConfig([
     "probe/**",
     "spike/**",
     "pipeline/vendor/**",
+    "data/cache/web-workers/**",
     "next-env.d.ts",
   ]),
   eslint.configs.recommended,
