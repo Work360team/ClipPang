@@ -54,3 +54,9 @@ test("removes starter preview artifacts and uses Thai product metadata", async (
   await access(new URL("../public/og.png", import.meta.url));
   await access(new URL("../public/clippang-sample.mp4", import.meta.url));
 });
+
+test("setup home action bypasses the broken RSC client transition", async () => {
+  const setupPage = await readFile(new URL("../app/setup/page.tsx", import.meta.url), "utf8");
+  assert.match(setupPage, /window\.location\.assign\("\/"\)/);
+  assert.doesNotMatch(setupPage, /from "next\/link"/);
+});

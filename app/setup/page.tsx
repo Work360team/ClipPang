@@ -20,7 +20,6 @@ import {
   Sparkles,
   Type,
 } from "lucide-react";
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   detectLocalEngine,
@@ -280,6 +279,13 @@ export default function SetupPage() {
     setKeyValid(false);
   };
 
+  const goHome = () => {
+    // Vinext beta can fail its RSC client transition after the long-running
+    // setup flow. A full browser navigation is deterministic and also clears
+    // setup-only listeners/audio before the dashboard mounts.
+    window.location.assign("/");
+  };
+
   const nodeInfo = typeof setupStatus?.node === "object" ? setupStatus.node : null;
   const kanitInfo = typeof setupStatus?.kanit === "object" ? setupStatus.kanit : null;
   const ffmpegInfo = typeof setupStatus?.ffmpeg === "object" ? setupStatus.ffmpeg : null;
@@ -296,13 +302,13 @@ export default function SetupPage() {
   return (
     <div className={styles.page}>
       <header className={styles.topbar}>
-        <Link className={styles.brand} href="/" aria-label="ClipPang หน้าแรก">
+        <button type="button" className={styles.brand} onClick={goHome} aria-label="ClipPang หน้าแรก">
           <span className={styles.brandMark} aria-hidden="true">
             <Clapperboard size={20} strokeWidth={2.4} />
           </span>
           <span>ClipPang</span>
           <span className={styles.localBadge}>{engineState === "connected" ? "LOCAL" : "WEB DEMO"}</span>
-        </Link>
+        </button>
         <div className={styles.privacyNote}>
           {engineState === "connected" ? <ShieldCheck size={16} aria-hidden="true" /> : <CircleAlert size={16} aria-hidden="true" />}
           {engineState === "connected" ? "เชื่อมต่อ ClipPang Local แล้ว" : engineState === "checking" ? "กำลังค้นหา ClipPang Local…" : "นี่คือเว็บตัวอย่าง"}
@@ -726,10 +732,10 @@ export default function SetupPage() {
                         <span><strong>บันทึกคีย์แล้ว แต่เสียงทดสอบยังไม่สำเร็จ</strong>{voicePreviewError}</span>
                       </div>
                     )}
-                    <Link className={styles.readyButton} href="/">
+                    <button type="button" className={styles.readyButton} onClick={goHome}>
                       ไปหน้าแรก
                       <ArrowRight size={19} aria-hidden="true" />
-                    </Link>
+                    </button>
                     <small>ครั้งหน้าที่เปิด ClipPang จะเข้าหน้าแรกให้ทันที</small>
                   </div>
                 )}
