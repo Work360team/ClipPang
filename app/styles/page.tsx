@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   Check,
   ChevronRight,
@@ -54,6 +54,39 @@ const captionStyles: CaptionStyle[] = [
   },
 ];
 
+type StyleParams = {
+  fill?: string;
+  activeFill?: string;
+  outline?: { color?: string; width?: number };
+  font?: { family?: string; weight?: number };
+  position?: { anchor?: string };
+};
+
+type EngineStyle = {
+  id: string;
+  name: string;
+  description?: string;
+  lane?: string;
+  tier?: string;
+  params?: StyleParams;
+};
+
+/**
+ * สีและฟอนต์ในตัวอย่างมาจากไฟล์สไตล์จริงที่ engine ใช้เรนเดอร์
+ * ถ้าใครแก้ไฟล์ใน pipeline/styles หน้านี้จะเปลี่ยนตามทันที ไม่ต้องมาแก้ CSS ซ้ำอีกที่
+ */
+function previewVars(params?: StyleParams): CSSProperties {
+  if (!params) return {};
+  const outlineWidth = Math.max(1, Math.round((params.outline?.width ?? 7) / 5));
+  const outlineColor = params.outline?.color ?? "#111";
+  return {
+    "--style-fill": params.fill ?? "#fff",
+    "--style-active": params.activeFill ?? "var(--yellow)",
+    "--style-weight": String(params.font?.weight ?? 800),
+    "--style-stroke": `${-outlineWidth}px ${-outlineWidth}px 0 ${outlineColor}, ${outlineWidth}px ${-outlineWidth}px 0 ${outlineColor}, ${-outlineWidth}px ${outlineWidth}px 0 ${outlineColor}, ${outlineWidth}px ${outlineWidth}px 0 ${outlineColor}`,
+  } as CSSProperties;
+}
+
 function CaptionPreview({ mode }: { mode: CaptionStyle["mode"] }) {
   if (mode === "box") {
     return (
@@ -93,7 +126,37 @@ function CaptionPreview({ mode }: { mode: CaptionStyle["mode"] }) {
 
 export default function StylesPage() {
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
-  const selected = captionStyles.find((style) => style.id === selectedStyle)!;
+  const [engineStyles, setEngineStyles] = useState<EngineStyle[] | null>(null);
+
+  // อ่านคลังสไตล์จาก engine จริง — ถ้าเพิ่มไฟล์สไตล์ใหม่ หน้านี้จะขึ้นเองโดยไม่ต้องแก้โค้ด
+  useEffect(() => {
+    let active = true;
+    fetch("/api/styles")
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+      .then((data) => { if (active && Array.isArray(data.styles)) setEngineStyles(data.styles); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const styles = useMemo(() => {
+    if (!engineStyles?.length) return captionStyles.map((style) => ({ ...style, params: undefined as StyleParams | undefined, live: false }));
+    return engineStyles.map((engineStyle) => {
+      const local = captionStyles.find((style) => style.id === engineStyle.id);
+      return {
+        id: engineStyle.id,
+        name: engineStyle.name || local?.name || engineStyle.id,
+        description: engineStyle.description || local?.description || "",
+        // เร็ว/ละเอียด อ่านจาก lane จริง ไม่ใช่ข้อความที่พิมพ์ไว้ตายตัว
+        speed: engineStyle.lane === "hyperframes" ? "ละเอียดกว่า" : "เร็วมาก",
+        mode: local?.mode ?? (engineStyle.lane === "hyperframes" ? "kanit" : "karaoke"),
+        badge: engineStyle.lane === "hyperframes" ? "คุณภาพสูง" : local?.badge,
+        params: engineStyle.params,
+        live: true,
+      };
+    });
+  }, [engineStyles]);
+
+  const selected = styles.find((style) => style.id === selectedStyle) ?? styles[0];
 
   return (
     <AppShell>
@@ -108,17 +171,18 @@ export default function StylesPage() {
           </div>
           <div className="style-heading-note" aria-label="จำนวนสไตล์ที่พร้อมใช้">
             <Layers3 size={18} />
-            <span><strong>4</strong> สไตล์พร้อมใช้</span>
+            <span><strong>{styles.length}</strong> สไตล์พร้อมใช้</span>
           </div>
         </header>
 
         <section className="style-gallery" aria-label="สไตล์คำบรรยาย">
-          {captionStyles.map((style, index) => {
+          {styles.map((style, index) => {
             const isSelected = selectedStyle === style.id;
             return (
               <article
                 className={`style-card${isSelected ? " style-card-selected" : ""}`}
                 key={style.id}
+                style={previewVars(style.params)}
               >
                 <div className="style-video-frame">
                   <video
@@ -135,7 +199,7 @@ export default function StylesPage() {
                   <div className="style-video-shade" />
                   <CaptionPreview mode={style.mode} />
                   <div className="style-preview-pill">
-                    <Play size={10} fill="currentColor" /> พรีวิวจริง
+                    <Play size={10} fill="currentColor" /> {style.live ? "สีจากไฟล์สไตล์จริง" : "ตัวอย่างสไตล์"}
                   </div>
                   {style.badge && (
                     <div className="style-quality-pill">
