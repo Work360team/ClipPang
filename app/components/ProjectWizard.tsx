@@ -1542,6 +1542,8 @@ export function ProjectWizard() {
       }
       return;
     }
+    // โหมดตัวอย่าง: สลับข้อความที่เตรียมไว้ ไม่ได้เรียก AI จริง
+    // ต้องบอกให้ต่างจากข้อความตอนต่อ Local ไม่งั้นผู้ใช้เข้าใจว่า AI เขียนให้แล้ว
     const replacement = replacementLines[(index + selectedScript.length) % replacementLines.length];
     setScriptTexts((current) => ({
       ...current,
@@ -1549,7 +1551,7 @@ export function ProjectWizard() {
         lineIndex === index ? replacement : line,
       ),
     }));
-    setToast(`เขียนท่อนที่ ${index + 1} ใหม่แล้ว โดยไม่กระทบท่อนอื่น`);
+    setToast(`สลับเป็นข้อความตัวอย่างแล้ว — เปิดผ่าน เริ่มโปรแกรม.bat เพื่อให้ AI เขียนใหม่จริง`);
   };
 
   const beginRender = async (kind: "draft" | "final", knownProjectId?: string) => {
