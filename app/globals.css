@@ -3279,6 +3279,57 @@ select:focus-visible,
   opacity: 0.75;
 }
 
+/* พรีวิวสด — สถานะจริงของ playhead และช่วงคลิป */
+
+.timeline-track.is-live {
+  cursor: pointer;
+}
+
+.timeline-track.is-live:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.timeline-track .scene.is-active {
+  background: var(--yellow);
+  opacity: 0.55;
+}
+
+.timeline-track.is-live > i {
+  transition: left 90ms linear;
+}
+
+.waveform i.is-past {
+  background: var(--yellow);
+  opacity: 0.95;
+}
+
+/* หน้าคลังสไตล์ — สีและน้ำหนักฟอนต์มาจาก params ของไฟล์สไตล์จริงผ่านตัวแปรบน .style-card */
+
+.style-card .style-caption {
+  color: var(--style-fill, #fff);
+  font-weight: var(--style-weight, 800);
+  text-shadow: var(--style-stroke, -2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111);
+}
+
+.style-card .style-caption strong,
+.style-card .style-caption .style-word-now {
+  color: var(--style-active, var(--yellow));
+}
+
+.style-card .style-caption-box,
+.style-card .style-caption-clean {
+  text-shadow: none;
+}
+
+.preview-timeline-note {
+  margin: 7px 0 0;
+  color: #5d665e;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
 .preview-config {
   display: grid;
   gap: 9px;

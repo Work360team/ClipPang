@@ -35,6 +35,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -349,10 +350,165 @@ export function ProjectWizard() {
   const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
   const downloadableOutputs = Object.entries(renderOutputs).filter(([, output]) => output?.url && output?.filename);
 
+  /* ---------- พรีวิวสด: เล่น Timeline จริง ไม่ใช่คลิปเดียวค้างไว้ ---------- */
+
+  const graphemeSegmenter = useMemo(
+    () => (typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter("th", { granularity: "grapheme" }) : null),
+    [],
+  );
+  const countGraphemes = useCallback(
+    (value: string) => (graphemeSegmenter ? [...graphemeSegmenter.segment(value)].length : value.length),
+    [graphemeSegmenter],
+  );
+
+  // ต่อคลิปที่ตัดไว้เป็นเส้นเวลาเดียว แต่ละช่วงรู้ว่าต้องเล่นไฟล์ไหนตั้งแต่วินาทีที่เท่าไหร่
+  const programSegments = useMemo(() => {
+    let cursor = 0;
+    const segments: { id: string; assetName: string; src: string; sourceStartMs: number; startMs: number; endMs: number; durationMs: number }[] = [];
+    for (const clip of orderedTimelineClips) {
+      const asset = orderedClipAssets.find((item) => item.name === clip.assetName) ?? null;
+      const durationMs = Math.max(0, clip.trimEndMs - clip.trimStartMs);
+      const src = asset?.previewUrl || asset?.url || "";
+      if (durationMs <= 0 || !src) continue;
+      segments.push({ id: clip.id, assetName: clip.assetName, src, sourceStartMs: clip.trimStartMs, startMs: cursor, endMs: cursor + durationMs, durationMs });
+      cursor += durationMs;
+    }
+    return segments;
+  }, [orderedTimelineClips, orderedClipAssets]);
+
+  const previewTotalMs = programSegments.length ? programSegments[programSegments.length - 1].endMs : 0;
+  const hasProgram = programSegments.length > 0;
+
+  // แบ่งเวลาให้แต่ละท่อนตามจำนวนตัวอักษร — วิธีเดียวกับที่ pipeline ใช้ตอนสร้างจริง
+  // ก่อนเรนเดอร์เรายังไม่รู้ความยาวเสียงจริง ค่านี้จึงเป็นค่าประมาณที่บอกผู้ใช้ตรง ๆ
+  const captionCues = useMemo(() => {
+    const texts = currentChunks.map((chunk) => (chunk ?? "").trim()).filter(Boolean);
+    if (!texts.length || previewTotalMs <= 0) return [] as { text: string; startMs: number; endMs: number }[];
+    const weights = texts.map((text) => Math.max(1, countGraphemes(text)));
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    let cursor = 0;
+    return texts.map((text, index) => {
+      const span = index === texts.length - 1 ? previewTotalMs - cursor : Math.round((weights[index] / totalWeight) * previewTotalMs);
+      const cue = { text, startMs: cursor, endMs: cursor + span };
+      cursor += span;
+      return cue;
+    });
+  }, [currentChunks, previewTotalMs, countGraphemes]);
+
+  const [rawPreviewTimeMs, setPreviewTimeMs] = useState(0);
+  const [rawPreviewSegmentIndex, setPreviewSegmentIndex] = useState(0);
+  const previewSeekRef = useRef<number | null>(null);
+  const appliedSegmentRef = useRef(-1);
+
+  // ผู้ใช้ลบหรือตัดคลิปได้ตลอด เส้นเวลาจึงหดได้ — หนีบค่าตอนอ่าน ไม่ใช่ตั้ง state ใหม่ใน effect
+  const previewTimeMs = previewTotalMs > 0 ? Math.min(rawPreviewTimeMs, Math.max(0, previewTotalMs - 1)) : 0;
+  const previewSegmentIndex = hasProgram ? Math.min(rawPreviewSegmentIndex, programSegments.length - 1) : 0;
+
+  const activeCue = captionCues.find((cue) => previewTimeMs >= cue.startMs && previewTimeMs < cue.endMs) ?? null;
+  const previewCaptionText = activeCue?.text ?? (isPlaying ? "" : captionCues[0]?.text ?? currentChunks[0] ?? "");
+
+  // ย้าย playhead ไปตำแหน่งที่ต้องการ แล้วปล่อยให้ effect ข้างล่างจัดการไฟล์และ currentTime
+  const seekPreviewTo = useCallback(
+    (targetMs: number) => {
+      if (!hasProgram) return;
+      const clamped = Math.min(Math.max(0, targetMs), Math.max(0, previewTotalMs - 1));
+      const index = programSegments.findIndex((segment) => clamped >= segment.startMs && clamped < segment.endMs);
+      previewSeekRef.current = clamped;
+      appliedSegmentRef.current = -1;
+      setPreviewSegmentIndex(index < 0 ? 0 : index);
+      setPreviewTimeMs(clamped);
+    },
+    [hasProgram, previewTotalMs, programSegments],
+  );
+
+  // สลับไฟล์ต้นทางเมื่อ playhead ข้ามไปช่วงถัดไป
+  useEffect(() => {
+    const video = videoRef.current;
+    const segment = programSegments[previewSegmentIndex];
+    if (!video || !segment) return;
+    if (appliedSegmentRef.current === previewSegmentIndex && previewSeekRef.current == null) return;
+    appliedSegmentRef.current = previewSegmentIndex;
+
+    const wanted = new URL(segment.src, window.location.href).href;
+    if (video.src !== wanted) video.src = segment.src;
+    const offsetMs = Math.max(0, (previewSeekRef.current ?? segment.startMs) - segment.startMs);
+    previewSeekRef.current = null;
+    const seekTo = (segment.sourceStartMs + offsetMs) / 1000;
+    const apply = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0) video.currentTime = Math.min(seekTo, Math.max(0, video.duration - 0.05));
+      else video.currentTime = seekTo;
+      if (isPlaying) void video.play().catch(() => undefined);
+    };
+    if (video.readyState >= 1) apply();
+    else video.addEventListener("loadedmetadata", apply, { once: true });
+  }, [previewSegmentIndex, programSegments, isPlaying]);
+
+  // อ่านเวลาจากวิดีโอจริงแล้วเลื่อน playhead — เรียกได้จากทั้ง timeupdate และ rAF
+  const syncPreviewFromVideo = useCallback(() => {
+    const video = videoRef.current;
+    const segment = programSegments[previewSegmentIndex];
+    if (!video || !segment) return;
+    const localMs = video.currentTime * 1000 - segment.sourceStartMs;
+    const globalMs = segment.startMs + Math.max(0, localMs);
+    if (globalMs >= segment.endMs - 40 || video.ended) {
+      const nextIndex = previewSegmentIndex + 1;
+      if (nextIndex >= programSegments.length) {
+        seekPreviewTo(0); // วนกลับไปต้นเส้นเวลา
+      } else {
+        previewSeekRef.current = programSegments[nextIndex].startMs;
+        appliedSegmentRef.current = -1;
+        setPreviewSegmentIndex(nextIndex);
+        setPreviewTimeMs(programSegments[nextIndex].startMs);
+      }
+    } else {
+      setPreviewTimeMs(globalMs);
+    }
+  }, [programSegments, previewSegmentIndex, seekPreviewTo]);
+
+  // timeupdate เป็นตัวหลักเพราะยังทำงานตอนแท็บถูกซ่อน ส่วน rAF ใช้แค่ให้ playhead ลื่นตอนมองอยู่
+  // ถ้าพึ่ง rAF อย่างเดียว ผู้ใช้สลับแท็บแล้วกลับมาจะเห็นซับค้างคนละที่กับเสียง
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !hasProgram) return;
+    const onTimeUpdate = () => syncPreviewFromVideo();
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("ended", onTimeUpdate);
+    return () => {
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("ended", onTimeUpdate);
+    };
+  }, [hasProgram, syncPreviewFromVideo]);
+
+  useEffect(() => {
+    if (!isPlaying || !hasProgram) return;
+    let frame = requestAnimationFrame(function tick() {
+      syncPreviewFromVideo();
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isPlaying, hasProgram, syncPreviewFromVideo]);
+
+  // แถบจังหวะพูด: สูง = ช่วงที่มีเสียงพูด, เตี้ย = ช่องว่างระหว่างท่อน
+  // สร้างจาก cue จริง ไม่ใช่ตัวเลขสุ่มเหมือนเดิม
+  const speechBars = useMemo(() => {
+    const BARS = 40;
+    if (!captionCues.length || previewTotalMs <= 0) return Array.from({ length: BARS }, () => 0);
+    return Array.from({ length: BARS }, (_, index) => {
+      const from = (index / BARS) * previewTotalMs;
+      const to = ((index + 1) / BARS) * previewTotalMs;
+      const covered = captionCues.reduce((sum, cue) => sum + Math.max(0, Math.min(cue.endMs, to) - Math.max(cue.startMs, from)), 0);
+      return Math.min(1, covered / Math.max(1, to - from));
+    });
+  }, [captionCues, previewTotalMs]);
+
+  const previewProgressRatio = previewTotalMs > 0 ? Math.min(1, previewTimeMs / previewTotalMs) : 0;
+
   const renderStage = useMemo(() => {
+    // ข้อความจริงมาจากเซิร์ฟเวอร์ผ่าน SSE — ข้างล่างเป็นข้อความสำรองตอนยังไม่ต่อ Local เท่านั้น
+    // จึงต้องไม่อ้างตัวเลขที่เราไม่รู้จริง เช่น "ท่อนที่ 5 จาก 12"
     if (operationMessage) return operationMessage;
     if (renderProgress < 20) return "กำลังเตรียมคลิปและจับจังหวะภาพ";
-    if (renderProgress < 52) return "กำลังพากย์ท่อนที่ 5 จาก 12";
+    if (renderProgress < 52) return "กำลังพากย์เสียงทีละท่อน";
     if (renderProgress < 78) return "กำลังวางซับให้ตรงกับเสียง";
     if (renderProgress < 96) return "กำลังรวมภาพ เสียง และซับ";
     return "กำลังตรวจไฟล์รอบสุดท้าย";
@@ -1477,12 +1633,15 @@ export function ProjectWizard() {
   };
 
   const toggleVideo = () => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      void videoRef.current.play();
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      // ถึงท้ายเส้นเวลาแล้วกดเล่นอีกครั้ง = เริ่มใหม่ ไม่ใช่ค้างอยู่เฟรมสุดท้าย
+      if (hasProgram && previewTotalMs > 0 && previewTimeMs >= previewTotalMs - 60) seekPreviewTo(0);
+      void video.play().catch(() => undefined);
       setIsPlaying(true);
     } else {
-      videoRef.current.pause();
+      video.pause();
       setIsPlaying(false);
     }
   };
@@ -1910,23 +2069,67 @@ export function ProjectWizard() {
           </section>
 
           {!(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
-            <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>อัปเดตตามที่คุณเลือก</p></div><span className="preview-quality">9:16 · HD</span></div>
+            <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">
               <div className="editor-phone">
-                <video ref={videoRef} src={previewVideoUrl} poster="/clippang-sample-poster.jpg" muted playsInline loop onLoadedMetadata={(event) => {
-                  if (!activeClip) return;
+                <video ref={videoRef} src={hasProgram ? undefined : previewVideoUrl} poster="/clippang-sample-poster.jpg" muted playsInline loop={!hasProgram} onLoadedMetadata={(event) => {
+                  const segment = programSegments[previewSegmentIndex];
+                  const target = segment ? orderedClipAssets.find((asset) => asset.name === segment.assetName) : activeClip;
+                  if (!target) return;
                   const durationMs = Math.round(event.currentTarget.duration * 1000);
-                  if (!activeClip.durationKnown || Math.abs(activeClip.durationMs - durationMs) > 500) reconcileAssetDuration(activeClip.name, durationMs);
-                }} onEnded={() => setIsPlaying(false)} />
+                  if (!target.durationKnown || Math.abs(target.durationMs - durationMs) > 500) reconcileAssetDuration(target.name, durationMs);
+                }} onEnded={() => { if (!hasProgram) setIsPlaying(false); }} />
                 <button className="video-toggle" type="button" onClick={toggleVideo} aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"}>{isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button>
-                <div className={`live-caption ${selectedStyleData.className} position-${captionPosition}`}>{currentChunks[0]}</div>
+                {previewCaptionText && <div className={`live-caption ${selectedStyleData.className} position-${captionPosition}`}>{previewCaptionText}</div>}
                 <div className="video-safe-zone" aria-hidden="true"><span>safe area</span></div>
               </div>
             </div>
             <div className="preview-timeline">
-              <div className="timeline-head"><span>00:00</span><b>{formatDuration(selectedTotalSec || 29)}</b></div>
-              <div className="timeline-track"><span className="scene s1"/><span className="scene s2"/><span className="scene s3"/><span className="scene s4"/><i /></div>
-              <div className="waveform" aria-hidden="true">{Array.from({length:32}).map((_,index) => <i key={index} style={{ height: `${8 + (index * 7 % 18)}px` }} />)}</div>
+              <div className="timeline-head">
+                <span>{formatDuration(previewTimeMs / 1000)}</span>
+                <b>{formatDuration(previewTotalMs > 0 ? previewTotalMs / 1000 : selectedTotalSec)}</b>
+              </div>
+              <div
+                className={`timeline-track ${hasProgram ? "is-live" : ""}`}
+                role={hasProgram ? "slider" : undefined}
+                tabIndex={hasProgram ? 0 : -1}
+                aria-label={hasProgram ? "เลื่อนดูตำแหน่งในคลิป" : undefined}
+                aria-valuemin={0}
+                aria-valuemax={Math.round(previewTotalMs / 1000)}
+                aria-valuenow={Math.round(previewTimeMs / 1000)}
+                onClick={(event) => {
+                  if (!hasProgram) return;
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  seekPreviewTo(((event.clientX - bounds.left) / Math.max(1, bounds.width)) * previewTotalMs);
+                }}
+                onKeyDown={(event) => {
+                  if (!hasProgram) return;
+                  if (event.key === "ArrowRight") { event.preventDefault(); seekPreviewTo(previewTimeMs + 1000); }
+                  if (event.key === "ArrowLeft") { event.preventDefault(); seekPreviewTo(previewTimeMs - 1000); }
+                }}
+              >
+                {hasProgram
+                  ? programSegments.map((segment, index) => (
+                      <span
+                        key={segment.id}
+                        className={`scene ${index === previewSegmentIndex ? "is-active" : ""}`}
+                        style={{ flexGrow: segment.durationMs, flexBasis: 0 }}
+                        title={`${segment.assetName} · ${formatDuration(segment.durationMs / 1000)}`}
+                      />
+                    ))
+                  : <><span className="scene s1"/><span className="scene s2"/><span className="scene s3"/><span className="scene s4"/></>}
+                <i style={hasProgram ? { left: `${previewProgressRatio * 100}%` } : undefined} />
+              </div>
+              <div className="waveform" aria-hidden="true">
+                {speechBars.map((level, index) => (
+                  <i
+                    key={index}
+                    className={index / speechBars.length <= previewProgressRatio ? "is-past" : ""}
+                    style={{ height: `${4 + level * 18}px` }}
+                  />
+                ))}
+              </div>
+              {hasProgram && <p className="preview-timeline-note">จังหวะซับเป็นค่าประมาณจากจำนวนตัวอักษร เวลาจริงจะล็อกตามไฟล์เสียงตอนสร้างคลิป</p>}
             </div>
             <div className="preview-config">
               <div><span className="config-icon" style={{background:selectedVoiceData.color}}><Mic2 size={15}/></span><p><small>เสียงพากย์</small><b>{selectedVoiceData.name} · {speed.toFixed(1)}×</b></p></div>
