@@ -31,6 +31,7 @@ import {
   regenerateChunk,
   synthesizePreview,
 } from "../pipeline/index.mjs";
+import { detectScriptProviders, SCRIPT_PROVIDERS } from "../pipeline/providers.mjs";
 import { isTerminalRenderState, renderLaneForStyle } from "./queue.mjs";
 import {
   normalizeAssetCatalog,
@@ -475,6 +476,8 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           brief,
           targetSec: Number(body.targetSec ?? 28),
           variants: 5,
+          // ผู้ใช้เลือกผู้ให้บริการไว้ในหน้าตั้งค่า — auto = ตัวแรกที่ใช้ได้จริง (CLI มาก่อน API)
+          provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,
         });
         const scripts = normalizeScriptsForClient(generated);
@@ -687,6 +690,49 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         }
         return json({ ok: true, settings: readStoreSettings(store) });
       }
+      // ---- ผู้ให้บริการ AI สำหรับเขียนสคริปต์ ----
+
+      if (method === "GET" && pathname === "/api/ai/providers") {
+        const refresh = url.searchParams.get("refresh") === "1";
+        const providers = await detectScriptProviders({ refresh });
+        const selected = String(readStoreSettings(store).scriptProvider ?? "auto");
+        return json({ ok: true, selected, providers });
+      }
+
+      if (method === "POST" && pathname === "/api/ai/providers/select") {
+        const body = await readJson(request);
+        const id = String(body.provider ?? "auto");
+        const known = ["auto", "template", ...SCRIPT_PROVIDERS.map((provider) => provider.id)];
+        if (!known.includes(id)) return apiError(400, "UNKNOWN_PROVIDER", `ไม่รู้จักผู้ให้บริการ "${id}"`);
+        store.setSetting?.("scriptProvider", settingValue(id));
+        return json({ ok: true, selected: id });
+      }
+
+      if (method === "POST" && pathname === "/api/ai/providers/key") {
+        const body = await readJson(request);
+        const provider = SCRIPT_PROVIDERS.find((item) => item.id === String(body.provider ?? ""));
+        if (!provider || provider.kind !== "api") return apiError(400, "UNKNOWN_PROVIDER", "ผู้ให้บริการนี้ไม่ได้ใช้ API key");
+        const key = String(body.key ?? "").trim();
+        if (key.length < 16) return apiError(400, "INVALID_API_KEY", "API key ดูไม่ครบ กรุณาคัดลอกมาใหม่ทั้งชุด");
+        // ใช้ตัวเขียน .env ตัวเดียวกับ Gemini เพื่อให้ได้การตรวจ symlink และการเขียนแบบ atomic เหมือนกัน
+        const result = await saveGeminiApiKey(key, { keyName: provider.keyName });
+        process.env[provider.keyName] = key;
+        return json({ ok: true, provider: provider.id, key: { configured: true, last4: result?.last4 ?? key.slice(-4) } });
+      }
+
+      if (method === "POST" && pathname === "/api/ai/providers/model") {
+        const body = await readJson(request);
+        const provider = SCRIPT_PROVIDERS.find((item) => item.id === String(body.provider ?? ""));
+        if (!provider?.modelEnv) return apiError(400, "UNKNOWN_PROVIDER", "ผู้ให้บริการนี้เปลี่ยนชื่อรุ่นไม่ได้");
+        const model = String(body.model ?? "").trim();
+        if (!model || model.length > 120 || !/^[A-Za-z0-9._\-/:]+$/.test(model)) {
+          return apiError(400, "INVALID_MODEL", "ชื่อรุ่นไม่ถูกต้อง");
+        }
+        await saveGeminiApiKey(model, { keyName: provider.modelEnv });
+        process.env[provider.modelEnv] = model;
+        return json({ ok: true, provider: provider.id, model });
+      }
+
       if (method === "POST" && pathname === "/api/settings/cache/clear") {
         const result = store.clearVoiceCache?.({ removeFiles: true }) ?? 0;
         return json({ ok: true, removed: result });

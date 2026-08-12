@@ -1,5 +1,12 @@
 // script — brief → สคริปต์ขายของภาษาไทย 5 เวอร์ชัน  →  อนาคตคือ packages/ai
 import { chunkText, graphemeCount } from "./core.mjs";
+import {
+  callCliProvider,
+  callOpenAICompatible,
+  extractJson,
+  getProvider,
+  pickAvailableProvider,
+} from "./providers.mjs";
 
 /**
  * ความเร็วพูดไทย หน่วยเป็น "ตัวอักษรที่มองเห็น" (grapheme) ต่อวินาที
@@ -103,6 +110,27 @@ async function withGemini(brief, targetSec, variants, { charsPerSec, signal, tim
 }
 
 /**
+ * เรียกผู้ให้บริการตามทะเบียนใน providers.mjs
+ * claude/gemini ยังใช้ฟังก์ชันเดิมเพราะรูปแบบ request ต่างจาก OpenAI
+ */
+async function runProvider(id, brief, targetSec, variants, { charsPerSec, signal, timeoutMs } = {}) {
+  if (id === "claude") return withClaude(brief, targetSec, variants, { charsPerSec, signal, timeoutMs });
+  if (id === "gemini") return withGemini(brief, targetSec, variants, { charsPerSec, signal, timeoutMs });
+
+  const provider = getProvider(id);
+  if (!provider) throw new Error(`ไม่รู้จักผู้ให้บริการ "${id}"`);
+  const payload = { system: SYSTEM, user: userPrompt(brief, targetSec, variants, charsPerSec), signal, timeoutMs };
+  const { text, model } = provider.kind === "cli"
+    ? await callCliProvider(provider, payload)
+    : await callOpenAICompatible(provider, payload);
+  const parsed = extractJson(text);
+  if (!Array.isArray(parsed?.variants) || !parsed.variants.length) {
+    throw new Error(`${provider.label} ตอบกลับมาไม่มี variants`);
+  }
+  return { provider: `${provider.id}:${model}`, variants: parsed.variants };
+}
+
+/**
  * ตัวสร้างสคริปต์แบบออฟไลน์ — ไม่ต้องมี API key
  * ใช้เพื่อพิสูจน์ pipeline และเป็น fallback เวลา LLM ล่ม ไม่ได้ตั้งใจให้แทน LLM
  */
@@ -167,29 +195,19 @@ export async function generateScript(
   if (!brief?.name) throw new Error("ข้อมูลสินค้าต้องมี brief.name");
   brief = normalizeBrief(brief);
   const rate = speakingRate(charsPerSec);
-  const canClaude = Boolean(process.env.ANTHROPIC_API_KEY);
-  const canGemini = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
-  const pick = provider === "auto" ? (canClaude ? "claude" : canGemini ? "gemini" : "template") : provider;
-
-  if (pick === "claude" && !canClaude) {
-    throw new Error("ต้องตั้ง ANTHROPIC_API_KEY ใน .env ก่อนใช้ --script-provider claude");
-  }
-  if (pick === "gemini" && !canGemini) {
-    throw new Error("ต้องตั้ง GEMINI_API_KEY ใน .env ก่อนใช้ script provider gemini");
-  }
+  const pick = provider === "template" ? "template" : await pickAvailableProvider({ preferred: provider });
 
   let result;
-  if (pick === "claude" || pick === "gemini") {
+  if (pick === "template") {
+    result = withTemplate(brief, targetSec, variants, rate);
+  } else {
     try {
-      result = pick === "claude"
-        ? await withClaude(brief, targetSec, variants, { charsPerSec: rate, signal, timeoutMs })
-        : await withGemini(brief, targetSec, variants, { charsPerSec: rate, signal, timeoutMs });
+      result = await runProvider(pick, brief, targetSec, variants, { charsPerSec: rate, signal, timeoutMs });
     } catch (e) {
       if (e?.name === "AbortError") throw e;
-      result = { ...withTemplate(brief, targetSec, variants, rate), fallbackFrom: `${pick} (${e.message.slice(0, 120)})` };
+      // ยังได้สคริปต์เสมอ แต่ต้องบอกให้รู้ว่าตกมาใช้ตัวสำรอง ไม่ใช่เงียบ ๆ
+      result = { ...withTemplate(brief, targetSec, variants, rate), fallbackFrom: `${pick} (${e.message.slice(0, 160)})` };
     }
-  } else {
-    result = withTemplate(brief, targetSec, variants, rate);
   }
 
   // ทำให้ทุกเวอร์ชันมีรูปร่างเดียวกัน ไม่ว่ามาจากไหน

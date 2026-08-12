@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AiProviderCard } from "./AiProviderCard";
 import {
   Check,
   CheckCircle2,
@@ -229,6 +230,8 @@ export default function SettingsPage() {
 
         <div className="settings-layout">
           <div className="settings-main-column">
+            <AiProviderCard engineState={engineState} />
+
             <section className="settings-card" aria-labelledby="gemini-title">
               <div className="settings-section-head">
                 <div className="settings-section-icon settings-icon-key"><KeyRound size={20} /></div>
