@@ -93,6 +93,31 @@ export function Dashboard() {
     ? projects.find((project) => project.statusClass === "running")
     : projects[2];
 
+  // สถิติต้องนับจากงานจริงบนเครื่อง ไม่ใช่ตัวเลขที่เขียนตายไว้
+  // ตัวเลขปลอมในแดชบอร์ดทำให้ผู้ใช้เลิกเชื่อทั้งหน้า รวมถึงส่วนที่จริงด้วย
+  const stats = useMemo(() => {
+    if (engineState !== "connected") return null;
+    let ready = 0;
+    let running = 0;
+    let attempts = 0;
+    let succeeded = 0;
+    for (const project of localProjects) {
+      const renders = project.renders ?? [];
+      if (renders.some((render) => render.state === "ready")) ready += 1;
+      if (renders.some((render) => ["queued", "running", "ingesting", "processing", "retrying"].includes(render.state))) running += 1;
+      for (const render of renders) {
+        if (["ready", "failed"].includes(render.state)) attempts += 1;
+        if (render.state === "ready") succeeded += 1;
+      }
+    }
+    return {
+      total: localProjects.length,
+      ready,
+      running,
+      successRate: attempts > 0 ? Math.round((succeeded / attempts) * 100) : null,
+    };
+  }, [engineState, localProjects]);
+
   const openLatestOutput = async () => {
     setFolderError("");
     if (engineState !== "connected") {
@@ -255,10 +280,14 @@ export function Dashboard() {
         </section>
 
         <section className="stats-strip" aria-label="สถิติการใช้งาน">
-          <div><span className="stat-icon"><Film size={18} /></span><p><small>โปรเจกต์ทั้งหมด</small><b>{engineState === "connected" ? localProjects.length : 12}</b></p></div>
-          <div><span className="stat-icon"><Clock3 size={18} /></span><p><small>เวลาที่ประหยัด</small><b>4.8 ชม.</b></p></div>
-          <div><span className="stat-icon"><Download size={18} /></span><p><small>ส่งออกสำเร็จ</small><b>98%</b></p></div>
-          <div className="stats-message"><Sparkles size={18} /><span>คุณสร้างคลิปเร็วขึ้น <b>3.2 เท่า</b> จากสัปดาห์แรก</span></div>
+          <div><span className="stat-icon"><Film size={18} /></span><p><small>โปรเจกต์ทั้งหมด</small><b>{stats ? stats.total : 12}</b></p></div>
+          <div><span className="stat-icon"><Clock3 size={18} /></span><p><small>{stats ? "กำลังทำอยู่" : "เวลาที่ประหยัด"}</small><b>{stats ? `${stats.running} งาน` : "4.8 ชม."}</b></p></div>
+          <div><span className="stat-icon"><Download size={18} /></span><p><small>คลิปที่เสร็จแล้ว</small><b>{stats ? stats.ready : "98%"}</b></p></div>
+          <div className="stats-message"><Sparkles size={18} />{stats
+            ? <span>{stats.successRate === null
+                ? "ยังไม่มีงานที่เรนเดอร์เสร็จ — สร้างคลิปแรกได้เลย"
+                : <>เรนเดอร์สำเร็จ <b>{stats.successRate}%</b> จากทั้งหมด {stats.ready + Math.max(0, stats.total - stats.ready)} โปรเจกต์</>}</span>
+            : <span>คุณสร้างคลิปเร็วขึ้น <b>3.2 เท่า</b> จากสัปดาห์แรก</span>}</div>
         </section>
       </div>
     </AppShell>
