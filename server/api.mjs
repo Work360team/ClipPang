@@ -32,6 +32,7 @@ import {
   synthesizePreview,
 } from "../pipeline/index.mjs";
 import { detectScriptProviders, SCRIPT_PROVIDERS } from "../pipeline/providers.mjs";
+import { checkTtsHealth, resetTtsHealthCache } from "./tts-health.mjs";
 import { isTerminalRenderState, renderLaneForStyle } from "./queue.mjs";
 import {
   normalizeAssetCatalog,
@@ -301,6 +302,9 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   const regenerateChunkImpl = services.regenerateChunk ?? regenerateChunk;
   const getSetupStatusImpl = services.getSetupStatus ?? getSetupStatus;
   const probeVideoImpl = services.probeVideo ?? probe;
+  const checkTtsHealthImpl = services.checkTtsHealth ?? checkTtsHealth;
+  // โหมด mock ใช้เสียงปลอมอยู่แล้ว การไปเช็ค Gemini จึงไม่มีประโยชน์และทำให้เทสต์ต้องต่อเน็ต
+  const mockTtsEnabled = services.mockTts ?? process.env.CLIPPANG_MOCK_TTS === "1";
 
   return async function handleApi(request) {
     const url = new URL(request.url);
@@ -345,6 +349,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         if (!body.key || String(body.key).trim().length < 16) return apiError(400, "INVALID_API_KEY", "API key ดูไม่ครบ กรุณาคัดลอกจาก Google AI Studio ใหม่อีกครั้ง");
         await testGeminiApiKey(String(body.key).trim(), { signal: request.signal });
         const result = await saveGeminiApiKey(String(body.key).trim());
+        resetTtsHealthCache();
         return json({ ok: true, key: { configured: true, last4: result?.last4 ?? String(body.key).trim().slice(-4), masked: `••••${String(body.key).trim().slice(-4)}` } });
       }
 
@@ -531,6 +536,16 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         if (!project) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
         const body = await readJson(request);
         if (!new Set(["draft", "final"]).has(body.kind)) return apiError(400, "INVALID_RENDER_KIND", "ชนิดงานต้องเป็นร่างหรือตัวจริง");
+
+        // เช็คว่า Gemini TTS พร้อมก่อนเข้าคิว — ล้มตรงนี้ดีกว่าปล่อยให้งานวิ่งไป
+        // ครึ่งทางแล้วค่อยตายตอนพากย์เสียง ซึ่งเสียเวลา ingest ไปฟรี ๆ
+        // การเช็คใช้ models.get จึงไม่กินโควตา TTS (ดู server/tts-health.mjs)
+        if (!mockTtsEnabled) {
+          const health = await checkTtsHealthImpl({ signal: request.signal });
+          if (!health.ok) {
+            return apiError(503, `TTS_${health.code}`, health.reason, { model: health.model, checkedAt: health.checkedAt });
+          }
+        }
         const styleId = String(body.styleId ?? body.config?.styleId ?? "pop-yellow");
         const lane = renderLaneForStyle(styleId);
         const config = { ...body.config, ...body, kind: body.kind, styleId };
@@ -690,6 +705,16 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         }
         return json({ ok: true, settings: readStoreSettings(store) });
       }
+      // สถานะความพร้อมของเสียงพากย์ — หน้าเว็บเรียกได้บ่อยเท่าที่ต้องการ
+      // เพราะเป็น metadata call ที่ไม่กินโควตา และผลถูกแคช 60 วินาที
+      if (method === "GET" && pathname === "/api/tts/health") {
+        const health = await checkTtsHealthImpl({
+          force: url.searchParams.get("refresh") === "1",
+          signal: request.signal,
+        });
+        return json({ ok: true, health });
+      }
+
       // ---- ผู้ให้บริการ AI สำหรับเขียนสคริปต์ ----
 
       if (method === "GET" && pathname === "/api/ai/providers") {
@@ -717,6 +742,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         // ใช้ตัวเขียน .env ตัวเดียวกับ Gemini เพื่อให้ได้การตรวจ symlink และการเขียนแบบ atomic เหมือนกัน
         const result = await saveGeminiApiKey(key, { keyName: provider.keyName });
         process.env[provider.keyName] = key;
+        if (provider.keyName === "GEMINI_API_KEY") resetTtsHealthCache();
         return json({ ok: true, provider: provider.id, key: { configured: true, last4: result?.last4 ?? key.slice(-4) } });
       }
 
