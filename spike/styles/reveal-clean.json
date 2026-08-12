@@ -1,0 +1,20 @@
+{
+  "slug": "reveal-clean",
+  "name": "เผยทีละคำ มินิมอล",
+  "lane": "ass",
+  "tier": "free",
+  "description": "คำที่ยังไม่พูดจางไว้ พูดถึงค่อยสว่าง — สุภาพ เหมาะกับสายแบรนด์",
+  "params": {
+    "font": { "family": "Leelawadee UI", "weight": 700, "size": 78 },
+    "fill": "#FFFFFF",
+    "activeFill": "#FFFFFF",
+    "emphasisFill": "#FFD400",
+    "idleAlpha": 128,
+    "outline": { "color": "#000000", "width": 5 },
+    "shadow": { "offset": 2 },
+    "position": { "anchor": "bottom", "marginV": 430, "marginH": 120 },
+    "animation": { "enter": "none" },
+    "fadeMs": 90,
+    "maxCharsPerLine": 22
+  }
+}

@@ -1,0 +1,1547 @@
+<title>ClipPang — Blueprint &amp; Technical Spec</title>
+
+<style>
+  :root {
+    color-scheme: light dark;
+
+    --paper:   #EDF0F2;
+    --panel:   #F8FAFA;
+    --panel-2: #E4E9EC;
+    --ink:     #11161A;
+    --ink-2:   #45525C;
+    --ink-3:   #6D7B85;
+    --rule:    #D0D9DE;
+    --rule-2:  #B9C5CB;
+    --accent:  #9A6B00;
+    --mark:    #FFD23F;
+    --ok:      #1C7A54;
+    --warn:    #9C5F0B;
+    --risk:    #A62A21;
+    --code-bg: #E6EBEE;
+
+    --f-sans: "Leelawadee UI", "Noto Sans Thai", "Thonburi", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --f-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
+
+    --shell: 1280px;
+    --rail: 244px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:   #0C1013;
+      --panel:   #141A1E;
+      --panel-2: #1A2227;
+      --ink:     #E3E9EC;
+      --ink-2:   #A7B4BC;
+      --ink-3:   #7A8892;
+      --rule:    #232D33;
+      --rule-2:  #33414A;
+      --accent:  #FFD23F;
+      --mark:    #FFD23F;
+      --ok:      #4FBF8B;
+      --warn:    #E0A33C;
+      --risk:    #E4695E;
+      --code-bg: #0F1519;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:   #0C1013;
+    --panel:   #141A1E;
+    --panel-2: #1A2227;
+    --ink:     #E3E9EC;
+    --ink-2:   #A7B4BC;
+    --ink-3:   #7A8892;
+    --rule:    #232D33;
+    --rule-2:  #33414A;
+    --accent:  #FFD23F;
+    --mark:    #FFD23F;
+    --ok:      #4FBF8B;
+    --warn:    #E0A33C;
+    --risk:    #E4695E;
+    --code-bg: #0F1519;
+  }
+
+  :root[data-theme="light"] {
+    --paper:   #EDF0F2;
+    --panel:   #F8FAFA;
+    --panel-2: #E4E9EC;
+    --ink:     #11161A;
+    --ink-2:   #45525C;
+    --ink-3:   #6D7B85;
+    --rule:    #D0D9DE;
+    --rule-2:  #B9C5CB;
+    --accent:  #9A6B00;
+    --mark:    #FFD23F;
+    --ok:      #1C7A54;
+    --warn:    #9C5F0B;
+    --risk:    #A62A21;
+    --code-bg: #E6EBEE;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 16px;
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    max-width: var(--shell);
+    margin: 0 auto;
+    padding: 0 24px 120px;
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--rule);
+    padding: 56px 0 28px;
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .masthead h1 {
+    font-size: clamp(30px, 4.4vw, 46px);
+    line-height: 1.14;
+    font-weight: 700;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+    margin: 14px 0 10px;
+  }
+  .masthead .lede {
+    color: var(--ink-2);
+    max-width: 66ch;
+    font-size: 17px;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .chip {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    padding: 4px 10px;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    color: var(--ink-2);
+    background: var(--panel);
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- rail ---------- */
+  .rail {
+    position: sticky;
+    top: 24px;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    font-size: 13.5px;
+  }
+  .rail-title {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 6px;
+  }
+  .rail a {
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 6px;
+    padding: 5px 0 5px 9px;
+    color: var(--ink-2);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+  }
+  .rail a span:first-child { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3); }
+  .rail a:hover { color: var(--ink); }
+  .rail a.on { color: var(--ink); border-left-color: var(--mark); font-weight: 600; }
+  .rail a.on span:first-child { color: var(--accent); }
+  .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .toc-mobile { display: none; grid-column: 1 / -1; margin-bottom: 32px; }
+  .toc-mobile summary {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    cursor: pointer; padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  }
+
+  /* ---------- content ---------- */
+  main { min-width: 0; }
+
+  section { scroll-margin-top: 24px; padding-bottom: 8px; }
+  section + section { margin-top: 64px; }
+
+  h2 {
+    font-size: 25px;
+    line-height: 1.24;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h2 .num {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  h3 {
+    font-size: 16.5px;
+    font-weight: 700;
+    margin: 34px 0 8px;
+    letter-spacing: -.005em;
+  }
+  h4 {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 26px 0 8px;
+    font-weight: 600;
+  }
+  p { margin: 0 0 14px; max-width: 74ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 20px; max-width: 74ch; }
+  li { margin-bottom: 5px; }
+  li::marker { color: var(--ink-3); }
+  strong { font-weight: 700; }
+  a { color: var(--accent); }
+
+  .sub { color: var(--ink-2); }
+  .hl {
+    background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 94%, transparent 94%);
+    color: var(--ink);
+    padding: 0 1px;
+    font-weight: 600;
+  }
+  :root[data-theme="dark"] .hl, :root:not([data-theme="light"]) .hl { color: inherit; }
+  @media (prefers-color-scheme: dark) {
+    .hl { background: linear-gradient(transparent 58%, rgba(255,210,63,.28) 58%, rgba(255,210,63,.28) 94%, transparent 94%); box-shadow: inset 0 -1px 0 rgba(255,210,63,.6); }
+  }
+  :root[data-theme="dark"] .hl { background: linear-gradient(transparent 58%, rgba(255,210,63,.28) 58%, rgba(255,210,63,.28) 94%, transparent 94%); box-shadow: inset 0 -1px 0 rgba(255,210,63,.6); }
+  :root[data-theme="light"] .hl { background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 94%, transparent 94%); box-shadow: none; color: var(--ink); }
+
+  code, kbd {
+    font-family: var(--f-mono);
+    font-size: .875em;
+    background: var(--code-bg);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0 0 18px;
+    line-height: 1.62;
+  }
+  pre code { background: none; padding: 0; font-size: 12.6px; }
+
+  .tw { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.6px; background: var(--panel); }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 600;
+    background: var(--panel-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.n, th.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td code { font-size: 12.4px; white-space: nowrap; }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .t-mvp  { color: var(--ok); }
+  .t-v11  { color: var(--accent); }
+  .t-v2   { color: var(--ink-3); }
+  .t-risk { color: var(--risk); }
+
+  .callout {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    background: var(--panel);
+    padding: 14px 18px;
+    margin: 0 0 18px;
+    border-radius: 0 3px 3px 0;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .lbl {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .callout.danger { border-left-color: var(--risk); }
+  .callout.danger .lbl { color: var(--risk); }
+
+  figure { margin: 0 0 22px; }
+  figure svg { display: block; width: 100%; max-width: 100%; height: auto; }
+  .figwrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--panel); border-radius: 3px; padding: 18px 16px 10px; }
+  figcaption {
+    font-size: 12.8px;
+    color: var(--ink-3);
+    margin-top: 10px;
+    padding-left: 2px;
+    max-width: 74ch;
+  }
+  svg text { font-family: var(--f-mono); fill: currentColor; }
+  .box { fill: var(--panel-2); stroke: var(--rule-2); }
+  .boxq { fill: none; stroke: var(--rule-2); stroke-dasharray: 4 3; }
+  .lead { stroke: currentColor; fill: none; }
+  .leadq { stroke: currentColor; fill: none; stroke-dasharray: 5 4; opacity: .6; }
+  .hot { stroke: var(--accent); }
+  .hotf { fill: var(--accent); }
+  .ttl { font-size: 12.5px; font-weight: 600; }
+  .sml { font-size: 10.5px; opacity: .72; }
+  .lbl { font-size: 10.5px; opacity: .8; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 18px; }
+  .card {
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    border-radius: 3px;
+    padding: 15px 17px;
+  }
+  .card h5 {
+    font-size: 14px; margin: 0 0 6px; font-weight: 700;
+  }
+  .card p { font-size: 13.6px; margin: 0; color: var(--ink-2); }
+  .card .metric {
+    font-family: var(--f-mono);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 40px 0; }
+
+  .foot {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--rule);
+    margin-top: 72px;
+    padding-top: 22px;
+    font-size: 13px;
+    color: var(--ink-3);
+  }
+
+  @media (max-width: 940px) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 18px 80px; }
+    .rail { display: none; }
+    .toc-mobile { display: block; }
+    body { font-size: 15.5px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="eyebrow">Technical Blueprint · v1.0 · สิงหาคม 2026</div>
+    <h1>ClipPang — ระบบใส่ Subtitle + AI Voiceover อัตโนมัติ สำหรับคลิปปักตะกร้า</h1>
+    <p class="lede">
+      สเปกฉบับเต็มสำหรับสร้างเว็บแอปที่รับคลิปสั้นหลายไฟล์ (คลิปจีน / คลิปถ่ายเอง) + ข้อมูลสินค้า
+      แล้วคืนคลิปพร้อมโพสต์ที่มีเสียงพากย์ AI ภาษาไทยและซับคาราโอเกะซิงก์ตรงเสียง ภายในเวลาไม่ถึงหนึ่งนาที
+      เอกสารนี้ครอบคลุมสถาปัตยกรรม อัลกอริทึมหลัก โครงสร้างข้อมูล API sitemap และแผนส่งงาน
+    </p>
+    <div class="chips">
+      <span class="chip">Backend <b>Node.js 22 · Fastify 5</b></span>
+      <span class="chip">Frontend <b>Next.js 15</b></span>
+      <span class="chip">DB <b>MongoDB Atlas</b></span>
+      <span class="chip">Queue <b>BullMQ · Redis</b></span>
+      <span class="chip">Media <b>FFmpeg · libass · HyperFrames</b></span>
+      <span class="chip">AI <b>Claude · Gemini TTS</b></span>
+    </div>
+  </header>
+
+  <div style="grid-column: 1 / -1; margin: -18px 0 32px;">
+    <div class="callout" style="border-left-color: var(--ink-3);">
+      <span class="lbl" style="color: var(--ink-3);">พักไว้ — 11 ส.ค. 2026</span>
+      <p>
+        เอกสารนี้คือเวอร์ชัน <strong>SaaS บนเซิร์ฟเวอร์</strong> ซึ่ง<strong>พักไว้ ไม่ได้ยกเลิก</strong>
+        โปรเจกต์เปลี่ยนไปทำเวอร์ชันที่ผู้ใช้ clone จาก GitHub มารันบนเครื่องตัวเองก่อน
+        เพราะยังไม่คุ้มที่จะแบกค่า infra และต้นทุน AI ของผู้ใช้คนอื่นในตอนนี้
+      </p>
+      <p>
+        <strong>สเปกที่ใช้จริงตอนนี้คือ <code>docs/blueprint-local.html</code></strong> ·
+        กลับมาอ่านเอกสารนี้อีกครั้งเมื่อพร้อมขึ้น cloud — §04 pipeline, §05 อัลกอริทึม
+        และ §06 ระบบสไตล์ ยังใช้ได้ทั้งหมดโดยไม่ต้องแก้
+      </p>
+    </div>
+  </div>
+
+  <details class="toc-mobile">
+    <summary>สารบัญ §00–§15</summary>
+    <nav class="rail" style="display:block; position:static; max-height:none; padding-top:12px;" id="toc-m"></nav>
+  </details>
+
+  <nav class="rail" aria-label="สารบัญ">
+    <div class="rail-title">สารบัญ</div>
+    <div id="toc"></div>
+  </nav>
+
+  <main>
+
+    <!-- ============ 00 ============ -->
+    <section id="s00">
+      <h2><span class="num">§00</span>ภาพรวมและขอบเขต</h2>
+      <p>
+        ผู้ขายสาย TikTok Shop / affiliate มีคลิปสินค้าดิบอยู่แล้ว (ดึงจากซัพจีน หรือถ่ายเอง)
+        แต่ติดคอขวดที่ขั้นตอน "ทำให้เป็นคลิปไทยพร้อมโพสต์" — เขียนสคริปต์ พากย์ ตัดต่อ ใส่ซับ ซึ่งกินเวลา 20–40 นาทีต่อคลิป
+        ระบบนี้ย่อขั้นตอนนั้นเหลือ <span class="hl">อัปโหลด → กรอกข้อมูลสินค้า → เลือกเสียง → เลือกสคริปต์ → ดาวน์โหลด</span>
+      </p>
+
+      <h4>เป้าหมายที่วัดได้</h4>
+      <div class="grid2">
+        <div class="card"><span class="metric">~2 นาที</span><h5>เวลาต่อคลิป (เลน B ที่เลือกใช้)</h5><p>วัดจริงแล้ว 64 วินาทีสำหรับคลิป 16 วินาที · เลน A ที่ใช้ในโหมดร่างอยู่ที่ ~14 วินาที</p></div>
+        <div class="card"><span class="metric">฿0.50–1.60</span><h5>ต้นทุนจริงต่อคลิป</h5><p>วัดจริง $0.004 สำหรับ AI + ค่า compute ตามเลนที่ใช้ (ดู §12)</p></div>
+        <div class="card"><span class="metric">100%</span><h5>ความแม่นของซับระดับท่อน</h5><p>ผลจากสถาปัตยกรรม chunked TTS (ดู §05)</p></div>
+        <div class="card"><span class="metric">10 คลิป</span><h5>ต่อ 1 สินค้าในโหมด Batch</h5><p>สลับ hook / เสียง / สไตล์ซับ เพื่อ A/B test</p></div>
+      </div>
+
+      <h4>อยู่นอกขอบเขต (Non-goals)</h4>
+      <ul>
+        <li><strong>ไม่ทำ NLE ในเบราว์เซอร์</strong> — ไม่มี timeline ลากวางแบบ CapCut ระบบนี้คือ "โรงงาน" ไม่ใช่ "โปรแกรมตัดต่อ"</li>
+        <li><strong>ไม่ทำ avatar / lip-sync / คนพูดในคลิป</strong> — เป็น voiceover ทับ b-roll เท่านั้น</li>
+        <li><strong>ไม่ลบซับเดิมออกจากคลิปต้นทาง</strong> (inpainting) — ใช้วิธีตรวจจับ + ครอป/ขยับตำแหน่งแทน (§05)</li>
+        <li><strong>ไม่ดึงคลิปจากแพลตฟอร์มอื่นให้อัตโนมัติ</strong> — ผู้ใช้อัปโหลดไฟล์เอง (ลดความเสี่ยงทางกฎหมายมาไว้ฝั่งผู้ใช้)</li>
+      </ul>
+    </section>
+
+    <!-- ============ 01 ============ -->
+    <section id="s01">
+      <h2><span class="num">§01</span>รายการฟีเจอร์</h2>
+      <p><span class="tag t-mvp">MVP</span> = ต้องมีวันเปิด · <span class="tag t-v11">V1.1</span> = ตามมาใน 1 เดือน · <span class="tag t-v2">V2</span> = เมื่อมีผู้ใช้จ่ายเงินแล้ว</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:130px">กลุ่ม</th><th>ฟีเจอร์</th><th style="width:78px">ระดับ</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="5">Media Ingest</td><td>อัปโหลดหลายไฟล์พร้อมกัน (drag &amp; drop) ตรงเข้า object storage ผ่าน presigned URL</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Normalize อัตโนมัติ: 1080×1920 / 30fps / H.264 + ทำ proxy สำหรับพรีวิว</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Scene detection — หาจุดตัดช็อตในแต่ละคลิป เพื่อจับคู่กับจังหวะสคริปต์</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ตรวจจับ "ซับเดิมเบิร์นติดมา" ที่ lower third แล้วเตือน + เสนอครอปอัตโนมัติ</td><td><span class="tag t-v11">V1.1</span></td></tr>
+            <tr><td>Media library ใช้คลิปเดิมซ้ำข้ามโปรเจกต์ได้</td><td><span class="tag t-v11">V1.1</span></td></tr>
+
+            <tr><td rowspan="4">Script</td><td>ฟอร์มข้อมูลสินค้า: ชื่อ / จุดขาย / ราคา / กลุ่มเป้าหมาย / โทน / CTA</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>สร้างสคริปต์ 5 เวอร์ชันด้วย LLM พร้อมโครง Hook → Problem → Feature → Proof → CTA</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>แก้สคริปต์รายท่อนได้ + regenerate เฉพาะท่อนที่ไม่ชอบ (ไม่ต้องทำใหม่ทั้งคลิป)</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Hook library แยกตามหมวดสินค้า + คลังคำต้องห้าม (คำโฆษณาเกินจริง / คำที่โดนแบน)</td><td><span class="tag t-v11">V1.1</span></td></tr>
+
+            <tr><td rowspan="4">Voice</td><td>เลือกเสียง 30 แบบ + โทน (ขายของ / เล่าเรื่อง / สนุก / นุ่มนวล) + ความเร็ว</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ฟังตัวอย่างเสียงก่อนใช้ (cache ไว้ ไม่เสียเงินซ้ำ)</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Provider abstraction — สลับ Gemini / ElevenLabs / Google Cloud ได้จาก config</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Voice cloning เสียงเจ้าของร้าน (ผ่าน ElevenLabs) เป็นฟีเจอร์ระดับ Pro</td><td><span class="tag t-v2">V2</span></td></tr>
+
+            <tr><td rowspan="4">Caption</td><td>Style gallery พร้อมพรีวิววิดีโอจริงของแต่ละสไตล์ (ไม่ใช่ภาพนิ่ง)</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td><strong>สไตล์หลัก เลน B (HyperFrames + Kanit)</strong> — คำเด้งพร้อมเบลอเข้า</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>3 สไตล์เลน A (libass) สำหรับโหมดร่าง/batch: karaoke-pop, box-bold, reveal-clean</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>เพิ่มสไตล์เลน B อีก 4 ตัว: 3D pop, glow-trail, particle, kinetic stack</td><td><span class="tag t-v11">V1.1</span></td></tr>
+            <tr><td><strong>เลือกตำแหน่งซับ 3 ตำแหน่ง: บน / กลาง / ล่าง</strong> — ใช้ได้กับทุกสไตล์ทั้งสองเลน</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ปรับขนาด / สีไฮไลต์ / ระยะห่างจากขอบ ต่อโปรเจกต์ แล้วบันทึกเป็น template ส่วนตัว</td><td><span class="tag t-v11">V1.1</span></td></tr>
+
+            <tr><td rowspan="4">Assembly</td><td>จับคู่ท่อนสคริปต์ ↔ ช็อตวิดีโออัตโนมัติ + สลับลำดับด้วยมือได้</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Duration fitting — ยืด/หด/ตัดคลิปให้พอดีความยาวเสียงพากย์</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>BGM + auto ducking (ลดเสียงเพลงตอนพากย์) + เสียงต้นฉบับเหลือ 10%</td><td><span class="tag t-v11">V1.1</span></td></tr>
+            <tr><td>Originality pass — reframe / speed ramp / ลำดับใหม่ / end-card CTA เพื่อลดความซ้ำ</td><td><span class="tag t-v11">V1.1</span></td></tr>
+
+            <tr><td rowspan="4">Delivery</td><td>พรีวิวในเบราว์เซอร์ + ดาวน์โหลด MP4 (1080×1920)</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Export เพิ่ม: ไฟล์ .srt / .ass และไฟล์เสียงพากย์แยก</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td><strong>ร่าง → เลือก → เรนเดอร์จริง</strong> — ร่าง N เวอร์ชันด้วยเลน A แล้วโปรโมตตัวที่ชอบไปเรนเดอร์ด้วยเลน B</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Batch mode — 1 สินค้า × N เวอร์ชัน แล้วดาวน์โหลดเป็น zip</td><td><span class="tag t-v11">V1.1</span></td></tr>
+            <tr><td>อัตราส่วนอื่น 1:1 / 4:5 / 16:9 สำหรับ Facebook &amp; YouTube Shorts</td><td><span class="tag t-v2">V2</span></td></tr>
+
+            <tr><td rowspan="4">Account</td><td>สมัคร/เข้าสู่ระบบ (email + Google) · ระบบเครดิต · ประวัติการใช้</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>Admin: จัดการสไตล์ เสียง ผู้ใช้ ดูคิวงานและต้นทุนรายวัน</td><td><span class="tag t-mvp">MVP</span></td></tr>
+            <tr><td>ชำระเงิน (Stripe / Omise / PromptPay) + แพ็กเกจเครดิต</td><td><span class="tag t-v11">V1.1</span></td></tr>
+            <tr><td>Team workspace + API key ให้ลูกค้าเรียกใช้เอง</td><td><span class="tag t-v2">V2</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 02 ============ -->
+    <section id="s02">
+      <h2><span class="num">§02</span>สถาปัตยกรรมระบบ</h2>
+      <p>
+        หลักการเดียวที่คุมทุกอย่าง: <span class="hl">ไฟล์วิดีโอต้องไม่วิ่งผ่าน API server</span>
+        เบราว์เซอร์อัปโหลดตรงเข้า object storage ด้วย presigned URL และ worker ก็อ่าน/เขียน storage ตรง
+        API ทำหน้าที่แค่จัดการ metadata + คิว ทำให้ API server เบามาก และสเกล worker แยกได้อิสระ
+      </p>
+
+      <figure>
+        <div class="figwrap">
+          <svg viewBox="0 0 1000 292" role="img" aria-label="แผนผังสถาปัตยกรรม: เบราว์เซอร์คุยกับ API ผ่าน REST และ SSE, API ส่งงานเข้า Redis, worker ดึงงานไปประมวลผล, ไฟล์วิดีโอวิ่งตรงระหว่างเบราว์เซอร์กับ object storage โดยไม่ผ่าน API">
+            <defs>
+              <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <rect class="box" x="30" y="40" width="200" height="56" rx="3"/>
+            <text class="ttl" x="130" y="65" text-anchor="middle">Browser</text>
+            <text class="sml" x="130" y="82" text-anchor="middle">Next.js 15 · React</text>
+
+            <rect class="box" x="300" y="40" width="200" height="56" rx="3"/>
+            <text class="ttl" x="400" y="65" text-anchor="middle">API</text>
+            <text class="sml" x="400" y="82" text-anchor="middle">Fastify 5 · stateless</text>
+
+            <rect class="box" x="570" y="40" width="150" height="56" rx="3"/>
+            <text class="ttl" x="645" y="65" text-anchor="middle">Redis</text>
+            <text class="sml" x="645" y="82" text-anchor="middle">BullMQ</text>
+
+            <rect class="box" x="760" y="24" width="215" height="112" rx="3"/>
+            <text class="sml" x="867" y="18" text-anchor="middle">Worker Pool</text>
+            <rect class="boxq" x="772" y="38" width="191" height="40" rx="2"/>
+            <text class="ttl" x="867" y="55" text-anchor="middle">lane A</text>
+            <text class="sml" x="867" y="70" text-anchor="middle">FFmpeg + libass</text>
+            <rect class="boxq" x="772" y="86" width="191" height="40" rx="2"/>
+            <text class="ttl" x="867" y="103" text-anchor="middle">lane B</text>
+            <text class="sml" x="867" y="118" text-anchor="middle">HyperFrames + Chrome</text>
+
+            <rect class="box" x="30" y="196" width="220" height="56" rx="3"/>
+            <text class="ttl" x="140" y="221" text-anchor="middle">Object Storage</text>
+            <text class="sml" x="140" y="238" text-anchor="middle">Cloudflare R2 (S3 API)</text>
+
+            <rect class="box" x="300" y="196" width="220" height="56" rx="3"/>
+            <text class="ttl" x="410" y="221" text-anchor="middle">MongoDB Atlas</text>
+            <text class="sml" x="410" y="238" text-anchor="middle">metadata เท่านั้น</text>
+
+            <rect class="box" x="740" y="196" width="235" height="56" rx="3"/>
+            <text class="ttl" x="857" y="221" text-anchor="middle">External APIs</text>
+            <text class="sml" x="857" y="238" text-anchor="middle">Claude · Gemini TTS</text>
+
+            <line class="lead" x1="232" y1="68" x2="294" y2="68" marker-end="url(#arw)"/>
+            <text class="lbl" x="263" y="58" text-anchor="middle">REST + SSE</text>
+
+            <line class="lead" x1="502" y1="68" x2="564" y2="68" marker-end="url(#arw)"/>
+            <text class="lbl" x="533" y="58" text-anchor="middle">enqueue</text>
+
+            <line class="lead" x1="722" y1="68" x2="754" y2="68" marker-end="url(#arw)"/>
+            <text class="lbl" x="738" y="58" text-anchor="middle">pull</text>
+
+            <line class="leadq hot" x1="130" y1="98" x2="130" y2="190" marker-end="url(#arw)"/>
+            <text class="lbl hotf" x="122" y="150" text-anchor="end">presigned PUT / GET</text>
+
+            <line class="lead" x1="400" y1="98" x2="400" y2="190" marker-end="url(#arw)"/>
+            <text class="lbl" x="410" y="150" text-anchor="start">read / write docs</text>
+
+            <polyline class="lead" points="790,138 790,160 165,160 165,190" marker-end="url(#arw)"/>
+            <text class="lbl" x="470" y="153" text-anchor="middle">read source · write output</text>
+
+            <polyline class="lead" points="830,138 830,176 465,176 465,190" marker-end="url(#arw)"/>
+            <text class="lbl" x="620" y="171" text-anchor="middle">progress · state</text>
+
+            <line class="lead" x1="900" y1="138" x2="900" y2="190" marker-end="url(#arw)"/>
+            <text class="lbl" x="910" y="168" text-anchor="start">HTTPS</text>
+          </svg>
+        </div>
+        <figcaption>
+          เส้นประสีเน้นคือเส้นทางของไฟล์วิดีโอ — มันไม่แตะ API server เลย นี่คือเหตุผลที่ API รันบนเครื่องเล็ก ๆ ได้
+          ขณะที่ worker ต้องการ CPU/RAM สูงและสเกลแยกตามคิว
+        </figcaption>
+      </figure>
+
+      <h3>อะไรรันที่ไหน</h3>
+      <p>
+        โดเมนคือ <code>clippang.work360.in.th</code> บน <strong>Plesk shared</strong> ที่มีอยู่แล้ว
+        แต่ <span class="hl">Plesk shared รันงานเรนเดอร์ไม่ได้</span> — ลง ffmpeg เองไม่ได้ (ไม่มี root),
+        Chrome ต้องการ RAM ระดับ GB ต่องาน, worker ที่รันค้างไว้จะโดน Passenger ฆ่า, ไม่มี Redis
+        และไฟล์ชั่วคราวของวิดีโอจะกินโควตาดิสก์หมดในไม่กี่สิบงาน
+      </p>
+      <p>
+        โชคดีที่สถาปัตยกรรมข้างบนออกแบบให้ <strong>ไฟล์ไม่วิ่งผ่าน API</strong> อยู่แล้ว
+        การแยกจึงลงตัวพอดีตามกล่องในแผนผัง — ไม่ต้องรื้ออะไร
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:200px">ส่วน</th><th style="width:180px">รันที่</th><th>เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td>Next.js + Fastify API</td><td><strong>Plesk shared</strong><br><span class="sub">Node.js extension</span></td><td>งานเบา ไม่แตะไฟล์สื่อ ใช้โดเมนและ SSL ที่มีอยู่แล้ว</td></tr>
+            <tr><td>Worker + Redis</td><td><strong>VPS แยก</strong><br><span class="sub">4 vCPU / 8GB</span></td><td>ต้องการ ffmpeg, Chrome, ดิสก์ชั่วคราว และ process ที่รันค้างได้</td></tr>
+            <tr><td>MongoDB · R2 · Gemini · Claude</td><td>ภายนอกทั้งหมด</td><td>ไม่กระทบการแยกนี้เลย</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">
+        เมื่อปริมาณงานขึ้นลงเป็นช่วง ค่อยย้ายเฉพาะคิว <code>render.final</code> ไปที่ Cloud Run
+        ซึ่ง HyperFrames รองรับอยู่แล้ว (<code>hyperframes cloudrun deploy</code>) แต่ต้องใช้ Terraform + gcloud
+        จึงไม่ควรเริ่มที่ตรงนั้น
+      </p>
+
+      <h4>เลือกขนาด VPS จากตัวเลขที่วัดจริง</h4>
+      <p>
+        เบนช์มาร์กการเรนเดอร์เลเยอร์ซับเดียวกัน (479 เฟรม) โดยเปลี่ยนจำนวน worker บนเครื่อง 10 คอร์:
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:130px" class="n">workers</th><th style="width:130px" class="n">เวลา</th><th>อ่านผลอย่างไร</th></tr></thead>
+          <tbody>
+            <tr><td class="n">2</td><td class="n">51.3s</td><td rowspan="3">เพิ่ม worker จาก 2 เป็น 8 เร็วขึ้นแค่ <strong>12%</strong> — งานนี้ไม่ได้ติดที่จำนวนคอร์ แต่ติดที่ความเร็วต่อคอร์และการ capture ทีละเฟรมของ Chrome</td></tr>
+            <tr><td class="n">4</td><td class="n">46.3s</td></tr>
+            <tr><td class="n">8</td><td class="n">45.3s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        ผลที่ตามมาต่อการเลือกเครื่อง: <span class="hl">เพิ่มคอร์ไม่ได้ทำให้คลิปหนึ่งเสร็จเร็วขึ้น
+        แต่ทำให้ทำหลายคลิปพร้อมกันได้มากขึ้น</span> — จึงไม่ต้องซื้อเครื่องใหญ่ตั้งแต่แรก
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:170px">เครื่อง</th><th style="width:120px" class="n">ราคา/เดือน</th><th>เหมาะกับ</th></tr></thead>
+          <tbody>
+            <tr><td><strong>HostAtom SSD3</strong><br><span class="sub">4 vCPU · 8GB · 80GB SSD</span></td><td class="n"><strong>฿1,190</strong></td><td><strong>เริ่มที่ตัวนี้</strong> — รันเลน B พร้อมกัน 2 งาน + Redis + เลน A ได้สบาย</td></tr>
+            <tr><td>SSD2<br><span class="sub">2 vCPU · 4GB · 40GB</span></td><td class="n">฿590</td><td>ไม่พอ — Chrome + ffmpeg + Redis บน RAM 4GB จะแน่น และเหลือ concurrency 1</td></tr>
+            <tr><td>SSD4<br><span class="sub">8 vCPU · 16GB · 160GB</span></td><td class="n">฿2,390</td><td>อัปเมื่อคิวเลน B ยาวเกิน 5 นาที — ได้ throughput 2 เท่า ไม่ใช่เร็วขึ้น 2 เท่า</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">
+        ตั้ง <code>--workers 2</code> บนเครื่อง 8GB (ค่า auto จะ spawn Chrome เยอะเกินจน RAM หมด)
+        และคาดว่าเวลาเรนเดอร์บน VPS จะอยู่ราว 1.5–2 เท่าของตัวเลขข้างบน เพราะคอร์ของ VPS ช้ากว่าคอร์เดสก์ท็อป
+      </p>
+
+      <div class="callout danger">
+        <span class="lbl">ต้องถามผู้ให้บริการก่อนซื้อ — 3 ข้อ</span>
+        <p>
+          <strong>1. KVM หรือ container?</strong> ต้องการ KVM · Chrome ใช้ user namespace และ seccomp
+          ซึ่ง VPS แบบ container มักปิดไว้ ทำให้ Chrome ไม่ยอมสตาร์ต<br>
+          <strong>2. มีนโยบาย fair-use CPU ไหม?</strong> งานนี้กิน CPU 100% ต่อเนื่องครั้งละ 1–3 นาที ทุกงาน
+          ผู้ให้บริการหลายเจ้า throttle หรือระงับเครื่องที่ทำแบบนี้ — <em>นี่คือความเสี่ยงอันดับหนึ่ง</em><br>
+          <strong>3. <code>/dev/shm</code> ใหญ่เท่าไหร่?</strong> Chrome ต้องการ ≥ 1GB ถ้าน้อยกว่านั้นต้องรันด้วย
+          <code>--disable-dev-shm-usage</code> ซึ่งช้าลง
+        </p>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">พอร์ต 100 Mbps มีผลต่อการออกแบบ</span>
+        <p>
+          ดาวน์โหลดได้ราว 12 MB/s — คลิปต้นฉบับ 500MB จะใช้เวลา 40 วินาทีต่อไฟล์ ซึ่งนานกว่าการเรนเดอร์เสียอีก
+          ดังนั้น <strong>ขั้น ingest ต้อง normalize ครั้งเดียวแล้วเก็บผลลง R2</strong> และงานเรนเดอร์ต้องดึง
+          <em>ไฟล์ที่ normalize แล้ว</em> (30–60MB) ไม่ใช่ต้นฉบับ ห้ามให้ไฟล์ดิบถูกดาวน์โหลดซ้ำในทุก render
+        </p>
+      </div>
+
+      <div class="callout danger">
+        <span class="lbl">ข้อจำกัดที่ต้องออกแบบรับตั้งแต่แรก</span>
+        <p>
+          <strong>SSE ผ่าน Passenger อาจถูก buffer</strong> — บน Plesk shared เราคุม proxy ไม่ได้
+          ทางถอย polling ทุก 3 วินาที (§08) จึงไม่ใช่ของสำรอง แต่ต้องทดสอบให้ผ่านตั้งแต่วันแรก
+          และถ้า SSE ใช้ไม่ได้จริง ให้ตัดทิ้งแล้วใช้ polling อย่างเดียว อย่าฝืน
+        </p>
+        <p>
+          <strong>API กับ worker อยู่คนละเครื่อง</strong> — worker ต้องเข้าถึง MongoDB และ Redis ได้โดยตรง
+          ห้ามให้ worker เรียกกลับมาที่ API เพื่ออัปเดตสถานะ (เพิ่มจุดพังโดยไม่จำเป็น)
+          และต้องล็อก Redis ด้วยรหัสผ่าน + TLS เพราะมันเปิดออกอินเทอร์เน็ตแล้ว
+        </p>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">การตัดสินใจสำคัญ</span>
+        <p>
+          <strong>ห้ามเรนเดอร์ใน Next.js API route เด็ดขาด</strong> — งาน FFmpeg/Chrome กินเวลาเป็นนาทีและกิน RAM หลัก GB
+          serverless function จะ timeout และคิดเงินตามเวลารัน แยกเป็น worker process ที่กินงานจากคิวตั้งแต่วันแรก
+          ต่อให้ตอน MVP จะรันอยู่บนเครื่องเดียวกันก็ตาม
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 03 ============ -->
+    <section id="s03">
+      <h2><span class="num">§03</span>Tech stack และเหตุผล</h2>
+
+      <h3>Frontend — ทำไมเลือก Next.js 15</h3>
+      <p>คุณให้ผมประเมิน นี่คือการเทียบตัวเลือกจริงกับข้อจำกัดของโปรเจกต์นี้:</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>ตัวเลือก</th><th>ข้อดีในบริบทนี้</th><th>ข้อเสีย</th><th style="width:88px">สรุป</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Next.js 15</strong><br><span class="sub">App Router</span></td>
+              <td>TypeScript ตัวเดียวทั้ง front/back ใช้ type ร่วมกันได้, มี SSR สำหรับหน้า landing/SEO ที่ต้องขายของ, ecosystem อัปโหลดไฟล์+วิดีโอครบ, หา dev ไทยง่ายที่สุด, deploy ได้ทั้ง Vercel และ Node self-host</td>
+              <td>เผลอเอา logic หนักไปใส่ API route ได้ง่าย (แก้ด้วยกฎใน §02)</td>
+              <td><strong>เลือก</strong></td>
+            </tr>
+            <tr><td>Nuxt 4 (Vue)</td><td>DX ดี เขียนสนุก</td><td>ecosystem เกี่ยวกับวิดีโอ/อัปโหลดน้อยกว่า, dev ไทยหายากกว่า</td><td>ไม่เลือก</td></tr>
+            <tr><td>SvelteKit</td><td>เบาและเร็วที่สุด</td><td>ทีมเล็กไม่คุ้มความเสี่ยง หา component สำเร็จรูปยาก</td><td>ไม่เลือก</td></tr>
+            <tr><td>Vite + React SPA</td><td>เรียบง่าย แยก front/back ชัด</td><td>ไม่มี SSR → หน้าขายของทำ SEO ไม่ได้ ต้องทำเว็บแยกอีกตัว</td><td>ไม่เลือก</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Stack ทั้งระบบ</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:150px">ชั้น</th><th style="width:230px">เลือกใช้</th><th>เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td>Frontend</td><td>Next.js 15 · TypeScript · Tailwind v4 · shadcn/ui</td><td>shadcn เป็นโค้ดในโปรเจกต์ ไม่ใช่ dependency → แก้ดีไซน์ได้อิสระ</td></tr>
+            <tr><td>State / data</td><td>TanStack Query + Zustand</td><td>Query จัดการ server state + polling/SSE, Zustand เก็บ state ของ wizard 5 สเต็ป</td></tr>
+            <tr><td>API</td><td>Node.js 22 · Fastify 5 · Zod</td><td>เร็วกว่า Express ~2 เท่า, schema validation + สร้าง OpenAPI อัตโนมัติ</td></tr>
+            <tr><td>DB</td><td>MongoDB Atlas · Mongoose 8</td><td>ตามที่มี hosting อยู่แล้ว, schema flexible เหมาะกับ timeline JSON ที่รูปร่างเปลี่ยนบ่อย</td></tr>
+            <tr><td>Queue</td><td>BullMQ + Redis 7</td><td>มาตรฐาน Node, มี FlowProducer สำหรับงานลูก (TTS หลายท่อน) และ retry/backoff ในตัว</td></tr>
+            <tr><td>Storage</td><td>Cloudflare R2</td><td><strong>egress ฟรี</strong> — สำคัญมากกับวิดีโอ (S3 คิดค่า egress จนกำไรหาย), ใช้ S3 SDK เดิมได้</td></tr>
+            <tr><td>Worker</td><td>Node 22 + ffmpeg-static + fontconfig</td><td>ภาษาเดียวกับทั้งระบบ, แชร์ type และ package ผ่าน monorepo</td></tr>
+            <tr><td>Render <strong>เลนหลัก</strong></td><td><code>@hyperframes/producer</code></td><td>Apache-2.0, เรียกจาก Node ได้ตรง, เรนเดอร์ local ไม่เสีย credit · เรนเดอร์เป็นเลเยอร์ ProRes 4444 ที่มี alpha แล้วให้ ffmpeg วางทับ คลิปต้นฉบับจึงไม่ถูก re-encode ผ่าน Chrome</td></tr>
+            <tr><td>LLM</td><td>Claude (Anthropic SDK)</td><td>เขียนคอปปี้ขายของภาษาไทยได้เป็นธรรมชาติกว่าอย่างเห็นได้ชัด</td></tr>
+            <tr><td>TTS</td><td>Gemini 2.5 Flash TTS</td><td>รองรับไทย, 30 เสียง, คุมอารมณ์ด้วย prompt, ~$0.0075 ต่อคลิป 30 วิ</td></tr>
+            <tr><td>Auth</td><td>Better Auth + MongoDB adapter</td><td>cookie session, มี Google OAuth, ไม่ต้องผูกกับ Next.js</td></tr>
+            <tr><td>Observability</td><td>Pino + Sentry + BullMQ Board</td><td>log แบบ structured, ดูคิวและงานค้างได้จากหน้าเว็บ</td></tr>
+            <tr><td>Hosting เว็บ + API</td><td>Plesk shared (Node.js extension)</td><td>โดเมนและ SSL มีอยู่แล้วที่ <code>clippang.work360.in.th</code> · งานส่วนนี้เบาพอ</td></tr>
+            <tr><td>Hosting worker</td><td>HostAtom Cloud VPS SSD3<br><span class="sub">Ubuntu · 4 vCPU / 8GB / 80GB · ฿1,190</span></td><td>ต้องลง ffmpeg + Chrome เองและรัน process ค้างได้ — shared hosting ทำไม่ได้ · ดู §02 สำหรับเหตุผลการเลือกขนาดและข้อที่ต้องถามผู้ให้บริการก่อนซื้อ</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 04 ============ -->
+    <section id="s04">
+      <h2><span class="num">§04</span>Pipeline และวงจรสถานะของงาน</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th class="n" style="width:44px">#</th><th style="width:150px">ขั้นตอน</th><th>สิ่งที่ทำ</th><th style="width:96px" class="n">งบเวลา</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td>Ingest</td><td>รับ presigned upload → <code>ffprobe</code> อ่านสเปก → normalize 1080×1920/30fps → ทำ proxy 480p + thumbnail</td><td class="n">3 วิ/คลิป</td></tr>
+            <tr><td class="n">2</td><td>Analyze</td><td>Scene detection หาจุดตัดช็อต → ตรวจ letterbox → ตรวจซับเบิร์นที่ lower third → คำนวณ luminance เพื่อเลือกสีซับ</td><td class="n">2 วิ/คลิป</td></tr>
+            <tr><td class="n">3</td><td>Script</td><td>ส่ง brief + ความยาวรวมของคลิป → LLM คืน JSON 5 เวอร์ชัน แต่ละเวอร์ชันแบ่งเป็นท่อนพร้อม role และคำเน้น</td><td class="n">6–10 วิ</td></tr>
+            <tr><td class="n">4</td><td>Voice</td><td>ยิง TTS <strong>ทีละท่อน</strong> ขนานกัน 4 งาน → วัด duration จริงด้วย ffprobe → เก็บ cache ตาม hash(text+voice+speed)</td><td class="n">10–15 วิ</td></tr>
+            <tr><td class="n">5</td><td>Timeline</td><td>prefix-sum หา offset ของทุกท่อน → จับคู่ท่อน↔ช็อต → คำนวณ speed/trim ให้ภาพพอดีเสียง → ได้ timeline JSON</td><td class="n">&lt; 1 วิ</td></tr>
+            <tr><td class="n">6</td><td>Caption</td><td>คอมไพล์ timeline + style manifest → ไฟล์ <code>.ass</code> (เลน A) หรือ HTML composition (เลน B)</td><td class="n">&lt; 1 วิ</td></tr>
+            <tr><td class="n">7</td><td>Compose</td><td>ต่อคลิปตาม timeline + ใส่ transform (crop/speed/zoom) + เบิร์นซับ</td><td class="n">3–6 วิ</td></tr>
+            <tr><td class="n">8</td><td>Mix</td><td>ต่อเสียงพากย์ + BGM + ducking + เสียงต้นฉบับ −20dB → normalize −14 LUFS</td><td class="n">2 วิ</td></tr>
+            <tr><td class="n">9</td><td>Package</td><td>mux เป็น MP4 (yuv420p, +faststart) → ทำ thumbnail + poster → เขียน .srt/.ass</td><td class="n">2 วิ</td></tr>
+            <tr><td class="n">10</td><td>Deliver</td><td>อัปขึ้น R2 → อัปเดต doc → ตัดเครดิต → ส่ง event ปิดงานทาง SSE</td><td class="n">2 วิ</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">รวมเลน A สำหรับคลิป 30 วินาที จาก 3 ไฟล์ต้นทาง: <strong>ประมาณ 40–55 วินาที</strong> · เลน B บวกเพิ่ม 90–180 วินาที</p>
+
+      <figure>
+        <div class="figwrap">
+          <svg viewBox="0 0 1000 226" role="img" aria-label="วงจรสถานะของงานเรนเดอร์: queued ingesting scripting voicing assembling rendering packaging ready พร้อมเส้นทางล้มเหลวและ retry สามครั้ง">
+            <defs>
+              <marker id="arw2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <rect class="box" x="8"   y="44" width="104" height="36" rx="3"/><text class="ttl" x="60"  y="67" text-anchor="middle">queued</text>
+            <rect class="box" x="134" y="44" width="104" height="36" rx="3"/><text class="ttl" x="186" y="67" text-anchor="middle">ingesting</text>
+            <rect class="box" x="260" y="44" width="104" height="36" rx="3"/><text class="ttl" x="312" y="67" text-anchor="middle">scripting</text>
+            <rect class="box" x="386" y="44" width="104" height="36" rx="3"/><text class="ttl" x="438" y="67" text-anchor="middle">voicing</text>
+            <rect class="box" x="512" y="44" width="104" height="36" rx="3"/><text class="ttl" x="564" y="67" text-anchor="middle">assembling</text>
+            <rect class="box" x="638" y="44" width="104" height="36" rx="3"/><text class="ttl" x="690" y="67" text-anchor="middle">rendering</text>
+            <rect class="box" x="764" y="44" width="104" height="36" rx="3"/><text class="ttl" x="816" y="67" text-anchor="middle">packaging</text>
+            <rect class="box hot" x="890" y="44" width="102" height="36" rx="3"/><text class="ttl hotf" x="941" y="67" text-anchor="middle">ready</text>
+
+            <line class="lead" x1="112" y1="62" x2="130" y2="62" marker-end="url(#arw2)"/>
+            <line class="lead" x1="238" y1="62" x2="256" y2="62" marker-end="url(#arw2)"/>
+            <line class="lead" x1="364" y1="62" x2="382" y2="62" marker-end="url(#arw2)"/>
+            <line class="lead" x1="490" y1="62" x2="508" y2="62" marker-end="url(#arw2)"/>
+            <line class="lead" x1="616" y1="62" x2="634" y2="62" marker-end="url(#arw2)"/>
+            <line class="lead" x1="742" y1="62" x2="760" y2="62" marker-end="url(#arw2)"/>
+            <line class="lead" x1="868" y1="62" x2="886" y2="62" marker-end="url(#arw2)"/>
+
+            <rect class="box" x="386" y="150" width="230" height="36" rx="3" stroke-dasharray="4 3"/>
+            <text class="ttl" x="501" y="173" text-anchor="middle">failed</text>
+
+            <polyline class="leadq" points="186,82 186,168 382,168" marker-end="url(#arw2)"/>
+            <polyline class="leadq" points="438,82 438,146" marker-end="url(#arw2)"/>
+            <polyline class="leadq" points="690,82 690,168 620,168" marker-end="url(#arw2)"/>
+            <text class="lbl" x="262" y="140" text-anchor="middle">ทุกสถานะโยน error ลงที่นี่ได้</text>
+
+            <polyline class="lead hot" points="386,168 60,168 60,84" marker-end="url(#arw2)"/>
+            <text class="lbl hotf" x="180" y="196" text-anchor="middle">retry × 3 · exponential backoff (5s / 25s / 125s)</text>
+          </svg>
+        </div>
+        <figcaption>
+          สถานะเก็บใน <code>renders.state</code> และส่งออกทาง SSE ทุกครั้งที่เปลี่ยน — ฝั่ง UI แค่ subscribe แล้ววาด progress bar
+          งานที่ล้มจะกลับเข้าคิวเองสูงสุด 3 ครั้ง <strong>โดยไม่หักเครดิตซ้ำ</strong> (เครดิตหักตอนสถานะ <code>ready</code> เท่านั้น)
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ 05 ============ -->
+    <section id="s05">
+      <h2><span class="num">§05</span>อัลกอริทึมหลัก</h2>
+
+      <h3>5.1 Chunked TTS — หัวใจของความแม่นยำ</h3>
+      <p>
+        ปัญหา: Gemini TTS คืนมาแค่ไฟล์เสียง ไม่บอกว่าคำไหนพูดวินาทีไหน และภาษาไทยไม่มีช่องว่างระหว่างคำ
+        การไปพึ่ง forced aligner ทำให้ซับหลุดและเพิ่ม GPU เข้ามาในระบบ ทางออกคือ
+        <span class="hl">ยิง TTS ทีละท่อนตามที่จะโชว์บนจอ แล้ววัดความยาวไฟล์จริง</span> — ปัญหาการ align จึงหายไปทั้งก้อน
+      </p>
+
+      <figure>
+        <div class="figwrap">
+          <svg viewBox="0 0 1000 296" role="img" aria-label="เปรียบเทียบสองวิธี: ยิง TTS ครั้งเดียวแล้วต้องใช้ forced aligner ได้ความแม่นราวเก้าสิบเปอร์เซ็นต์ กับการยิงทีละท่อนซึ่งวัดความยาวได้จริงจึงไม่ต้องมี aligner">
+            <defs>
+              <marker id="arw3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <text class="lbl" x="0" y="20" text-anchor="start">วิธี A — ยิงทีเดียวจบ</text>
+            <line class="lead" x1="0" y1="28" x2="1000" y2="28" opacity=".25"/>
+
+            <rect class="box" x="0"   y="46" width="150" height="44" rx="3"/>
+            <text class="ttl" x="75"  y="66" text-anchor="middle">สคริปต์เต็ม</text>
+            <text class="sml" x="75"  y="81" text-anchor="middle">85 คำ</text>
+            <rect class="box" x="200" y="46" width="150" height="44" rx="3"/>
+            <text class="ttl" x="275" y="66" text-anchor="middle">TTS 1 ครั้ง</text>
+            <text class="sml" x="275" y="81" text-anchor="middle">→ audio 28.6s</text>
+            <rect class="boxq" x="400" y="46" width="210" height="44" rx="3"/>
+            <text class="ttl" x="505" y="66" text-anchor="middle">forced aligner</text>
+            <text class="sml" x="505" y="81" text-anchor="middle">Whisper + PyThaiNLP + GPU</text>
+            <rect class="box" x="660" y="46" width="190" height="44" rx="3"/>
+            <text class="ttl" x="755" y="66" text-anchor="middle">เวลาคำ ~85–95%</text>
+            <text class="sml" x="755" y="81" text-anchor="middle">ต้องมีคน QA</text>
+
+            <line class="lead" x1="152" y1="68" x2="196" y2="68" marker-end="url(#arw3)"/>
+            <line class="lead" x1="352" y1="68" x2="396" y2="68" marker-end="url(#arw3)"/>
+            <line class="lead" x1="612" y1="68" x2="656" y2="68" marker-end="url(#arw3)"/>
+            <text class="lbl" x="870" y="72" text-anchor="start">← จุดที่ซับหลุด</text>
+
+            <text class="lbl hotf" x="0" y="140" text-anchor="start">วิธี B — chunked (เลือกใช้)</text>
+            <line class="lead hot" x1="0" y1="148" x2="1000" y2="148" opacity=".45"/>
+
+            <rect class="box" x="0"  y="166" width="150" height="44" rx="3"/>
+            <text class="ttl" x="75" y="186" text-anchor="middle">ท่อน c1…c12</text>
+            <text class="sml" x="75" y="201" text-anchor="middle">ท่อนละ 2–5 คำ</text>
+            <rect class="box" x="200" y="166" width="150" height="44" rx="3"/>
+            <text class="ttl" x="275" y="186" text-anchor="middle">TTS 12 ครั้ง</text>
+            <text class="sml" x="275" y="201" text-anchor="middle">ขนาน 4 · มี cache</text>
+            <rect class="box hot" x="400" y="166" width="210" height="44" rx="3"/>
+            <text class="ttl hotf" x="505" y="186" text-anchor="middle">ffprobe วัดความยาวจริง</text>
+            <text class="sml" x="505" y="201" text-anchor="middle">1.24s · 0.98s · 1.51s …</text>
+            <rect class="box" x="660" y="166" width="190" height="44" rx="3"/>
+            <text class="ttl" x="755" y="186" text-anchor="middle">prefix sum → offset</text>
+            <text class="sml" x="755" y="201" text-anchor="middle">แม่นระดับท่อน 100%</text>
+
+            <line class="lead" x1="152" y1="188" x2="196" y2="188" marker-end="url(#arw3)"/>
+            <line class="lead" x1="352" y1="188" x2="396" y2="188" marker-end="url(#arw3)"/>
+            <line class="lead" x1="612" y1="188" x2="656" y2="188" marker-end="url(#arw3)"/>
+
+            <line class="lead" x1="70" y1="240" x2="930" y2="240" opacity=".3"/>
+            <rect class="hotf" x="70"  y="234" width="3" height="13"/>
+            <rect class="hotf" x="196" y="234" width="3" height="13"/>
+            <rect class="hotf" x="296" y="234" width="3" height="13"/>
+            <rect class="hotf" x="450" y="234" width="3" height="13"/>
+            <rect class="hotf" x="566" y="234" width="3" height="13"/>
+            <text class="sml" x="70"  y="264" text-anchor="middle">0.00</text>
+            <text class="sml" x="196" y="264" text-anchor="middle">1.24</text>
+            <text class="sml" x="296" y="264" text-anchor="middle">2.22</text>
+            <text class="sml" x="450" y="264" text-anchor="middle">3.73</text>
+            <text class="sml" x="566" y="264" text-anchor="middle">4.90</text>
+            <text class="lbl" x="700" y="264" text-anchor="start">= จุดเริ่มของแต่ละท่อนบน timeline (และของซับ)</text>
+          </svg>
+        </div>
+        <figcaption>
+          ความต่างที่แท้จริงอยู่ที่กล่องที่สาม: วิธี A ต้อง <em>เดา</em> ว่าคำอยู่ตรงไหน วิธี B <em>รู้</em> เพราะมันวัดจากไฟล์เสียงที่มีอยู่จริง
+          ผลพลอยได้คือแก้/regenerate ทีละท่อนได้ และ cache เสียงซ้ำได้
+        </figcaption>
+      </figure>
+
+      <h4>กฎการตัดท่อน (Thai chunking)</h4>
+      <ul>
+        <li>ท่อนละ <strong>2–5 คำ ไม่เกิน 22 อักขระ</strong> — เกินกว่านี้อ่านไม่ทันบนจอมือถือ</li>
+        <li>ตัดที่ขอบวลีก่อนเสมอ: หลัง <code>ที่ / แล้ว / เพราะ / แต่ / ก็</code> และหลังเครื่องหมายวรรคตอน</li>
+        <li>ใช้ <code>pythainlp.word_tokenize(engine="newmm")</code> ผ่าน microservice เล็ก ๆ หรือ <code>wordcut</code> ฝั่ง JS สำหรับตัดคำในท่อน (ใช้กำหนดจังหวะไฮไลต์)</li>
+        <li>ห้ามตัดกลางคำ หรือแยกวรรณยุกต์/สระออกจากพยัญชนะ — ต้องเช็คด้วย grapheme cluster ไม่ใช่ <code>string.length</code></li>
+        <li>ไฮไลต์คำในท่อน: แบ่งเวลาตามสัดส่วนจำนวนอักขระของแต่ละคำ (ค่าคลาดเคลื่อน &lt; 80ms ตาไม่จับ)</li>
+      </ul>
+
+      <h3>5.2 Duration fitting — ทำให้ภาพพอดีเสียง</h3>
+      <pre><code>ให้  A = ความยาวเสียงพากย์รวม (จาก §5.1)
+     V = ความยาวคลิปต้นทางที่ใช้ได้รวม
+r = A / V
+
+r ≤ 0.85          → ตัดคลิปให้สั้นลง เลือกช็อตที่ scene score สูงสุด
+0.85 &lt; r &lt; 1.15   → ปรับ speed ทีละคลิป (0.92–1.10×) ไม่แตะ pitch เสียงพากย์
+r ≥ 1.15          → วนคลิปซ้ำแบบ ping-pong + เติม Ken Burns zoom
+r &gt; 1.6           → เตือนผู้ใช้: "สคริปต์ยาวเกินคลิป" + เสนอย่อสคริปต์อัตโนมัติ
+
+ปิดท้ายเสมอ: ยืดเฟรมสุดท้าย 0.4 วิ ให้ CTA อ่านจบ (ห้ามตัดจบพร้อมเสียง)</code></pre>
+
+      <h3>5.3 การจับคู่ท่อน ↔ ช็อต</h3>
+      <p>
+        MVP ใช้กติกาง่าย ๆ ที่ทำงานได้จริงก่อน: เรียงช็อตตามลำดับที่ผู้ใช้อัปโหลด แล้วแจกให้ท่อนสคริปต์ตามสัดส่วนเวลา
+        โดยบังคับว่า <strong>ท่อน hook ต้องได้ช็อตที่ scene score สูงสุด</strong> (ค่าความเคลื่อนไหว × ความคมชัด) เพราะ 3 วินาทีแรกชี้เป็นชี้ตาย
+        ส่วน V1.1 ค่อยยกระดับเป็นการจับคู่เชิงความหมายด้วย vision model (ท่อนที่พูดถึง "พับเก็บได้" → ช็อตที่มีการพับ)
+      </p>
+
+      <h3>5.4 การเลือกเลนเรนเดอร์</h3>
+      <p>ผู้ใช้ไม่เคยเห็นคำว่า "เลน" — เขาเลือกแค่สไตล์จาก gallery ระบบอ่านค่า <code>captionStyles.lane</code> แล้วส่งเข้าคิวที่ถูกต้องเอง</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:120px"></th><th>เลน A · FFmpeg + libass</th><th>เลน B · HyperFrames</th></tr></thead>
+          <tbody>
+            <tr><td>เวลาต่อคลิป 30 วิ</td><td class="n"><strong>2–3 วินาที</strong></td><td class="n">90–180 วินาที</td></tr>
+            <tr><td>RAM ต่องาน</td><td class="n">~300 MB</td><td class="n">~1.5 GB (Chrome)</td></tr>
+            <tr><td>ทำอะไรได้</td><td>karaoke, ขอบ, เงา, pop, สี, ตำแหน่ง, emoji</td><td>ทุกอย่างที่ CSS/GSAP/WebGL ทำได้ — 3D, glow, particle</td></tr>
+            <tr><td>เอาต์พุตขั้นกลาง</td><td>ไฟล์ <code>.ass</code></td><td>HTML composition + <code>data-*</code> timing</td></tr>
+            <tr><td>บทบาทในระบบ</td><td>โหมด batch และร่าง — งาน volume</td><td><strong>เลนหลัก (ค่าเริ่มต้น)</strong> — คิดเครดิต 3 เท่า</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">ตัดสินใจแล้ว — 11 ส.ค. 2026</span>
+        <p>
+          หลังเทียบผลลัพธ์จริงจากคลิปเดียวกันทั้งสองเลน เจ้าของโปรเจกต์เลือก
+          <span class="hl">เลน B (HyperFrames + Kanit) คู่กับ Gemini TTS เป็นทางหลัก</span>
+          โดยรู้ตัวเลข 3 วินาที เทียบกับ 64 วินาทีต่อคลิปแล้ว — คุณภาพงานมาก่อนความเร็ว
+        </p>
+        <p>
+          แต่ <strong>เลน A ยังต้องอยู่ในระบบ</strong> ไม่ใช่ในฐานะทางเลือกที่ถูกกว่า แต่เพราะโหมด batch
+          (10 คลิปต่อสินค้า) ถ้าใช้เลน B จะกินเวลา ~20 นาที ซึ่งนานเกินกว่าจะให้ผู้ใช้รอหน้าเว็บ
+          รูปแบบที่ควรเป็นคือ <strong>ร่างด้วยเลน A → เลือกตัวที่ชอบ → เรนเดอร์ตัวจริงด้วยเลน B</strong>
+        </p>
+      </div>
+
+      <div class="callout danger">
+        <span class="lbl">ข้อควรระวังที่ค้นพบจากคลิปตัวอย่าง</span>
+        <p>
+          คลิปจีนจำนวนมาก<strong>มีซับเบิร์นติดมาแล้ว</strong> (คลิปตัวอย่างที่ให้มาก็มี) ถ้าเบิร์นทับตรง ๆ จะได้ซับสองชั้น
+          ระบบต้องตรวจบริเวณ y 65–85% ด้วย edge density + OCR แล้วเสนอทางแก้ 3 ทาง:
+          ครอปเข้า 8% แล้วสเกลกลับ / ย้ายซับใหม่ขึ้นไปที่ 55% / เปลี่ยนคลิป — ห้ามเงียบแล้วปล่อยผ่าน
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ 06 ============ -->
+    <section id="s06">
+      <h2><span class="num">§06</span>ระบบสไตล์ซับ</h2>
+      <p>สไตล์คือ <strong>ข้อมูล ไม่ใช่โค้ด</strong> — เก็บเป็น document ใน MongoDB ทำให้เพิ่มสไตล์ใหม่ได้โดยไม่ต้อง deploy นี่คือจุดที่ระบบจะทิ้งห่างคู่แข่งในระยะยาว</p>
+
+      <pre><code>// captionStyles document
+{
+  slug: "karaoke-pop",
+  name: "คาราโอเกะ ป๊อป",
+  lane: "ass",                    // "ass" | "hyperframes"
+  tier: "free",                   // "free" | "pro"
+  previewKey: "styles/karaoke-pop.mp4",
+  params: {
+    font:        { family: "Noto Sans Thai", weight: 800, size: 64 },
+    fill:        "#FFFFFF",
+    activeFill:  "#FFD400",       // สีคำที่กำลังพูด
+    outline:     { color: "#000000", width: 5 },
+    shadow:      { color: "#00000080", offset: 2 },
+    position:    { anchor: "bottom", marginV: 400, marginH: 90 },  // anchor: top | middle | bottom
+    animation:   { enter: "pop", scale: 1.08, durationMs: 120 },
+    maxCharsPerLine: 22
+  },
+  editable: ["position.anchor", "position.marginV", "activeFill", "font.size"]
+}</code></pre>
+
+      <p>
+        Compiler ของเลน A รับ <code>params</code> + timeline แล้วปั๊มไฟล์ <code>.ass</code> ออกมา (หนึ่ง Dialogue event ต่อหนึ่งคำที่ไฮไลต์)
+        Compiler ของเลน B รับก้อนเดียวกันแล้วปั๊ม HTML composition ที่มี <code>data-start</code>/<code>data-duration</code>
+        <span class="hl">timeline JSON เป็นอินพุตเดียวกันทั้งสองเลน</span> — สลับเลนได้โดยไม่ต้องคำนวณเวลาใหม่
+      </p>
+
+      <h4>ตำแหน่งซับ — บังคับให้สองเลนตีความตรงกัน</h4>
+      <p>
+        ผู้ใช้เลือกได้ 3 ตำแหน่ง และต้องใช้ได้กับทุกสไตล์ ไม่ใช่คุณสมบัติของสไตล์ใดสไตล์หนึ่ง
+        กติกาสำคัญคือ <code>marginV</code> แปลว่า <span class="hl">ระยะห่างจากขอบที่ยึด</span> เสมอ
+        และตัวแปลงของทั้งสองเลนต้องเรียกฟังก์ชันเดียวกันในการตีความ
+      </p>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:110px">anchor</th><th style="width:150px">เลน A · ASS</th><th style="width:230px">เลน B · CSS</th><th><code>marginV</code></th></tr></thead>
+          <tbody>
+            <tr><td><code>top</code></td><td><code>Alignment: 8</code></td><td><code>top: &lt;marginV&gt;px</code></td><td>ห่างจากขอบบน</td></tr>
+            <tr><td><code>middle</code></td><td><code>Alignment: 5</code></td><td><code>top:50%; translateY(-50%)</code></td><td>ไม่ใช้</td></tr>
+            <tr><td><code>bottom</code></td><td><code>Alignment: 2</code></td><td><code>bottom: &lt;marginV&gt;px</code></td><td>ห่างจากขอบล่าง</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">
+        การยกซับหนีซับเบิร์นเดิมอัตโนมัติ (§05) ทำงานเฉพาะตอน <code>anchor === "bottom"</code>
+        เพราะอีกสองตำแหน่งพ้นแถบซับเดิมอยู่แล้ว
+      </p>
+
+      <h4>ขั้นตอนเพิ่มสไตล์ใหม่</h4>
+      <ol>
+        <li>เขียน params ใหม่ (หรือให้ Claude เขียน HTML composition สำหรับเลน B)</li>
+        <li>รัน <code>pnpm style:preview &lt;slug&gt;</code> — เรนเดอร์คลิปตัวอย่าง 6 วินาทีด้วยสไตล์นั้น</li>
+        <li>ตรวจด้วยตา → <code>pnpm style:publish &lt;slug&gt;</code> เขียนลง DB + อัปโหลดพรีวิว</li>
+        <li>สไตล์ขึ้น gallery ทันทีโดยไม่ต้อง deploy โค้ด</li>
+      </ol>
+
+      <h4>ฟอนต์</h4>
+      <p>
+        Bundle ฟอนต์ไทยไว้ใน worker image และลงทะเบียนกับ fontconfig ให้เรียบร้อย — บน Linux ไม่มี Leelawadee UI
+        แนะนำ <strong>Noto Sans Thai</strong> (SIL OFL) เป็นค่าเริ่มต้น เสริมด้วย <strong>Kanit / Prompt / Anuphan</strong> (OFL เช่นกัน ใช้เชิงพาณิชย์ได้)
+        และเช็ค license ทุกตัวก่อนขึ้น production
+      </p>
+    </section>
+
+    <!-- ============ 07 ============ -->
+    <section id="s07">
+      <h2><span class="num">§07</span>โครงสร้างข้อมูล (MongoDB)</h2>
+
+      <div class="callout">
+        <span class="lbl">กฎเหล็กของ storage</span>
+        <p>
+          <strong>ห้ามเก็บไฟล์สื่อใน MongoDB</strong> ไม่ว่ากรณีใด (document จำกัด 16MB และ GridFS ทำให้ backup บวมโดยไม่จำเป็น)
+          Mongo เก็บแค่ <code>storageKey</code> ที่ชี้ไปยัง R2 ส่วนไฟล์จริงอยู่บน R2 ทั้งหมด
+        </p>
+      </div>
+
+      <h4>Collections</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:150px">Collection</th><th>เก็บอะไร</th><th style="width:290px">Index</th></tr></thead>
+          <tbody>
+            <tr><td><code>users</code></td><td>บัญชี, แผน, ยอดเครดิตปัจจุบัน, role</td><td><code>{email:1}</code> unique</td></tr>
+            <tr><td><code>projects</code></td><td>หนึ่งสินค้า = หนึ่งโปรเจกต์ — brief, ค่าที่เลือกไว้, สถานะ wizard</td><td><code>{userId:1, updatedAt:-1}</code></td></tr>
+            <tr><td><code>assets</code></td><td>คลิปต้นทางและไฟล์ที่ระบบสร้าง — probe, scenes, ผลตรวจซับเดิม</td><td><code>{userId:1, createdAt:-1}</code>, <code>{sha256:1}</code></td></tr>
+            <tr><td><code>scripts</code></td><td>สคริปต์ 5 เวอร์ชันของโปรเจกต์ แต่ละเวอร์ชันเป็น array ของท่อน</td><td><code>{projectId:1}</code></td></tr>
+            <tr><td><code>voiceTakes</code></td><td>เสียงรายท่อน + duration จริง + cacheKey (ใช้ซ้ำข้ามโปรเจกต์)</td><td><code>{cacheKey:1}</code> unique</td></tr>
+            <tr><td><code>renders</code></td><td>งานเรนเดอร์หนึ่งครั้ง — state, timeline, outputs, ต้นทุน, error</td><td><code>{projectId:1,createdAt:-1}</code>, <code>{state:1,createdAt:1}</code></td></tr>
+            <tr><td><code>captionStyles</code></td><td>คลังสไตล์ (§06)</td><td><code>{slug:1}</code> unique</td></tr>
+            <tr><td><code>voices</code></td><td>คลังเสียง — provider, voiceId, ตัวอย่าง, tags</td><td><code>{provider:1, lang:1}</code></td></tr>
+            <tr><td><code>templates</code></td><td>preset ที่ผู้ใช้บันทึกเอง (เสียง + สไตล์ + โทน)</td><td><code>{userId:1}</code></td></tr>
+            <tr><td><code>creditLedger</code></td><td>ทุกการเพิ่ม/หักเครดิต — append only ห้ามแก้ย้อนหลัง</td><td><code>{userId:1, createdAt:-1}</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Schema สำคัญ</h4>
+      <pre><code>// projects
+{
+  _id, userId, title,
+  product: {
+    name, price, features: [String], audience, tone,   // "ขายของ"|"เล่าเรื่อง"|"สนุก"|"นุ่มนวล"
+    cta, keywords: [String], avoid: [String]
+  },
+  sourceAssetIds: [ObjectId],
+  selection: {
+    scriptId, variantId,
+    voice: { provider: "gemini", voiceId: "Kore", speed: 1.0, styleHint: "..." },
+    captionStyleSlug, captionOverrides: {},
+    aspect: "9:16", targetDurationMs: 30000,
+    bgm: { assetId, gainDb: -18, ducking: true }
+  },
+  wizardStep: 4,              // 1..5  ให้ผู้ใช้กลับมาทำต่อได้
+  latestRenderId, createdAt, updatedAt
+}
+
+// scripts.variants[]
+{
+  id: "v2", hookType: "ปัญหา-ทางออก", tone: "สนุก", model: "claude-opus-5",
+  estDurationMs: 28400,
+  chunks: [
+    { i: 0, text: "หัวชาร์จพกพา",  role: "hook", emphasis: ["พกพา"] },
+    { i: 1, text: "เสียบปุ๊บ ชาร์จปั๊บ", role: "body", emphasis: ["ปั๊บ"] }
+  ]
+}
+
+// renders  ← เอกสารที่ worker เขียนบ่อยที่สุด
+{
+  _id, projectId, userId,
+  kind: "draft",              // draft = เลน A ไว้เลือก · final = เลน B ตัวที่จะโพสต์จริง
+  lane: "ass",                // อนุมานจาก kind + สไตล์ ไม่ให้ client ส่งมาเอง
+  promotedFrom: ObjectId,     // ถ้าเป็น final ที่โปรโมตมาจากร่าง — ใช้เสียงและ timeline เดิมซ้ำทั้งชุด
+  state: "rendering",         // queued|ingesting|scripting|voicing|assembling|rendering|packaging|ready|failed|canceled
+  progress: 62, attempts: 1, idempotencyKey,
+  timeline: {
+    durationMs: 28400,
+    chunks: [{ i, startMs, endMs, text,
+               words: [{ text, startMs, endMs }] }],
+    clips:  [{ assetId, inMs, outMs, startMs, speed, transform: { crop, zoom } }]
+  },
+  outputs: { videoKey, thumbKey, posterKey, srtKey, assKey, voiceKey },
+  costs:   { llmUsd: 0.004, ttsUsd: 0.0075, cpuSec: 11 },
+  timings: { ingestMs, scriptMs, ttsMs, renderMs, totalMs },
+  error:   { stage, code, message, retryable },
+  createdAt, startedAt, finishedAt
+}</code></pre>
+
+      <h4>กฎการออกแบบเอกสาร</h4>
+      <ul>
+        <li><strong>ฝัง (embed) timeline ไว้ใน <code>renders</code></strong> เพราะอ่าน/เขียนพร้อมกันเสมอและไม่ถูก query แยก</li>
+        <li><strong>แยก <code>voiceTakes</code> ออกมา</strong> เพราะต้อง cache ข้ามโปรเจกต์ด้วย <code>cacheKey = sha256(text+voiceId+speed+provider)</code></li>
+        <li><strong>ยอดเครดิตใน <code>users.credits</code> เป็นเพียง cache</strong> ความจริงคือผลรวมของ <code>creditLedger</code> — มี job กระทบยอดทุกคืน</li>
+        <li>ใช้ <code>updateOne</code> เฉพาะ field ที่เปลี่ยน (<code>$set: {progress}</code>) อย่าเขียนทั้ง document ทุกครั้งที่ progress ขยับ</li>
+        <li>ตั้ง TTL index บน asset ชั่วคราว: <code>{expiresAt:1}, expireAfterSeconds:0</code> + cron ลบไฟล์ใน R2 คู่กัน</li>
+      </ul>
+    </section>
+
+    <!-- ============ 08 ============ -->
+    <section id="s08">
+      <h2><span class="num">§08</span>API Contract</h2>
+      <p>REST ทั้งหมดอยู่ใต้ <code>/api/v1</code> · auth ด้วย httpOnly cookie session · ทุก endpoint คืน error รูปแบบเดียวกัน <code>{ error: { code, message, field? } }</code></p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:62px">Method</th><th style="width:290px">Path</th><th>หน้าที่</th><th style="width:56px">Auth</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/auth/register</code> · <code>/auth/login</code> · <code>/auth/logout</code></td><td>บัญชีผู้ใช้</td><td>–</td></tr>
+            <tr><td>GET</td><td><code>/auth/me</code></td><td>ข้อมูลผู้ใช้ + ยอดเครดิต</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/uploads/presign</code></td><td>ขอ presigned URL (รองรับ multipart สำหรับไฟล์ &gt; 100MB)</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/assets/commit</code></td><td>แจ้งว่าอัปโหลดเสร็จ → เข้าคิว <code>media.ingest</code></td><td>✓</td></tr>
+            <tr><td>GET</td><td><code>/assets?cursor=&amp;limit=</code></td><td>media library (cursor pagination)</td><td>✓</td></tr>
+            <tr><td>DELETE</td><td><code>/assets/:id</code></td><td>ลบไฟล์ + object ใน R2</td><td>✓</td></tr>
+            <tr><td>POST/GET</td><td><code>/projects</code></td><td>สร้าง / ลิสต์โปรเจกต์</td><td>✓</td></tr>
+            <tr><td>GET/PATCH/DELETE</td><td><code>/projects/:id</code></td><td>อ่าน / แก้ brief และค่าที่เลือก / ลบ</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/projects/:id/scripts:generate</code></td><td>สร้างสคริปต์ 5 เวอร์ชัน (sync 6–10 วิ)</td><td>✓</td></tr>
+            <tr><td>PATCH</td><td><code>/projects/:id/scripts/:variantId</code></td><td>แก้ท่อน / regenerate เฉพาะท่อน</td><td>✓</td></tr>
+            <tr><td>GET</td><td><code>/voices</code> · <code>/caption-styles</code></td><td>คลังเสียง / คลังสไตล์ (cache 1 ชม.)</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/voices/:id/preview</code></td><td>ฟังตัวอย่างเสียง (cache ตาม hash ข้อความ)</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/projects/:id/renders</code></td><td>สั่งเรนเดอร์ <code>kind: "draft" | "final"</code> → <code>202 {renderId}</code> · ต้องส่ง <code>Idempotency-Key</code></td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/renders/:id/promote</code></td><td><strong>โปรโมตร่างเป็นตัวจริง</strong> — ใช้ timeline และไฟล์เสียงของร่างเดิมทั้งชุด เรนเดอร์ใหม่เฉพาะเลเยอร์ซับด้วยเลน B (ไม่ยิง TTS ซ้ำ ไม่เสียเงิน AI อีก)</td><td>✓</td></tr>
+            <tr><td>GET</td><td><code>/renders/:id</code></td><td>สถานะ + ลิงก์ดาวน์โหลด (signed URL 24 ชม.)</td><td>✓</td></tr>
+            <tr><td>GET</td><td><code>/renders/:id/events</code></td><td><strong>SSE</strong> — สตรีมสถานะและ progress แบบเรียลไทม์</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/renders/:id/cancel</code> · <code>/retry</code></td><td>ยกเลิก / ลองใหม่</td><td>✓</td></tr>
+            <tr><td>POST</td><td><code>/projects/:id/batch</code></td><td>สร้าง N เวอร์ชันพร้อมกัน → คืน array ของ renderId</td><td>✓</td></tr>
+            <tr><td>GET</td><td><code>/credits/ledger</code></td><td>ประวัติเครดิต</td><td>✓</td></tr>
+            <tr><td>*</td><td><code>/admin/*</code></td><td>จัดการสไตล์ เสียง ผู้ใช้ คิวงาน ต้นทุน</td><td>admin</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>ตัวอย่าง: สั่งเรนเดอร์</h4>
+      <pre><code>POST /api/v1/projects/66f.../renders
+Idempotency-Key: 8f14e45f-ea...
+
+{
+  "kind": "draft",
+  "variantId": "v2",
+  "voice": { "provider": "gemini", "voiceId": "Kore", "speed": 1.05,
+             "styleHint": "พูดแบบขายของ ตื่นเต้น เป็นกันเอง" },
+  "captionStyleSlug": "karaoke-pop",
+  "captionOverrides": { "activeFill": "#FF3B6B" },
+  "clipOrder": ["asset_a", "asset_c", "asset_b"]
+}
+
+→ 202 Accepted
+{ "renderId": "670...", "kind": "draft", "state": "queued", "estimatedSec": 15, "creditsHold": 0.3 }
+
+# พอใจกับร่างตัวไหนแล้วค่อยโปรโมต — ไม่ต้องส่งพารามิเตอร์อะไรอีก
+POST /api/v1/renders/670.../promote
+→ 202 { "renderId": "671...", "kind": "final", "estimatedSec": 130, "creditsHold": 3 }</code></pre>
+
+      <h4>ตัวอย่าง: SSE ระหว่างเรนเดอร์</h4>
+      <pre><code>GET /api/v1/renders/670.../events
+
+event: state
+data: {"state":"voicing","progress":38,"message":"กำลังพากย์ท่อนที่ 5 จาก 12"}
+
+event: state
+data: {"state":"rendering","progress":74,"message":"กำลังเบิร์นซับ"}
+
+event: done
+data: {"state":"ready","videoUrl":"https://...","durationMs":28400,"credits":1}</code></pre>
+      <p class="sub">ฝั่ง client ใช้ <code>EventSource</code> และถอยไป polling ทุก 3 วินาทีอัตโนมัติถ้าการเชื่อมต่อหลุด (พร็อกซีบางตัวตัด SSE)</p>
+    </section>
+
+    <!-- ============ 09 ============ -->
+    <section id="s09">
+      <h2><span class="num">§09</span>คิวงานและ Worker</h2>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:170px">Queue</th><th style="width:96px" class="n">Concurrency</th><th style="width:74px" class="n">Retry</th><th>หมายเหตุ</th></tr></thead>
+          <tbody>
+            <tr><td><code>media.ingest</code></td><td class="n">4 / worker</td><td class="n">2</td><td>CPU-bound · ตั้ง <code>-threads 2</code> กันแย่ง core กัน</td></tr>
+            <tr><td><code>script.generate</code></td><td class="n">8</td><td class="n">3</td><td>รอ network เป็นหลัก · timeout 30 วิ</td></tr>
+            <tr><td><code>tts.synthesize</code></td><td class="n">4</td><td class="n">3</td><td>เช็ค cache ก่อนเสมอ · เจอ 429 ให้ backoff แบบสุ่ม</td></tr>
+            <tr><td><code>render.draft</code></td><td class="n">2 / vCPU-pair</td><td class="n">2</td><td>เลน A · ~300MB ต่องาน · ต้องได้คิวก่อนเสมอ (ผู้ใช้กำลังนั่งรออยู่)</td></tr>
+            <tr><td><code>render.final</code></td><td class="n">1</td><td class="n">1</td><td>เลน B · แยก worker pool ที่ RAM ≥ 4GB · รอได้ แจ้งเตือนเมื่อเสร็จ</td></tr>
+            <tr><td><code>media.cleanup</code></td><td class="n">1</td><td class="n">–</td><td>cron ตี 3 · ลบ temp เกิน 7 วัน และ render ที่ล้มเกิน 30 วัน</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>กติกาที่ต้องบังคับในโค้ด</h4>
+      <ul>
+        <li><strong>FlowProducer</strong> — งาน render เป็นแม่ที่มีลูกเป็น TTS ทีละท่อน แม่จะเริ่มก็ต่อเมื่อลูกเสร็จครบ (BullMQ จัดการให้)</li>
+        <li><strong>Idempotency</strong> — เก็บ <code>idempotencyKey</code> ไว้ใน <code>renders</code> พร้อม unique index กดปุ่มรัว ๆ ต้องไม่ได้งานซ้ำ</li>
+        <li><strong>เครดิตหักตอนสำเร็จ</strong> — ตอนสั่งงานให้ "จอง" (hold) ตอน <code>ready</code> ค่อยหักจริง ถ้า <code>failed</code> ให้คืน</li>
+        <li><strong>ทุกงานทำงานใน temp dir ของตัวเอง</strong> และลบทิ้งใน <code>finally</code> เสมอ — ดิสก์เต็มคือสาเหตุอันดับหนึ่งที่ระบบวิดีโอล่ม</li>
+        <li><strong>Progress ต้องรายงานจาก stderr ของ FFmpeg</strong> (parse <code>out_time_ms</code>) ไม่ใช่เดาเป็นขั้น ๆ</li>
+        <li><strong>Graceful shutdown</strong> — รับ SIGTERM แล้วรองานปัจจุบันจบก่อน (สูงสุด 120 วิ) ไม่งั้น deploy ทีงานหายที</li>
+      </ul>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="s10">
+      <h2><span class="num">§10</span>Sitemap และเส้นทาง</h2>
+
+      <pre><code>/                              หน้าขาย — hero + ตัวอย่างคลิป before/after + ราคา
+├── /styles                    แกลเลอรีสไตล์ซับ (พรีวิววิดีโอจริง) — หน้านี้คือตัวปิดการขาย
+├── /pricing                   แพ็กเกจเครดิต + คำถามที่พบบ่อย
+├── /login  /register  /forgot-password
+├── /legal/terms  /legal/privacy  /legal/content-policy
+│
+├── /app                       [auth] แดชบอร์ด — โปรเจกต์ล่าสุด, เครดิตคงเหลือ, งานที่กำลังรัน
+│   ├── /app/new               เริ่มโปรเจกต์ใหม่ → redirect เข้า wizard
+│   ├── /app/projects                       รายการโปรเจกต์ทั้งหมด (ค้นหา/กรอง)
+│   │   └── /app/projects/[id]              ภาพรวมโปรเจกต์ + ประวัติการเรนเดอร์
+│   │       ├── /upload        ① อัปโหลดคลิป
+│   │       ├── /brief         ② ข้อมูลสินค้า
+│   │       ├── /voice         ③ เสียงและโทน
+│   │       ├── /script        ④ เลือก/แก้สคริปต์ + เลือกสไตล์ซับ
+│   │       └── /preview       ⑤ พรีวิว + ดาวน์โหลด
+│   ├── /app/library           คลังคลิปที่เคยอัปโหลด (ใช้ซ้ำได้)
+│   ├── /app/templates         preset ส่วนตัว (เสียง + สไตล์ + โทน)
+│   ├── /app/renders           คิวงานของฉัน — สถานะ, ดาวน์โหลดซ้ำ, ลองใหม่
+│   ├── /app/billing           เครดิต, ประวัติ, ใบเสร็จ
+│   └── /app/settings          โปรไฟล์, รหัสผ่าน, การแจ้งเตือน
+│
+└── /admin                     [role=admin]
+    ├── /admin/styles          CRUD สไตล์ซับ + อัปโหลดพรีวิว
+    ├── /admin/voices          จัดการคลังเสียง + provider
+    ├── /admin/jobs            คิวงานทั้งระบบ (BullMQ board)
+    ├── /admin/users           ผู้ใช้และเครดิต
+    └── /admin/costs           ต้นทุน API รายวัน แยกตาม provider</code></pre>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:220px">Route</th><th>งานหลักของหน้า</th><th style="width:200px">สถานะที่ต้องออกแบบ</th></tr></thead>
+          <tbody>
+            <tr><td><code>/styles</code></td><td>เล่นพรีวิวสไตล์แบบวนอัตโนมัติ (คลิปสั้น 6 วิ, muted, lazy load)</td><td>loading skeleton</td></tr>
+            <tr><td><code>/app/projects/[id]/upload</code></td><td>drag&amp;drop หลายไฟล์ + progress ต่อไฟล์ + ทัมบ์เนลเมื่อ ingest เสร็จ</td><td>ว่าง / กำลังอัป / ไฟล์เสีย / ใหญ่เกิน</td></tr>
+            <tr><td><code>/app/projects/[id]/brief</code></td><td>ฟอร์มสินค้า + ตัวช่วยเติมจากลิงก์สินค้า (V1.1)</td><td>validation รายฟิลด์</td></tr>
+            <tr><td><code>/app/projects/[id]/voice</code></td><td>การ์ดเสียง เล่นตัวอย่างได้ + สไลเดอร์ความเร็ว + ชิปโทน</td><td>กำลังโหลดตัวอย่าง</td></tr>
+            <tr><td><code>/app/projects/[id]/script</code></td><td>สคริปต์ 5 การ์ดเทียบกัน + แก้ inline รายท่อน + เลือกสไตล์ซับ + <strong>เลือกตำแหน่งซับ บน/กลาง/ล่าง</strong> (ปุ่ม 3 ตัวพร้อมภาพตัวอย่างตำแหน่ง)</td><td>กำลังสร้าง / สร้างไม่สำเร็จ</td></tr>
+            <tr><td><code>/app/projects/[id]/preview</code></td><td>เพลเยอร์ + progress ระหว่างเรนเดอร์ + ปุ่มดาวน์โหลด/ทำ batch</td><td>คิว / กำลังทำ / เสร็จ / ล้มเหลว</td></tr>
+            <tr><td><code>/app/renders</code></td><td>ตารางงาน มีชิปสถานะสี + กรองตามสถานะ</td><td>ว่าง / โหลด</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure>
+        <div class="figwrap">
+          <svg viewBox="0 0 1000 240" role="img" aria-label="ผังการไหลของ wizard ห้าขั้นตอน พร้อมเส้นย้อนกลับเพื่อแก้ไข ประตูตรวจเครดิตก่อนเรนเดอร์ และวงจรทำซ้ำจากหน้าพรีวิว">
+            <defs>
+              <marker id="arw4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+
+            <rect class="box" x="8"   y="60" width="150" height="50" rx="3"/>
+            <text class="ttl" x="83"  y="80" text-anchor="middle">① อัปโหลด</text>
+            <text class="sml" x="83"  y="96" text-anchor="middle">≥ 1 คลิป</text>
+
+            <rect class="box" x="198" y="60" width="150" height="50" rx="3"/>
+            <text class="ttl" x="273" y="80" text-anchor="middle">② ข้อมูลสินค้า</text>
+            <text class="sml" x="273" y="96" text-anchor="middle">ชื่อ + จุดขาย</text>
+
+            <rect class="box" x="388" y="60" width="150" height="50" rx="3"/>
+            <text class="ttl" x="463" y="80" text-anchor="middle">③ เสียง + โทน</text>
+            <text class="sml" x="463" y="96" text-anchor="middle">ฟังตัวอย่างได้</text>
+
+            <rect class="box" x="578" y="60" width="150" height="50" rx="3"/>
+            <text class="ttl" x="653" y="80" text-anchor="middle">④ สคริปต์ + สไตล์</text>
+            <text class="sml" x="653" y="96" text-anchor="middle">เลือก 1 ใน 5</text>
+
+            <rect class="box hot" x="828" y="60" width="164" height="50" rx="3"/>
+            <text class="ttl hotf" x="910" y="80" text-anchor="middle">⑤ พรีวิว + โหลด</text>
+            <text class="sml" x="910" y="96" text-anchor="middle">MP4 · SRT · เสียง</text>
+
+            <line class="lead" x1="160" y1="85" x2="192" y2="85" marker-end="url(#arw4)"/>
+            <line class="lead" x1="350" y1="85" x2="382" y2="85" marker-end="url(#arw4)"/>
+            <line class="lead" x1="540" y1="85" x2="572" y2="85" marker-end="url(#arw4)"/>
+            <line class="lead" x1="730" y1="85" x2="822" y2="85" marker-end="url(#arw4)"/>
+
+            <polygon class="boxq" points="776,85 800,73 824,85 800,97" stroke-dasharray="0"/>
+            <text class="lbl" x="800" y="60" text-anchor="middle">เครดิตพอ?</text>
+
+            <polyline class="leadq" points="653,114 653,146 83,146 83,114" marker-end="url(#arw4)"/>
+            <text class="lbl" x="360" y="140" text-anchor="middle">ย้อนกลับแก้ได้ทุกขั้น — state เก็บใน projects.wizardStep</text>
+
+            <polyline class="lead hot" points="910,114 910,186 653,186 653,114" marker-end="url(#arw4)"/>
+            <text class="lbl hotf" x="790" y="204" text-anchor="middle">ทำเวอร์ชันใหม่ (เปลี่ยน hook / เสียง / สไตล์) → โหมด Batch</text>
+
+            <polyline class="leadq" points="800,97 800,120 760,120" marker-end="url(#arw4)"/>
+            <text class="lbl" x="700" y="124" text-anchor="end">ไม่พอ → /app/billing</text>
+          </svg>
+        </div>
+        <figcaption>
+          เส้นย้อนกลับสองเส้นคือสิ่งที่ทำให้เครื่องมือนี้ใช้จริงได้: แก้ย้อนได้ทุกขั้นโดยไม่เสียงาน
+          และวงจรจากหน้าพรีวิวกลับไปทำเวอร์ชันใหม่คือทางที่ผู้ใช้จะสร้าง 10 คลิปต่อสินค้า
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="s11">
+      <h2><span class="num">§11</span>ข้อกำหนดฝั่ง UI</h2>
+      <ul>
+        <li><strong>Wizard ต้องกลับมาทำต่อได้</strong> — เก็บ <code>wizardStep</code> ใน DB ไม่ใช่ใน localStorage ผู้ใช้เปลี่ยนเครื่องแล้วต้องต่อได้</li>
+        <li><strong>Optimistic UI ตอนอัปโหลด</strong> — ขึ้นการ์ดคลิปทันทีพร้อม progress ต่อไฟล์ ไม่ต้องรอ ingest เสร็จ</li>
+        <li><strong>หน้าพรีวิวห้ามเป็นจอโหลดเปล่า</strong> — ระหว่างเรนเดอร์ให้โชว์สถานะเป็นภาษาคน ("กำลังพากย์ท่อนที่ 5 จาก 12") จาก SSE</li>
+        <li><strong>เล่นพรีวิวสไตล์เป็นวิดีโอจริง</strong> ไม่ใช่ภาพนิ่ง — ผู้ใช้ตัดสินใจจากการเคลื่อนไหว</li>
+        <li><strong>แสดงเครดิตที่จะถูกใช้บนปุ่ม</strong> ("สร้างคลิป · 1 เครดิต") ไม่ให้เกิดการหักเงินที่ไม่คาดคิด</li>
+        <li>
+          <strong>หน้าพรีวิวคือหน้าเลือกร่าง</strong> — โชว์ร่างเป็นกริดเล่นวนอัตโนมัติ ผู้ใช้เลือกตัวที่ชอบแล้วกด
+          "เรนเดอร์ตัวจริง" คำว่าเลน A / เลน B ต้องไม่โผล่ใน UI เลย ผู้ใช้เห็นแค่ <em>ร่าง</em> กับ <em>ตัวจริง</em>
+          และเห็นว่าตัวจริงใช้เวลานานกว่าเพราะซับสวยกว่า
+        </li>
+        <li><strong>ข้อความ error ต้องบอกทางแก้</strong> — "ไฟล์นี้เป็น 4K 60fps เกิน 200MB ระบบย่อให้อัตโนมัติ (ใช้เวลาเพิ่ม ~20 วิ)" ไม่ใช่ "Upload failed"</li>
+        <li><strong>ทุกหน้าใช้งานได้บนมือถือ</strong> — ผู้ใช้กลุ่มนี้ทำงานบนมือถือครึ่งหนึ่ง โดยเฉพาะขั้นอัปโหลดและดาวน์โหลด</li>
+      </ul>
+    </section>
+
+    <!-- ============ 12 ============ -->
+    <section id="s12">
+      <h2><span class="num">§12</span>Non-functional</h2>
+
+      <h3>ต้นทุนต่อคลิป (30 วินาที, เลน A)</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>รายการ</th><th class="n" style="width:110px">USD</th><th>ที่มา</th></tr></thead>
+          <tbody>
+            <tr><td>LLM เขียนสคริปต์ 5 เวอร์ชัน</td><td class="n">0.004</td><td>~2k in / 1.5k out</td></tr>
+            <tr><td>TTS (Gemini 2.5 Flash)</td><td class="n">0.0075</td><td>25 tokens/วินาที × 30 วิ × $10/1M</td></tr>
+            <tr><td>Compute (ingest + render)</td><td class="n">0.003</td><td>~20 วินาที vCPU</td></tr>
+            <tr><td>Storage + egress</td><td class="n">0.001</td><td>R2 · egress ฟรี</td></tr>
+            <tr><td><strong>รวม</strong></td><td class="n"><strong>≈ 0.016</strong></td><td><strong>≈ 0.55 บาท/คลิป</strong></td></tr>
+            <tr><td>เลน B (HyperFrames) เพิ่ม</td><td class="n">+0.02–0.05</td><td>2–4 นาที CPU → คิด 3 เครดิต</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:150px">งาน</th><th style="width:110px" class="n">เครดิต</th><th>เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td>สร้างสคริปต์</td><td class="n">0.2</td><td>กัน regenerate รัวจนต้นทุน LLM บาน</td></tr>
+            <tr><td>ร่าง (เลน A)</td><td class="n">0.3</td><td>ถูกพอให้กล้าลองหลายเวอร์ชัน — นี่คือจุดที่ผู้ใช้ค้นพบว่าอะไรเวิร์ค</td></tr>
+            <tr><td>ตัวจริง (เลน B)</td><td class="n">3</td><td>กิน CPU ~20 เท่าของร่าง และเป็นคลิปที่จะเอาไปโพสต์จริง</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub">
+        แนะนำตั้งราคา 1 เครดิต ≈ 3 บาท (แพ็ก 100 เครดิต 299 บาท) → ผู้ใช้ทั่วไปจะร่าง 5–10 ครั้ง
+        ต่อคลิปที่โพสต์จริงหนึ่งตัว ตกราว 5–6 เครดิต ≈ 16 บาทต่อคลิปที่ใช้งานได้ · gross margin ยังเกิน 80%
+      </p>
+
+      <h3>ขีดจำกัดและความปลอดภัย</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:230px">หัวข้อ</th><th>ค่า / มาตรการ</th></tr></thead>
+          <tbody>
+            <tr><td>ขนาดไฟล์ต่อคลิป</td><td>500 MB · ยาวไม่เกิน 3 นาที · รับ mp4/mov/webm เท่านั้น (ตรวจ magic bytes ไม่เชื่อนามสกุล)</td></tr>
+            <tr><td>คลิปต่อโปรเจกต์</td><td>สูงสุด 12 ไฟล์</td></tr>
+            <tr><td>Rate limit</td><td>สร้างสคริปต์ 20/ชม. · เรนเดอร์ 60/วัน ต่อบัญชี (กัน bot เผาเครดิตทดลอง)</td></tr>
+            <tr><td>Presigned URL</td><td>upload หมดอายุ 15 นาที · download 24 ชม. · ผูก content-type และขนาดสูงสุด</td></tr>
+            <tr><td>Session</td><td>httpOnly + Secure + SameSite=Lax · หมุน token ทุก 7 วัน · <strong>ตั้ง cookie <code>Domain</code> เป็น <code>clippang.work360.in.th</code> เท่านั้น ห้ามตั้งเป็น <code>.work360.in.th</code></strong> ไม่งั้น session จะรั่วไปทุก subdomain ของ work360</td></tr>
+            <tr><td>ความเป็นส่วนตัว</td><td>bucket ปิดสาธารณะทั้งหมด · เข้าถึงผ่าน signed URL เท่านั้น · ลบไฟล์จริงเมื่อผู้ใช้กดลบภายใน 24 ชม.</td></tr>
+            <tr><td>ป้องกันการใช้ในทางผิด</td><td>กรองคำโฆษณาต้องห้ามในสคริปต์ (อย.) · ห้ามใช้เสียงเลียนแบบบุคคลจริง · เก็บ log ผู้สร้างทุกคลิป</td></tr>
+            <tr><td>Observability</td><td>Sentry (error) · Pino → log aggregator · dashboard: งานในคิว, p95 เวลาเรนเดอร์, อัตราล้มเหลว, ต้นทุนรายวัน</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>การขยายระบบ</h3>
+      <p>
+        เลน B ที่เลือกใช้กิน CPU มากกว่าเลน A ราว 20 เท่าต่อคลิป — วัดจริงได้ 64 วินาทีสำหรับคลิป 16 วินาที
+        (479 เฟรม ≈ 7.5 fps ผ่าน Chrome) คลิป 30 วินาทีจึงอยู่ราว <strong>2 นาทีต่อคลิปต่อ worker</strong>
+        VPS 8 vCPU / 16GB รันเลน B พร้อมกันได้ประมาณ 2 งาน
+      </p>
+      <p>
+        แปลว่าจำนวนคลิปต่อวันขึ้นกับสัดส่วนการใช้สองเลน ไม่ใช่ตัวเลขเดียว — วางแผน capacity จาก
+        <span class="hl">สมมติฐานว่าผู้ใช้ร่างด้วยเลน A หลายรอบ แล้วเรนเดอร์จริงด้วยเลน B ครั้งเดียว</span>
+        เมื่อคิวเลน B ยาวเกิน 5 นาทีค่อยเพิ่ม worker node แนวราบ (API และ DB ยังไม่ต้องแตะ)
+        และควรแยก worker pool ของสองเลนออกจากกันตั้งแต่แรก เพราะเลน B ต้องการ RAM ≥ 4GB ต่องาน
+        ขณะที่เลน A ต้องการแค่ ~300MB
+      </p>
+    </section>
+
+    <!-- ============ 13 ============ -->
+    <section id="s13">
+      <h2><span class="num">§13</span>โครงสร้างโปรเจกต์และ Config</h2>
+
+      <pre><code>clippang/                      # pnpm workspace
+├── apps/
+│   ├── web/          Next.js 15 — หน้าเว็บทั้งหมด      ┐ deploy ขึ้น Plesk shared
+│   ├── api/          Fastify — REST + SSE + auth       ┘ (clippang.work360.in.th)
+│   └── worker/       ตัวกินคิว — deploy ขึ้น VPS แยก (ffmpeg + Chrome + Redis)
+├── packages/
+│   ├── core/         อัลกอริทึม: chunker, timeline builder, duration fitter
+│   ├── media/        ffmpeg wrapper, probe, scene detect, ass compiler
+│   ├── ai/           TTSProvider interface (gemini|elevenlabs|google), script generator
+│   ├── db/           Mongoose models + migrations + seed สไตล์/เสียง
+│   └── shared/       Zod schemas + TypeScript types ใช้ร่วมทุก app
+├── styles/           ต้นฉบับสไตล์ซับ (.json สำหรับเลน A, .html สำหรับเลน B)
+├── fonts/            ฟอนต์ไทยที่ bundle ไปกับ worker image
+└── docker/           Dockerfile ของ api / worker + compose สำหรับ dev</code></pre>
+
+      <pre><code># .env
+NODE_ENV=production
+APP_URL=https://clippang.work360.in.th
+
+MONGODB_URI=mongodb+srv://...            # Atlas cluster ที่มีอยู่ — ทั้ง API และ worker ใช้ตัวนี้
+REDIS_URL=rediss://:<pass>@<vps-ip>:6379 # Redis อยู่บน VPS worker · ต้องมีรหัสผ่าน + TLS
+                                         # เพราะเปิดออกอินเทอร์เน็ตให้ Plesk เรียกถึง
+
+R2_ACCOUNT_ID=...        R2_BUCKET=clippang-media
+R2_ACCESS_KEY_ID=...     R2_SECRET_ACCESS_KEY=...
+R2_PUBLIC_BASE=https://cdn.clippang.work360.in.th
+
+ANTHROPIC_API_KEY=...                    # เขียนสคริปต์
+GEMINI_API_KEY=...                       # TTS หลัก
+ELEVENLABS_API_KEY=...                   # TTS สำรอง / voice clone
+
+AUTH_SECRET=...          GOOGLE_CLIENT_ID=...   GOOGLE_CLIENT_SECRET=...
+SENTRY_DSN=...
+
+FFMPEG_PATH=/usr/bin/ffmpeg
+FONTS_DIR=/app/fonts
+WORKER_CONCURRENCY_COMPOSE=2
+WORKER_CONCURRENCY_TTS=4
+MAX_UPLOAD_MB=500</code></pre>
+    </section>
+
+    <!-- ============ 14 ============ -->
+    <section id="s14">
+      <h2><span class="num">§14</span>แผนส่งงาน</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:120px">ช่วง</th><th style="width:180px">ชื่อ milestone</th><th>ส่งอะไร</th><th style="width:180px">ผ่านเมื่อ</th></tr></thead>
+          <tbody>
+            <tr><td class="n">สัปดาห์ 1</td><td>Spike — pipeline วิ่งได้</td><td>CLI ตัวเดียว: mp4 หลายไฟล์ + brief → คลิปเสร็จ (ยังไม่มีเว็บ ไม่มี DB)</td><td>ได้คลิปที่โพสต์ได้จริง 1 คลิป</td></tr>
+            <tr><td class="n">สัปดาห์ 2</td><td>ตั้ง infra</td><td>รัน <code>infra/preflight.sh</code> → <code>provision.sh</code> → <code>verify.sh</code> บน VPS · deploy <code>probe/</code> ขึ้น Plesk เพื่อวัดว่า SSE ผ่าน Passenger ได้จริงหรือต้องใช้ polling · runbook อยู่ที่ <code>infra/README.md</code></td><td>preflight ไม่มี ✗ · verify เรนเดอร์เลเยอร์ alpha ได้ ≥ 3 fps · probe บน Plesk ต่อ Redis บน VPS ได้ · ตัดสินใจเรื่อง SSE แล้ว</td></tr>
+            <tr><td class="n">สัปดาห์ 3</td><td>แกนหลังบ้าน</td><td>API + Mongo + คิว + worker จริง + R2 · endpoint ครบตาม §08</td><td>ยิง API แล้วได้คลิปกลับมา</td></tr>
+            <tr><td class="n">สัปดาห์ 4–5</td><td>Wizard ใช้งานได้</td><td>Next.js 5 สเต็ป + auth + เครดิต + หน้าพรีวิว/ดาวน์โหลด</td><td>คนนอกทำคลิปได้เองโดยไม่ต้องสอน</td></tr>
+            <tr><td class="n">สัปดาห์ 6</td><td>สไตล์และเสียง</td><td>6 สไตล์เลน A + คลังเสียง + หน้า /styles + admin</td><td>สลับสไตล์แล้วได้ผลต่างกันจริงทั้ง 6</td></tr>
+            <tr><td class="n">สัปดาห์ 7</td><td>เก็บงาน + เปิดเบต้า</td><td>rate limit, error state, cleanup job, Sentry, หน้าขาย</td><td>ผู้ใช้ทดสอบ 10 คน ทำครบ 100 คลิปโดยไม่ล่ม</td></tr>
+            <tr><td class="n">สัปดาห์ 8+</td><td>V1.1</td><td>เลน B, batch mode, BGM, originality pass, ชำระเงิน</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Definition of Done ของ MVP</h4>
+      <ul>
+        <li>อัปโหลด 3 คลิป → ได้ไฟล์ MP4 1080×1920 พร้อมโพสต์ ภายใน 60 วินาที</li>
+        <li>ซับตรงเสียงทุกท่อน (ตรวจด้วยตาจาก 20 คลิปทดสอบ ต้องผ่าน 20/20)</li>
+        <li>สระ/วรรณยุกต์ไทยแสดงถูกต้องทุกสไตล์ ไม่มีตัวอักษรซ้อนหรือกล่องสี่เหลี่ยม</li>
+        <li>งานที่ล้มกลางทางกลับเข้าคิวเองและไม่หักเครดิต</li>
+        <li>ปิดเบราว์เซอร์แล้วเปิดใหม่ ยังเห็นงานที่กำลังรันและได้ผลลัพธ์</li>
+        <li>ดิสก์บน worker ไม่โตขึ้นหลังรัน 200 งานติดกัน</li>
+      </ul>
+    </section>
+
+    <!-- ============ 15 ============ -->
+    <section id="s15">
+      <h2><span class="num">§15</span>ความเสี่ยงและการรับมือ</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th style="width:230px">ความเสี่ยง</th><th style="width:80px">ระดับ</th><th>การรับมือ</th></tr></thead>
+          <tbody>
+            <tr><td>Gemini TTS ยังเป็น preview — API เปลี่ยนหรือ rate limit เข้ม</td><td><span class="tag t-risk">สูง</span></td><td>ทำ <code>TTSProvider</code> interface ตั้งแต่วันแรก + มี ElevenLabs/Google เสียบสำรองได้ทันที · cache เสียงทุกท่อน</td></tr>
+            <tr><td>ลิขสิทธิ์คลิปจีน + TikTok ตีว่าเนื้อหาไม่ออริจินัล</td><td><span class="tag t-risk">สูง</span></td><td>ผู้ใช้อัปโหลดเอง + ยอมรับ content policy · ทำ originality pass เป็นฟีเจอร์ขาย · ไม่มีฟังก์ชันดึงคลิปจากแพลตฟอร์มให้</td></tr>
+            <tr><td>คลิปต้นทางมีซับเบิร์นติดมา</td><td><span class="tag t-risk">สูง</span></td><td>ตรวจอัตโนมัติ (§05) + เสนอครอป/ย้ายตำแหน่ง · เตือนก่อนเรนเดอร์เสมอ</td></tr>
+            <tr><td>ซับหลุดจากเสียงเพราะการตัดคำไทย</td><td><span class="tag t-v11">กลาง</span></td><td>สถาปัตยกรรม chunked TTS ตัดปัญหานี้ทิ้งที่ราก + ทดสอบ 20 คลิปก่อนปล่อย</td></tr>
+            <tr><td>ดิสก์เต็ม / worker ค้าง</td><td><span class="tag t-v11">กลาง</span></td><td>temp dir ต่องาน + ลบใน finally + cron cleanup + alert เมื่อดิสก์เกิน 75%</td></tr>
+            <tr><td>Plesk shared รันงานหนักไม่ได้ / SSE โดน buffer</td><td><span class="tag t-risk">สูง</span></td><td>แยก worker ไป VPS ตั้งแต่วันแรก (§02) · ทดสอบ SSE ในสัปดาห์ 2 ก่อนเขียนโค้ดที่พึ่งมัน ถ้าไม่ผ่านให้ใช้ polling อย่างเดียว</td></tr>
+            <tr><td>ต้นทุน AI พุ่งเพราะผู้ใช้กด regenerate รัว</td><td><span class="tag t-v11">กลาง</span></td><td>เครดิตหักตั้งแต่ขั้นสร้างสคริปต์ (0.2 เครดิต) + rate limit + cache</td></tr>
+            <tr><td>คุณภาพเสียงไทยไม่ธรรมชาติพอสำหรับสายแบรนด์</td><td><span class="tag t-v2">ต่ำ</span></td><td>เปิด ElevenLabs เป็นตัวเลือกระดับ Pro + ให้อัปโหลดเสียงพากย์เองได้</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">ก้าวถัดไปที่แนะนำ</span>
+        <p>
+          เริ่มที่ <strong>สัปดาห์ 1 — Spike</strong> ก่อนเสมอ: สคริปต์ CLI ตัวเดียวที่รันจบตั้งแต่ mp4 ถึงคลิปเสร็จ
+          มันคือ <code>packages/core</code> + <code>packages/media</code> ในอนาคตพอดี และเป็นวิธีเดียวที่จะรู้ว่าสมมติฐานเรื่องเวลาและคุณภาพในเอกสารนี้จริงหรือไม่
+          ก่อนจะลงแรงเขียน UI
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    ClipPang Blueprint v1.0 · จัดทำ 11 สิงหาคม 2026 · เอกสารนี้เป็นสเปกสำหรับสั่งงานพัฒนา ไม่ใช่เอกสารการตลาด
+    — ตัวเลขเวลาและต้นทุนเป็นค่าประมาณจากการวัดจริงบนคลิปตัวอย่าง 720×1280 / 30 วินาที
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var sections = Array.prototype.slice.call(document.querySelectorAll("main section"));
+    var titles = sections.map(function (s) {
+      var h = s.querySelector("h2");
+      var num = h.querySelector(".num").textContent.trim();
+      var clone = h.cloneNode(true);
+      clone.querySelector(".num").remove();
+      return { id: s.id, num: num, text: clone.textContent.trim() };
+    });
+
+    function build(target) {
+      target.innerHTML = titles.map(function (t) {
+        return '<a href="#' + t.id + '" data-for="' + t.id + '"><span>' + t.num + '</span><span>' + t.text + '</span></a>';
+      }).join("");
+    }
+    build(document.getElementById("toc"));
+    build(document.getElementById("toc-m"));
+
+    var links = Array.prototype.slice.call(document.querySelectorAll('.rail a[data-for]'));
+    function setActive(id) {
+      links.forEach(function (a) { a.classList.toggle("on", a.dataset.for === id); });
+    }
+
+    if ("IntersectionObserver" in window) {
+      var seen = {};
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
+        var best = null, bestV = 0;
+        sections.forEach(function (s) {
+          var v = seen[s.id] || 0;
+          if (v > bestV) { bestV = v; best = s.id; }
+        });
+        if (best) setActive(best);
+      }, { rootMargin: "-10% 0px -70% 0px", threshold: [0, 0.25, 0.5, 1] });
+      sections.forEach(function (s) { io.observe(s); });
+    }
+    setActive("s00");
+  })();
+</script>

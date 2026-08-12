@@ -1,0 +1,14 @@
+{
+  "name": "clippang-probe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ตรวจสภาพ hosting ก่อนลงมือ — SSE ผ่าน Passenger ได้ไหม และ Plesk ต่อ Redis บน VPS ได้ไหม",
+  "main": "server.mjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

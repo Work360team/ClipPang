@@ -1,0 +1,7 @@
+.env
+.venv/
+.venv-tmp/
+.cache/
+out/
+out-pos*/
+node_modules/

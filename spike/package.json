@@ -1,0 +1,18 @@
+{
+  "name": "clippang-spike",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Week-1 spike: mp4 หลายไฟล์ + brief → คลิปพร้อมโพสต์ (ซับคาราโอเกะ + AI voiceover) — โค้ดหลักไม่มี dependency, hyperframes ใช้เฉพาะเลน B",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "make": "node src/cli.mjs",
+    "styles": "node src/cli.mjs --list-styles",
+    "demo": "node src/cli.mjs --in ../asset --brief brief.example.json --duration 22 --out out"
+  },
+  "dependencies": {
+    "hyperframes": "^0.7.106"
+  }
+}

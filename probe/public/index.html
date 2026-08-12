@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ClipPang · ตรวจสภาพ hosting</title>
+<style>
+  :root {
+    --bg: #0e1216; --panel: #161d23; --line: #263139;
+    --ink: #e4eaed; --dim: #8b98a2; --ok: #4fbf8b; --bad: #e4695e; --warn: #e0a33c; --accent: #ffd23f;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 80px; background: var(--bg); color: var(--ink);
+    font-family: "Leelawadee UI", "Noto Sans Thai", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--dim); font-size: 14px; margin: 0 0 28px; }
+  section { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; padding: 18px 20px; margin-bottom: 18px; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  h2 .n { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: .12em; display: block; }
+  p.why { color: var(--dim); font-size: 13.5px; margin: 0 0 14px; }
+  button {
+    font: inherit; font-size: 14px; font-weight: 600; color: #10161a; background: var(--accent);
+    border: 0; border-radius: 3px; padding: 8px 18px; cursor: pointer;
+  }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; background: #0b1013; border: 1px solid var(--line);
+    border-radius: 3px; padding: 12px 14px; overflow-x: auto; margin: 14px 0 0; white-space: pre-wrap;
+  }
+  .verdict { font-weight: 700; padding: 10px 14px; border-radius: 3px; margin-top: 14px; font-size: 14.5px; }
+  .v-ok   { background: rgba(79,191,139,.12); color: var(--ok);   border: 1px solid rgba(79,191,139,.35); }
+  .v-bad  { background: rgba(228,105,94,.12); color: var(--bad);  border: 1px solid rgba(228,105,94,.35); }
+  .v-warn { background: rgba(224,163,60,.12); color: var(--warn); border: 1px solid rgba(224,163,60,.35); }
+  .bars { display: flex; gap: 3px; align-items: flex-end; height: 54px; margin-top: 14px; }
+  .bar { flex: 1; background: var(--accent); border-radius: 1px 1px 0 0; min-height: 3px; transition: height .15s; }
+  .bar.late { background: var(--bad); }
+  .legend { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ClipPang · ตรวจสภาพ hosting</h1>
+  <p class="sub">แอปนี้ตอบคำถามสองข้อของสัปดาห์ที่ 2 — รันบน Plesk แล้วกดปุ่มตามลำดับ</p>
+
+  <section>
+    <h2><span class="n">01 · ENVIRONMENT</span>Node รันอยู่จริงและอยู่หลังอะไร</h2>
+    <p class="why">ถ้าเห็น header ขึ้นต้นด้วย <code>x-</code> แปลว่ามี proxy คั่นอยู่ ซึ่งเป็นตัวที่จะ buffer SSE</p>
+    <button id="b-health">ตรวจ</button>
+    <pre id="o-health">ยังไม่ได้ตรวจ</pre>
+  </section>
+
+  <section>
+    <h2><span class="n">02 · SSE</span>Passenger ปล่อย stream ผ่านหรือ buffer ไว้</h2>
+    <p class="why">
+      เซิร์ฟเวอร์ส่ง event ทุก 1 วินาที 12 ครั้ง ถ้าแท่งเรียงห่างเท่า ๆ กัน = ใช้ SSE ได้
+      ถ้าแท่งกระจุกท้าย = โดน buffer ต้องเปลี่ยนไปใช้ polling ทั้งระบบ
+    </p>
+    <button id="b-sse">เริ่มทดสอบ 12 วินาที</button>
+    <div class="bars" id="bars"></div>
+    <div class="legend" id="legend">แต่ละแท่ง = ระยะห่างจาก event ก่อนหน้า (สูง = ห่างมาก)</div>
+    <div id="v-sse"></div>
+    <pre id="o-sse">ยังไม่ได้ทดสอบ</pre>
+  </section>
+
+  <section>
+    <h2><span class="n">03 · REDIS</span>Plesk ต่อ Redis บน VPS worker ได้ไหม</h2>
+    <p class="why">
+      ข้อนี้พังบ่อยที่สุดเพราะ ufw ยังไม่เปิดให้ IP ของ Plesk หรือลืมตั้ง requirepass
+      ถ้าข้อนี้ไม่ผ่าน API จะสั่งงาน worker ไม่ได้เลย
+    </p>
+    <button id="b-redis">ทดสอบการเชื่อมต่อ</button>
+    <div id="v-redis"></div>
+    <pre id="o-redis">ยังไม่ได้ทดสอบ</pre>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const show = (el, v) => { el.textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
+  const verdict = (el, cls, text) => { el.innerHTML = `<div class="verdict ${cls}">${text}</div>`; };
+
+  $("b-health").onclick = async () => {
+    show($("o-health"), "กำลังตรวจ…");
+    try { show($("o-health"), await (await fetch("/api/health")).json()); }
+    catch (e) { show($("o-health"), "ผิดพลาด: " + e.message); }
+  };
+
+  $("b-sse").onclick = () => {
+    const btn = $("b-sse");
+    btn.disabled = true;
+    $("bars").innerHTML = "";
+    $("v-sse").innerHTML = "";
+    show($("o-sse"), "กำลังรับ stream…");
+
+    const gaps = [];
+    let last = performance.now();
+    const started = last;
+    const es = new EventSource("/api/sse?n=12");
+
+    es.addEventListener("tick", (ev) => {
+      const now = performance.now();
+      const gap = Math.round(now - last);
+      last = now;
+      gaps.push(gap);
+      const bar = document.createElement("div");
+      bar.className = "bar" + (gap < 200 ? " late" : "");
+      bar.style.height = Math.max(3, Math.min(54, gap / 1000 * 40)) + "px";
+      bar.title = gap + " ms";
+      $("bars").appendChild(bar);
+      show($("o-sse"), `ได้รับ ${gaps.length} event · ระยะห่าง (ms): ${gaps.join(", ")}`);
+    });
+
+    es.addEventListener("done", () => {
+      es.close();
+      btn.disabled = false;
+      const total = Math.round(performance.now() - started);
+      const instant = gaps.filter((g) => g < 200).length;
+      const detail = `\nรวม ${total} ms · event ที่มาติดกัน (<200ms): ${instant} จาก ${gaps.length}`;
+      show($("o-sse"), $("o-sse").textContent + detail);
+
+      if (instant <= 1 && total > 9000) {
+        verdict($("v-sse"), "v-ok", "✓ SSE ใช้ได้จริง — ใช้ SSE เป็นช่องทางหลักได้ตามสเปก §08");
+      } else if (instant >= gaps.length - 2) {
+        verdict($("v-sse"), "v-bad", "✗ โดน buffer — event มาพร้อมกันทีเดียวตอนจบ ให้ตัด SSE ออกแล้วใช้ polling ทุก 3 วินาทีแทน");
+      } else {
+        verdict($("v-sse"), "v-warn", "! ผ่านบางส่วน — stream มาเป็นก้อน ๆ ใช้ได้แต่ progress จะกระตุก พิจารณาใช้ polling เพื่อความแน่นอน");
+      }
+    });
+
+    es.onerror = () => {
+      es.close();
+      btn.disabled = false;
+      verdict($("v-sse"), "v-bad", "✗ ต่อ SSE ไม่ติดเลย — proxy ตัดการเชื่อมต่อ ให้ใช้ polling");
+    };
+  };
+
+  $("b-redis").onclick = async () => {
+    show($("o-redis"), "กำลังต่อ…");
+    $("v-redis").innerHTML = "";
+    try {
+      const r = await (await fetch("/api/redis")).json();
+      show($("o-redis"), r);
+      if (r.ok && r.authenticated) {
+        verdict($("v-redis"), "v-ok", `✓ ต่อได้ · ping ${r.roundTripMs} ms · Redis ${r.redisVersion}`);
+      } else if (r.ok) {
+        verdict($("v-redis"), "v-warn", "! ต่อได้แต่ไม่ได้ใช้รหัสผ่าน — Redis เปิดโล่ง ต้องตั้ง requirepass ก่อนขึ้นจริง");
+      } else {
+        verdict($("v-redis"), "v-bad", "✗ " + (r.error || "ต่อไม่ได้"));
+      }
+    } catch (e) {
+      show($("o-redis"), "ผิดพลาด: " + e.message);
+    }
+  };
+</script>
+</body>
+</html>
