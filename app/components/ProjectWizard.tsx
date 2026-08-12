@@ -212,12 +212,26 @@ const initialScripts = [
   },
 ];
 
-const captionStyles = [
+type WizardStyle = { id: string; name: string; note: string; label: string; className: string; speed: string };
+
+/**
+ * ใช้เป็นค่าตั้งต้นตอนยังไม่ต่อ Local เท่านั้น — พอต่อได้จะแทนที่ด้วยคลังจริงจาก
+ * /api/styles ไม่งั้นวางไฟล์สไตล์ใหม่ใน pipeline/styles แล้ว wizard จะไม่เห็น
+ */
+const fallbackCaptionStyles: WizardStyle[] = [
   { id: "karaoke-pop", name: "ป๊อปขายดี", note: "เด่น อ่านไว", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว" },
   { id: "reveal-clean", name: "คลีนมินิมอล", note: "สะอาด ดูแพง", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว" },
   { id: "box-bold", name: "กล่องครีเอเตอร์", note: "ชัดบนทุกพื้นหลัง", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว" },
   { id: "kanit-hf", name: "คาราโอเกะพรีเมียม", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด" },
 ];
+
+/** หน้าตาของซับในพรีวิวยังอิง class เดิม — จับคู่จาก id ที่รู้จัก ที่เหลือใช้ค่ากลาง */
+const STYLE_CLASSNAMES: Record<string, string> = {
+  "karaoke-pop": "caption-pop",
+  "reveal-clean": "caption-clean",
+  "box-bold": "caption-boxed",
+  "kanit-hf": "caption-karaoke",
+};
 
 const replacementLines = [
   "ตัวเดียวจบทั้งชาร์จ ทั้งจับมือถือ พกออกจากบ้านได้แบบสบายมาก",
@@ -279,6 +293,7 @@ export function ProjectWizard() {
   const [uploadError, setUploadError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [voiceLibrary, setVoiceLibrary] = useState(voices);
+  const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [voiceFilter, setVoiceFilter] = useState("ทั้งหมด");
   const [voicePlaying, setVoicePlaying] = useState<string | null>(null);
@@ -729,6 +744,25 @@ export function ProjectWizard() {
             initials: voice.initials || (voice.name || voice.id).slice(0, 1),
             provider: voice.provider || "gemini",
           })));
+        }
+        // คลังสไตล์ต้องมาจาก engine เหมือนหน้า /styles ไม่งั้นสองหน้าจะไม่ตรงกัน
+        try {
+          const styleResult = await localApi.styles();
+          if (active && Array.isArray(styleResult.styles) && styleResult.styles.length) {
+            setCaptionStyles(styleResult.styles.map((style: { id: string; name?: string; description?: string; lane?: string }) => {
+              const fallback = fallbackCaptionStyles.find((item) => item.id === style.id);
+              return {
+                id: style.id,
+                name: fallback?.name || style.name || style.id,
+                note: fallback?.note || (style.description || "").slice(0, 28),
+                label: fallback?.label || "ตัวอย่างซับ",
+                className: STYLE_CLASSNAMES[style.id] || "caption-pop",
+                speed: style.lane === "hyperframes" ? "ละเอียด" : "เร็ว",
+              };
+            }));
+          }
+        } catch {
+          // สไตล์โหลดไม่ได้ไม่ควรทำให้เปิดโปรเจกต์ไม่ได้ — ใช้ค่าตั้งต้นต่อไป
         }
         if (routeId) {
           const result = await localApi.getProject(routeId);
