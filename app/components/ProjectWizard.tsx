@@ -294,6 +294,8 @@ export function ProjectWizard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [voiceLibrary, setVoiceLibrary] = useState(voices);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
+  const captionStylesRef = useRef(captionStyles);
+  captionStylesRef.current = captionStyles;
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [voiceFilter, setVoiceFilter] = useState("ทั้งหมด");
   const [voicePlaying, setVoicePlaying] = useState<string | null>(null);
@@ -712,11 +714,16 @@ export function ProjectWizard() {
     } else if (render.state === "failed") setRenderError(render.error?.message || "งานครั้งล่าสุดไม่สำเร็จ");
   }
 
+  // ?style= มาจากลิงก์ในหน้าคลังสไตล์ ตรวจครั้งเดียวตอนเปิดหน้า
+  // อ่านคลังผ่าน ref ไม่ใช่ state ไม่งั้น effect จะรันซ้ำตอนคลังโหลดเสร็จ
+  // แล้วเด้งสไตล์ที่ผู้ใช้เพิ่งเลือกกลับไปเป็นค่าใน URL
   useEffect(() => {
-    if (routeId) return;
+    if (routeId) return undefined;
     const requestedStyle = new URLSearchParams(window.location.search).get("style");
-    if (!requestedStyle || !captionStyles.some((style) => style.id === requestedStyle)) return;
-    const timer = window.setTimeout(() => setSelectedStyle(requestedStyle), 0);
+    if (!requestedStyle) return undefined;
+    const timer = window.setTimeout(() => {
+      setSelectedStyle((current) => (captionStylesRef.current.some((style) => style.id === requestedStyle) ? requestedStyle : current));
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [routeId]);
 
