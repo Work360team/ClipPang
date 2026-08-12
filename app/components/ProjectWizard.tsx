@@ -520,6 +520,58 @@ export function ProjectWizard() {
 
   const previewProgressRatio = previewTotalMs > 0 ? Math.min(1, previewTimeMs / previewTotalMs) : 0;
 
+  // เฟรมจากคลิปของผู้ใช้เอง ใช้แทนภาพ demo ในทุกที่ที่ต้องโชว์ตัวอย่างนิ่ง
+  // (การ์ดเลือกสไตล์ การ์ดร่าง และ poster ของเพลเยอร์) แคปครั้งเดียวแล้วใช้ซ้ำ
+  // เพราะการ์ดมีหลายใบ ถ้าใส่ <video> ทุกใบจะถอดรหัส 4K พร้อมกันหลายตัว
+  const [projectPosterUrl, setProjectPosterUrl] = useState<string | null>(null);
+  const posterSourceRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const segment = programSegments[0];
+    const source = segment?.src || activeClip?.previewUrl || activeClip?.url || "";
+    if (!source || posterSourceRef.current === source) return undefined;
+    posterSourceRef.current = source;
+
+    let cancelled = false;
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "metadata";
+    video.crossOrigin = "anonymous";
+    video.src = source;
+
+    const cleanup = () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+    const capture = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, 480 / Math.max(1, video.videoWidth));
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setProjectPosterUrl(canvas.toDataURL("image/jpeg", 0.72));
+      } catch {
+        // แคปไม่ได้ก็ไม่เป็นไร ตกกลับไปใช้ภาพเดิม
+      } finally {
+        cleanup();
+      }
+    };
+    const onLoaded = () => {
+      // ขยับออกจากเฟรมแรกนิดหนึ่ง เฟรมที่ 0 ของคลิปมือถือมักมืดหรือเบลอ
+      const target = ((segment?.sourceStartMs ?? 0) + 250) / 1000;
+      video.currentTime = Math.min(target, Math.max(0, (video.duration || 1) - 0.05));
+    };
+    video.addEventListener("loadeddata", onLoaded, { once: true });
+    video.addEventListener("seeked", capture, { once: true });
+    video.addEventListener("error", cleanup, { once: true });
+    return () => { cancelled = true; cleanup(); };
+  }, [programSegments, activeClip]);
+
+  // ภาพนิ่งที่ใช้ทั่วหน้า — ของผู้ใช้ถ้ามี ไม่งั้นค่อยใช้ภาพตัวอย่าง
+  const stillPoster = projectPosterUrl ?? "/clippang-sample-poster.jpg";
+
   const renderStage = useMemo(() => {
     // ข้อความจริงมาจากเซิร์ฟเวอร์ผ่าน SSE — ข้างล่างเป็นข้อความสำรองตอนยังไม่ต่อ Local เท่านั้น
     // จึงต้องไม่อ้างตัวเลขที่เราไม่รู้จริง เช่น "ท่อนที่ 5 จาก 12"
@@ -2043,7 +2095,7 @@ export function ProjectWizard() {
                 <div className="caption-style-grid">
                   {captionStyles.map((style) => (
                     <button type="button" className={`caption-style-card ${selectedStyle === style.id ? "selected" : ""}`} onClick={() => setSelectedStyle(style.id)} key={style.id}>
-                      <span className="style-preview"><img src="/clippang-sample-poster.jpg" alt="" /><b className={style.className}>{style.label}</b></span>
+                      <span className="style-preview"><img src={stillPoster} alt="" /><b className={style.className}>{style.label}</b></span>
                       <span className="style-info"><b>{style.name}</b><small>{style.note}</small></span>
                       <em>{style.speed}</em>
                       {selectedStyle === style.id && <i className="style-selected"><Check size={12} /></i>}
@@ -2066,7 +2118,7 @@ export function ProjectWizard() {
                     <div className="draft-grid">
                       {captionStyles.slice(0, 3).map((style, index) => (
                         <button type="button" className={`draft-card ${selectedDraft === index ? "selected" : ""}`} onClick={() => { setSelectedDraft(index); setSelectedStyle(style.id); }} key={style.id}>
-                          <span className="draft-video"><img src="/clippang-sample-poster.jpg" alt="" /><b className={style.className}>{style.label}</b><i><Play size={16} fill="currentColor" /></i></span>
+                          <span className="draft-video"><img src={stillPoster} alt="" /><b className={style.className}>{style.label}</b><i><Play size={16} fill="currentColor" /></i></span>
                           <span><b>ร่าง {index + 1}</b><small>{style.name} · {formatDuration(selectedTotalSec)}</small></span>
                           {selectedDraft === index && <em><Check size={13} /> เลือกแล้ว</em>}
                         </button>
@@ -2086,7 +2138,7 @@ export function ProjectWizard() {
 
                 {renderDone && (
                   <div className="final-result">
-                    <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster="/clippang-sample-poster.jpg" controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video><span className={`final-caption ${selectedStyleData.className}`}>{currentChunks[1]}</span></div>
+                    <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video><span className={`final-caption ${selectedStyleData.className}`}>{currentChunks[1]}</span></div>
                     <div className="output-list">
                       <div className="output-head"><span className="output-icon"><Film size={20} /></span><div><h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3><p>1080 × 1920 · H.264 · พร้อมโพสต์</p></div><a className="button button-primary button-small" href={renderedVideoUrl || "/clippang-sample.mp4"} download><Download size={15} /> MP4</a></div>
                       {engineState === "connected" ? downloadableOutputs.filter(([, output]) => !output.filename.toLowerCase().endsWith(".mp4")).map(([key, output]) => (
@@ -2115,7 +2167,7 @@ export function ProjectWizard() {
             <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">
               <div className="editor-phone">
-                <video ref={videoRef} src={hasProgram ? undefined : previewVideoUrl} poster="/clippang-sample-poster.jpg" muted playsInline loop={!hasProgram} onLoadedMetadata={(event) => {
+                <video ref={videoRef} src={hasProgram ? undefined : previewVideoUrl} poster={stillPoster} preload="metadata" muted playsInline loop={!hasProgram} onLoadedMetadata={(event) => {
                   const segment = programSegments[previewSegmentIndex];
                   const target = segment ? orderedClipAssets.find((asset) => asset.name === segment.assetName) : activeClip;
                   if (!target) return;
