@@ -87,10 +87,14 @@ function resolveStyle(styleId, position) {
   style.params.font ||= {};
 
   if (typeof position === "string") {
-    if (!/^(top|middle|bottom|center)/i.test(position)) {
-      throw new Error(`ตำแหน่งซับรับได้แค่ ${ANCHORS.join(" | ")}`);
+    // UI เก็บตำแหน่งเป็นภาษาไทยตามที่ผู้ใช้กด (project.json มี "position":"ล่าง")
+    // แล้วแปลงเป็นอังกฤษก่อนส่งเรนเดอร์ ถ้าผู้เรียกไหนส่งค่าที่เก็บไว้มาตรง ๆ จะพัง
+    // ทั้งที่ค่านั้นถูกต้องในมุมผู้ใช้ จึงรับทั้งสองภาษาแล้วแปลงที่จุดเดียวตรงนี้
+    const canonical = { "บน": "top", "กลาง": "middle", "ล่าง": "bottom" }[position.trim()] ?? position;
+    if (!/^(top|middle|bottom|center)/i.test(canonical)) {
+      throw new Error(`ตำแหน่งซับรับได้แค่ ${ANCHORS.join(" | ")} หรือ บน | กลาง | ล่าง`);
     }
-    style.params.position.anchor = normalizeAnchor(position);
+    style.params.position.anchor = normalizeAnchor(canonical);
   } else if (position && typeof position === "object") {
     if (position.anchor) style.params.position.anchor = normalizeAnchor(position.anchor);
     if (position.marginV != null) style.params.position.marginV = Number(position.marginV);
