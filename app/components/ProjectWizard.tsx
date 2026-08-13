@@ -435,6 +435,9 @@ export function ProjectWizard() {
   const previewVideoUrl = activeClip?.previewUrl || activeClip?.url || videoUrl;
   const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clippang-sample.mp4";
   const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
+  // ชื่อไฟล์จริงที่เซิร์ฟเวอร์ตั้งให้ ใช้เป็นชื่อตอนบันทึกและบอกไว้ที่ tooltip ของปุ่ม
+  const finalVideoName = Object.values(renderOutputs ?? {})
+    .find((output) => output?.filename?.toLowerCase().endsWith(".mp4"))?.filename ?? "";
 
   /* ---------- พรีวิวสด: เล่น Timeline จริง ไม่ใช่คลิปเดียวค้างไว้ ---------- */
 
@@ -2293,17 +2296,24 @@ export function ProjectWizard() {
           {renderDone && (
             <aside className="final-download">
               <span className="final-download-icon"><Film size={26} /></span>
+              {/* ชื่อโปรเจกต์บอกได้ว่านี่คือคลิปของสินค้าอะไร ต่างจาก "final.mp4" ที่ทุกโปรเจกต์
+                  เหมือนกันหมดและไม่ได้เป็นชื่อไฟล์จริงด้วยซ้ำ ชื่อไฟล์จริงอยู่ที่ปุ่มดาวน์โหลด */}
               <div className="final-download-copy">
-                <h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3>
-                <p>เรนเดอร์เสร็จแล้ว พร้อมโพสต์ทันที</p>
+                <h3>{projectTitle()}</h3>
+                <p>{renderedVideoUrl ? "คลิปตัวจริง พร้อมโพสต์ลง TikTok Shop" : "คลิปตัวอย่างสำหรับดูหน้าตาระบบ"}</p>
               </div>
               <ul className="final-download-meta">
                 <li>1080 × 1920</li>
                 <li>H.264</li>
                 <li>{formatDuration(selectedTotalSec)}</li>
               </ul>
-              <a className="button button-primary final-download-button" href={renderedVideoUrl || "/clippang-sample.mp4"} download>
-                <Download size={17} /> ดาวน์โหลด MP4
+              <a
+                className="button button-primary final-download-button"
+                href={renderedVideoUrl || "/clippang-sample.mp4"}
+                download={finalVideoName || undefined}
+                title={finalVideoName ? `บันทึกเป็น ${finalVideoName}` : undefined}
+              >
+                <Download size={17} /> ดาวน์โหลดคลิป MP4
               </a>
               <div className="final-download-more">
                 <button type="button" className="final-download-secondary" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้")}>

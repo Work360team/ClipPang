@@ -5148,6 +5148,13 @@ select:focus-visible,
   font-weight: 680;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
+  /* ชื่อโปรเจกต์ยาวแค่ไหนก็ต้องไม่ดันการ์ดจนเสียสัดส่วนจัตุรัส ตัดที่สองบรรทัด
+     ชื่อเต็มยังอ่านได้จากหัวหน้าเพจและ tooltip ของปุ่มดาวน์โหลด */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .final-download-copy p {
