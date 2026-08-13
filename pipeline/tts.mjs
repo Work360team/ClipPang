@@ -6,7 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { durationMs, ensureDir, ffmpeg, run, sha256, throwIfAborted, toAbortError } from "./lib.mjs";
-import { noteQuotaOk, noteRateLimited } from "./tts-quota.mjs";
+import { keyQuotaStatus, noteQuotaOk, noteRateLimited } from "./tts-quota.mjs";
+import { listGeminiKeys } from "./gemini-keys.mjs";
 import { graphemeCount } from "./core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,7 +63,8 @@ export const DEFAULT_VOICE = {
 /** เลือก provider ที่ใช้ได้จริงในเครื่องนี้ ตามลำดับความชอบ */
 export function resolveProvider(requested = "auto") {
   const has = {
-    gemini: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
+    // นับทุกช่องคีย์ ไม่ใช่แค่ใบหลัก — ผู้ใช้ที่ลบใบแรกออกแต่ยังมีใบสำรองต้องใช้งานได้
+    gemini: listGeminiKeys().length > 0,
     edge: fs.existsSync(pythonBin()),
     mock: true,
     silence: true,
@@ -127,14 +129,26 @@ function abortableDelay(ms, signal) {
 }
 
 async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile) {
-  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const prompt = styleHint ? `${styleHint}: ${text}` : text;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel()}:generateContent`;
   const requestTimeoutMs = Number(timeoutMs ?? process.env.GEMINI_TTS_TIMEOUT_MS ?? 45_000);
 
+  const keys = listGeminiKeys();
+  if (!keys.length) throw new Error("ยังไม่ได้ตั้ง GEMINI_API_KEY ใน .env");
+
+  // ลองได้อย่างน้อยหนึ่งรอบต่อคีย์ บวกอีกสองรอบไว้เผื่อ backoff ของคีย์สุดท้าย
+  const maxAttempts = keys.length + 4;
   let lastErr;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     throwIfAborted(signal);
+
+    // เลือกคีย์ใบแรกที่ยังไม่ติดโควตา ถ้าติดหมดค่อยกลับไปใช้ใบที่จะคืนเร็วที่สุด
+    const usable = keys.filter((entry) => !keyQuotaStatus(entry.id).limited);
+    const entry = usable[0] ?? keys
+      .map((item) => ({ item, wait: keyQuotaStatus(item.id).retryInMs ?? 0 }))
+      .sort((a, b) => a.wait - b.wait)[0].item;
+    const key = entry.key;
+
     const signals = [signal, AbortSignal.timeout(requestTimeoutMs)].filter(Boolean);
     const res = await fetch(url, {
       method: "POST",
@@ -151,14 +165,23 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
 
     if (res.status === 429 || res.status >= 500) {
       const body = await res.text();
-      lastErr = new Error(`Gemini TTS ${res.status}: ${body.slice(0, 300)}`);
+      lastErr = new Error(`Gemini TTS ${res.status} (คีย์ ••${entry.last4}): ${body.slice(0, 240)}`);
       // Google บอกมาเองว่าให้รอกี่วินาที — เชื่อค่านั้นก่อน exponential backoff ของเรา
       const hinted = Number(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(body)?.[1] || 0);
       const waitMs = Math.min(60_000, hinted ? hinted * 1000 + 800 : 2000 * 2 ** attempt);
-      if (process.env.TTS_VERBOSE) {
-        process.stderr.write(`   [tts] ${res.status} รออีก ${Math.round(waitMs / 1000)}s\n`);
+      if (res.status === 429) {
+        noteRateLimited({ provider: "gemini", keyId: entry.id, retryAfterMs: waitMs, detail: body.slice(0, 1200) });
       }
-      if (res.status === 429) noteRateLimited({ provider: "gemini", retryAfterMs: waitMs, detail: body.slice(0, 1200) });
+
+      // มีคีย์อื่นที่ยังว่างอยู่ → สลับไปใช้ทันที ไม่ต้องนั่งรอ backoff ของคีย์ที่เพิ่งเต็ม
+      // นี่คือเหตุผลหลักที่ทำ multi-key: คีย์ใบหนึ่งหมดโควตาไม่ควรหยุดงานทั้งงาน
+      const hasSpare = keys.some((item) => item.id !== entry.id && !keyQuotaStatus(item.id).limited);
+      if (process.env.TTS_VERBOSE) {
+        process.stderr.write(
+          `   [tts] ${res.status} คีย์ ••${entry.last4} ${hasSpare ? "→ สลับคีย์ถัดไปทันที" : `รออีก ${Math.round(waitMs / 1000)}s`}\n`,
+        );
+      }
+      if (hasSpare) continue;
       await abortableDelay(waitMs + Math.random() * 400, signal);
       continue;
     }
@@ -169,7 +192,7 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
     if (!part) throw new Error("Gemini TTS ไม่ได้คืนเสียงกลับมา (อาจโดน safety filter)");
     const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || "")?.[1] || 24000);
     fs.writeFileSync(rawFile, wavFromPcm(Buffer.from(part.inlineData.data, "base64"), { rate }));
-    noteQuotaOk("gemini");
+    noteQuotaOk(entry.id);
     return rawFile;
   }
   throw lastErr;

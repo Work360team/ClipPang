@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AiProviderCard } from "./AiProviderCard";
+import { TtsKeysCard } from "./TtsKeysCard";
 import {
   Check,
   CheckCircle2,
@@ -231,6 +232,7 @@ export default function SettingsPage() {
         <div className="settings-layout">
           <div className="settings-main-column">
             <AiProviderCard engineState={engineState} />
+            <TtsKeysCard engineState={engineState} />
 
             <section className="settings-card" aria-labelledby="gemini-title">
               <div className="settings-section-head">

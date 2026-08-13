@@ -12,6 +12,7 @@ import {
 } from "./config.mjs";
 import {
   MAX_VIDEO_BYTES,
+  removeEnvValue,
   resolveUnderRoot,
   saveGeminiApiKey,
   safeFilename,
@@ -33,6 +34,7 @@ import {
 } from "../pipeline/index.mjs";
 import { detectScriptProviders, SCRIPT_PROVIDERS } from "../pipeline/providers.mjs";
 import { checkTtsHealth, resetTtsHealthCache } from "./tts-health.mjs";
+import { MAX_KEYS, keySlots, listGeminiKeys, nextFreeSlot } from "../pipeline/gemini-keys.mjs";
 import { isTerminalRenderState, renderLaneForStyle } from "./queue.mjs";
 import {
   normalizeAssetCatalog,
@@ -713,6 +715,36 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           signal: request.signal,
         });
         return json({ ok: true, health });
+      }
+
+      // ---- คีย์ Gemini หลายใบ (failover) ----
+
+      if (method === "POST" && pathname === "/api/tts/keys") {
+        const body = await readJson(request);
+        const key = String(body.key ?? "").trim();
+        if (key.length < 16) return apiError(400, "INVALID_API_KEY", "API key ดูไม่ครบ กรุณาคัดลอกมาใหม่ทั้งชุด");
+        const existing = listGeminiKeys();
+        if (existing.some((entry) => entry.key === key)) {
+          return apiError(409, "DUPLICATE_KEY", "คีย์นี้ใส่ไว้แล้ว — คีย์ซ้ำไม่ได้เพิ่มโควตา");
+        }
+        const slot = nextFreeSlot();
+        if (!slot) return apiError(409, "NO_FREE_SLOT", `ใส่คีย์ได้สูงสุด ${MAX_KEYS} ใบ`);
+        // ยืนยันว่าคีย์ใช้ได้จริงก่อนบันทึก ไม่งั้นผู้ใช้จะเพิ่งรู้ตอนเรนเดอร์ล้ม
+        await testGeminiApiKey(key, { signal: request.signal });
+        await saveGeminiApiKey(key, { keyName: slot });
+        process.env[slot] = key;
+        resetTtsHealthCache();
+        return json({ ok: true, slot, last4: key.slice(-4) });
+      }
+
+      const ttsKeyMatch = /^\/api\/tts\/keys\/([A-Z0-9_]+)$/.exec(pathname);
+      if (ttsKeyMatch && method === "DELETE") {
+        const slot = ttsKeyMatch[1];
+        if (!keySlots().includes(slot)) return apiError(404, "UNKNOWN_SLOT", "ไม่รู้จักช่องคีย์นี้");
+        removeEnvValue(slot);
+        delete process.env[slot];
+        resetTtsHealthCache();
+        return json({ ok: true, slot });
       }
 
       // ---- ผู้ให้บริการ AI สำหรับเขียนสคริปต์ ----

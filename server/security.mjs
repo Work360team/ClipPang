@@ -396,6 +396,46 @@ function validateNewGeminiKey(value) {
  * Atomically insert or update GEMINI_API_KEY while preserving unrelated .env
  * entries. The full key is accepted only as input and is never returned.
  */
+/**
+ * ลบตัวแปรหนึ่งบรรทัดออกจาก .env แบบ atomic เหมือนตอนเขียน
+ * ใช้ตอนผู้ใช้เอาคีย์สำรองออก — ต้องลบจริง ไม่ใช่ตั้งเป็นค่าว่าง
+ * เพราะช่องที่เป็นค่าว่างจะทำให้ nextFreeSlot() งงว่าใช้ได้หรือไม่
+ */
+export function removeEnvValue(keyName, options = {}) {
+  const { envFile = ENV_FILE } = options;
+  if (!/^[A-Z0-9_]+$/.test(String(keyName))) {
+    throw new SecurityError("ชื่อตัวแปรไม่ถูกต้อง", { code: "INVALID_ENV_NAME" });
+  }
+  let current = "";
+  try {
+    const stat = fs.lstatSync(envFile);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new SecurityError("ไม่แก้ไฟล์ .env ที่เป็นลิงก์", { code: "UNSAFE_ENV_FILE", statusCode: 403 });
+    }
+    current = fs.readFileSync(envFile, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+
+  const newline = current.includes("\r\n") ? "\r\n" : "\n";
+  const matcher = new RegExp(`^\\s*(?:export\\s+)?${keyName}\\s*=`);
+  const lines = current.split(/\r?\n/);
+  const kept = lines.filter((line) => !matcher.test(line));
+  if (kept.length === lines.length) return false;
+
+  const output = `${kept.join(newline).replace(new RegExp(`${newline}+$`), "")}${newline}`;
+  const directory = path.dirname(path.resolve(envFile));
+  const temporary = path.join(directory, `.${path.basename(envFile)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    fs.writeFileSync(temporary, output, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    fs.renameSync(temporary, envFile);
+  } finally {
+    try { fs.rmSync(temporary, { force: true }); } catch { /* best effort */ }
+  }
+  return true;
+}
+
 export function saveGeminiApiKey(apiKey, options = {}) {
   const {
     envFile = ENV_FILE,
