@@ -4578,11 +4578,11 @@ select:focus-visible,
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
-}
-
-.final-caption {
-  pointer-events: none;
+  /* contain ไม่ใช่ cover: กล่องนี้เป็น 9/16 อยู่แล้วจึงเห็นเท่ากันตอนอยู่ในหน้า
+     แต่พอกดเต็มจอ element จะกลายเป็นอัตราส่วนของจอ ถ้าเป็น cover คลิปแนวตั้ง
+     จะถูกครอปจนเหลือแต่กลางภาพและซับหายไปหมด */
+  object-fit: contain;
+  background: #000;
 }
 
 .output-list {

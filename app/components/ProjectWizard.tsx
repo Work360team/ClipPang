@@ -2289,7 +2289,9 @@ export function ProjectWizard() {
 
                 {renderDone && (
                   <div className="final-result">
-                    <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video><span className={`final-caption ${selectedStyleData.className}`}>{currentChunks[1]}</span></div>
+                    {/* ไม่วางซับซ้อนทับ: ไฟล์ผลลัพธ์เผาซับมาในภาพแล้ว ถ้าวาง <span> ทับอีกชั้น
+                        จะเห็นข้อความค้างสองบรรทัดบนเว็บทั้งที่ไฟล์จริงถูกต้อง */}
+                    <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video></div>
                     <div className="output-list">
                       <div className="output-head"><span className="output-icon"><Film size={20} /></span><div><h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3><p>1080 × 1920 · H.264 · พร้อมโพสต์</p></div><a className="button button-primary button-small" href={renderedVideoUrl || "/clippang-sample.mp4"} download><Download size={15} /> MP4</a></div>
                       {engineState === "connected" ? downloadableOutputs.filter(([, output]) => !output.filename.toLowerCase().endsWith(".mp4")).map(([key, output]) => (
@@ -2314,7 +2316,8 @@ export function ProjectWizard() {
             </footer>
           </section>
 
-          {!(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
+          {/* เรนเดอร์เสร็จแล้วพรีวิวสดไม่มีประโยชน์อีก มีแต่จะแย่งความสนใจกับไฟล์จริง */}
+          {!renderDone && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
             <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">
               <div className="editor-phone">

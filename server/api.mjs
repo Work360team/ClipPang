@@ -796,6 +796,32 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         return json({ ok: true, removed: result });
       }
 
+      // เปิดโฟลเดอร์ผลงานใน File Explorer / Finder — ทำได้เพราะเป็นแอปที่รันบนเครื่อง
+      // ผู้ใช้เอง ไม่ใช่เซิร์ฟเวอร์กลาง พาธถูกบีบให้อยู่ใต้ projects/ ด้วย safeProjectPath
+      // และส่งเป็น argument แยก ไม่ผ่าน shell จึงไม่มีช่องให้แทรกคำสั่ง
+      if (method === "POST" && pathname === "/api/open") {
+        const body = await readJson(request);
+        const folder = body.target === "project"
+          ? safeProjectPath(String(body.projectId ?? ""))
+          : safeProjectPath(String(body.projectId ?? ""), "out");
+        if (!fs.existsSync(folder)) return apiError(404, "FOLDER_NOT_FOUND", "ยังไม่มีโฟลเดอร์นี้ ลองสร้างคลิปให้เสร็จก่อน");
+
+        const opener = process.platform === "win32"
+          ? { command: "explorer.exe", args: [folder] }
+          : process.platform === "darwin"
+            ? { command: "open", args: [folder] }
+            : { command: "xdg-open", args: [folder] };
+        try {
+          // explorer.exe คืน exit code 1 แม้เปิดหน้าต่างสำเร็จ จึงไม่รอผลลัพธ์
+          const child = spawn(opener.command, opener.args, { detached: true, stdio: "ignore" });
+          child.on("error", () => undefined);
+          child.unref();
+        } catch (error) {
+          return apiError(500, "OPEN_FAILED", `เปิดโฟลเดอร์ไม่สำเร็จ: ${error?.message ?? error}`);
+        }
+        return json({ ok: true, folder });
+      }
+
       return apiError(404, "API_NOT_FOUND", "ไม่พบ API ที่เรียกใช้");
     } catch (error) {
       const storeStatus = {
