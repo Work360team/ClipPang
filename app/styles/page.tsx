@@ -161,6 +161,7 @@ function CaptionPreview({ params, index }: { params?: StyleParams; index: number
 
 export default function StylesPage() {
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
+  const [laneFilter, setLaneFilter] = useState<"all" | "hyperframes" | "ass">("all");
   const [engineStyles, setEngineStyles] = useState<EngineStyle[] | null>(null);
 
   // อ่านคลังสไตล์จาก engine จริง — ถ้าเพิ่มไฟล์สไตล์ใหม่ หน้านี้จะขึ้นเองโดยไม่ต้องแก้โค้ด
@@ -174,7 +175,14 @@ export default function StylesPage() {
   }, []);
 
   const styles = useMemo(() => {
-    if (!engineStyles?.length) return captionStyles.map((style) => ({ ...style, params: undefined as StyleParams | undefined, live: false }));
+    if (!engineStyles?.length) {
+      return captionStyles.map((style) => ({
+        ...style,
+        lane: style.id === "kanit-hf" ? "hyperframes" : "ass",
+        params: undefined as StyleParams | undefined,
+        live: false,
+      }));
+    }
     return engineStyles.map((engineStyle) => {
       const local = captionStyles.find((style) => style.id === engineStyle.id);
       return {
@@ -182,6 +190,7 @@ export default function StylesPage() {
         name: engineStyle.name || local?.name || engineStyle.id,
         description: engineStyle.description || local?.description || "",
         // เร็ว/ละเอียด อ่านจาก lane จริง ไม่ใช่ข้อความที่พิมพ์ไว้ตายตัว
+        lane: engineStyle.lane === "hyperframes" ? "hyperframes" : "ass",
         speed: engineStyle.lane === "hyperframes" ? "ละเอียดกว่า" : "เร็วมาก",
         mode: local?.mode ?? (engineStyle.lane === "hyperframes" ? "kanit" : "karaoke"),
         badge: engineStyle.lane === "hyperframes" ? "คุณภาพสูง" : local?.badge,
@@ -190,6 +199,17 @@ export default function StylesPage() {
       };
     });
   }, [engineStyles]);
+
+  // กรองตามเลนที่ใช้เรนเดอร์จริง — สองเลนนี้ต่างกันทั้งหน้าตาและเวลาเรนเดอร์
+  // จึงเป็นสิ่งแรกที่คนเลือกสไตล์อยากแยก
+  const laneCounts = {
+    all: styles.length,
+    hyperframes: styles.filter((style) => style.lane === "hyperframes").length,
+    ass: styles.filter((style) => style.lane !== "hyperframes").length,
+  };
+  const visibleStyles = laneFilter === "all" ? styles : styles.filter((style) => (
+    laneFilter === "hyperframes" ? style.lane === "hyperframes" : style.lane !== "hyperframes"
+  ));
 
   const selected = styles.find((style) => style.id === selectedStyle) ?? styles[0];
 
@@ -210,8 +230,34 @@ export default function StylesPage() {
           </div>
         </header>
 
+        <div className="style-filter-row" role="group" aria-label="กรองตามวิธีเรนเดอร์">
+          {([
+            ["all", "ทั้งหมด", laneCounts.all],
+            ["hyperframes", "HyperFrames", laneCounts.hyperframes],
+            ["ass", "เรนเดอร์เร็ว", laneCounts.ass],
+          ] as const).map(([value, label, count]) => (
+            <button
+              type="button"
+              key={value}
+              className={laneFilter === value ? "active" : ""}
+              disabled={count === 0}
+              aria-pressed={laneFilter === value}
+              onClick={() => setLaneFilter(value)}
+            >
+              {label} <em>{count}</em>
+            </button>
+          ))}
+          <span className="style-filter-note">
+            {laneFilter === "hyperframes"
+              ? "เลเยอร์ซับเรนเดอร์แยกแล้ววางทับ ลูกเล่นเยอะกว่า แต่ใช้เวลานานกว่า"
+              : laneFilter === "ass"
+                ? "เผาซับลงภาพตรง ๆ เสร็จไวที่สุด เหมาะกับงานร่าง"
+                : "สองวิธีเรนเดอร์ ต่างกันทั้งลูกเล่นและเวลาที่ใช้"}
+          </span>
+        </div>
+
         <section className="style-gallery" aria-label="สไตล์คำบรรยาย">
-          {styles.map((style, index) => {
+          {visibleStyles.map((style, index) => {
             const isSelected = selectedStyle === style.id;
             return (
               <article
@@ -356,6 +402,57 @@ export default function StylesPage() {
         }
 
         .style-heading-note strong { color: var(--style-ink); }
+
+        .style-filter-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 15px;
+        }
+
+        .style-filter-row button {
+          min-height: 32px;
+          padding: 0 13px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: #fff;
+          color: var(--ink-soft);
+          font: inherit;
+          font-size: 12.5px;
+          cursor: pointer;
+          transition: border-color .14s ease, background .14s ease, color .14s ease;
+        }
+
+        .style-filter-row button:hover:not(:disabled):not(.active) {
+          border-color: var(--ink-faint);
+          color: var(--ink);
+        }
+
+        .style-filter-row button.active {
+          border-color: #262b25;
+          background: #242924;
+          color: #fff;
+        }
+
+        .style-filter-row button em {
+          margin-left: 4px;
+          font-style: normal;
+          font-variant-numeric: tabular-nums;
+          opacity: .6;
+        }
+
+        .style-filter-row button:disabled { opacity: .42; cursor: not-allowed; }
+
+        .style-filter-note {
+          margin-left: 4px;
+          color: var(--ink-faint);
+          font-size: 12px;
+        }
+
+        @media (max-width: 720px) {
+          .style-filter-note { flex-basis: 100%; margin: 2px 0 0; }
+        }
 
         .style-gallery {
           display: grid;
@@ -680,7 +777,58 @@ export default function StylesPage() {
         .style-use-link:focus-visible { outline: 3px solid rgba(206,163,0,.24); outline-offset: 2px; }
 
         @media (max-width: 1120px) {
-          .style-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .style-filter-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 15px;
+        }
+
+        .style-filter-row button {
+          min-height: 32px;
+          padding: 0 13px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: #fff;
+          color: var(--ink-soft);
+          font: inherit;
+          font-size: 12.5px;
+          cursor: pointer;
+          transition: border-color .14s ease, background .14s ease, color .14s ease;
+        }
+
+        .style-filter-row button:hover:not(:disabled):not(.active) {
+          border-color: var(--ink-faint);
+          color: var(--ink);
+        }
+
+        .style-filter-row button.active {
+          border-color: #262b25;
+          background: #242924;
+          color: #fff;
+        }
+
+        .style-filter-row button em {
+          margin-left: 4px;
+          font-style: normal;
+          font-variant-numeric: tabular-nums;
+          opacity: .6;
+        }
+
+        .style-filter-row button:disabled { opacity: .42; cursor: not-allowed; }
+
+        .style-filter-note {
+          margin-left: 4px;
+          color: var(--ink-faint);
+          font-size: 12px;
+        }
+
+        @media (max-width: 720px) {
+          .style-filter-note { flex-basis: 100%; margin: 2px 0 0; }
+        }
+
+        .style-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .style-video-frame { aspect-ratio: 9 / 10; }
           .style-card-body > p { min-height: 0; }
           .style-caption-karaoke { font-size: clamp(18px, 2.6vw, 28px); }
@@ -693,7 +841,58 @@ export default function StylesPage() {
           .style-page { padding: 26px 18px 40px; }
           .style-heading { align-items: flex-start; flex-direction: column; gap: 16px; }
           .style-heading-note { display: none; }
-          .style-gallery { grid-template-columns: 1fr; }
+          .style-filter-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 15px;
+        }
+
+        .style-filter-row button {
+          min-height: 32px;
+          padding: 0 13px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: #fff;
+          color: var(--ink-soft);
+          font: inherit;
+          font-size: 12.5px;
+          cursor: pointer;
+          transition: border-color .14s ease, background .14s ease, color .14s ease;
+        }
+
+        .style-filter-row button:hover:not(:disabled):not(.active) {
+          border-color: var(--ink-faint);
+          color: var(--ink);
+        }
+
+        .style-filter-row button.active {
+          border-color: #262b25;
+          background: #242924;
+          color: #fff;
+        }
+
+        .style-filter-row button em {
+          margin-left: 4px;
+          font-style: normal;
+          font-variant-numeric: tabular-nums;
+          opacity: .6;
+        }
+
+        .style-filter-row button:disabled { opacity: .42; cursor: not-allowed; }
+
+        .style-filter-note {
+          margin-left: 4px;
+          color: var(--ink-faint);
+          font-size: 12px;
+        }
+
+        @media (max-width: 720px) {
+          .style-filter-note { flex-basis: 100%; margin: 2px 0 0; }
+        }
+
+        .style-gallery { grid-template-columns: 1fr; }
           .style-video-frame { aspect-ratio: 9 / 10.5; }
           .style-selection-summary { grid-template-columns: auto 1fr; }
           .style-selection-summary p { grid-column: 1 / -1; justify-self: start; padding-top: 2px; }
