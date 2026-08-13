@@ -4561,15 +4561,22 @@ select:focus-visible,
 
 .final-result {
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(290px, 1.2fr);
+  /* คอลัมน์ซ้ายกว้างตามคลิป ไม่ใช่สัดส่วนคงที่ เพราะความสูงถูกกำหนดโดยรายการไฟล์
+     ทางขวา ถ้าตรึงความกว้างไว้ คลิปจะเตี้ยกว่าและเหลือช่องว่างใต้กล่องเป็นแถบยาว */
+  grid-template-columns: auto minmax(290px, 1fr);
   gap: 18px;
+  align-items: stretch;
 }
 
 .final-video {
   position: relative;
   overflow: hidden;
   aspect-ratio: 9 / 16;
-  max-height: 480px;
+  /* สูงเท่าคอลัมน์ขวา แล้วปล่อยความกว้างไหลตามอัตราส่วน 9:16 */
+  height: 100%;
+  width: auto;
+  min-height: 360px;
+  justify-self: start;
   border-radius: 16px;
   background: #191c18;
 }
