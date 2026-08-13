@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import crypto from "node:crypto";
 import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -8,6 +9,7 @@ import { Readable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createApiHandler } from "./api.mjs";
 import { HOST, DEFAULT_PORT, PATHS, ensureDirectories } from "./config.mjs";
+import { remoteHelpText as buildRemoteHelp } from "./remote-help.mjs";
 import { safeProjectPath } from "./security.mjs";
 import { prepareSources } from "./sources.mjs";
 import { createStore } from "./store/index.mjs";
@@ -20,6 +22,42 @@ const CLIENT_ROOT = path.join(ROOT, "dist", "client");
 const WORKER_ENTRY = path.join(ROOT, "dist", "server", "index.js");
 const VERSION = "0.3.0";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * เปิดให้เข้าจากเครื่องอื่น (เช่นมือถือ) แบบต้องตั้งใจเปิดเองเท่านั้น
+ *
+ * ClipPang Local ไม่มีระบบล็อกอิน และทำสิ่งที่ย้อนกลับไม่ได้บนเครื่องผู้ใช้ได้จริง
+ * (ใช้โควตา Gemini ของเจ้าของเครื่อง อ่าน/ลบโปรเจกต์ เปิดโฟลเดอร์) ค่าเริ่มต้นจึงรับ
+ * เฉพาะคำขอจากเครื่องตัวเอง ใครจะเปิดออกไปต้องระบุโฮสต์ที่อนุญาต "และ" ตั้งรหัสผ่าน
+ * ไม่มีทางเปิดออกไปโดยไม่ตั้งรหัส เพราะนั่นคือการยกเครื่องให้คนทั้งอินเทอร์เน็ต
+ */
+const REMOTE_HOSTS = new Set(
+  String(process.env.CLIPPANG_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean),
+);
+const ACCESS_TOKEN = String(process.env.CLIPPANG_ACCESS_TOKEN || "").trim();
+const REMOTE_READY = REMOTE_HOSTS.size > 0 && ACCESS_TOKEN.length >= 16;
+const TOKEN_COOKIE = "clippang_access";
+
+function tokenFromRequest(request, url) {
+  const header = request.headers.get("x-clippang-token");
+  if (header) return header.trim();
+  const query = url.searchParams.get("token");
+  if (query) return query.trim();
+  const cookie = request.headers.get("cookie") || "";
+  const match = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${TOKEN_COOKIE}=`));
+  return match ? decodeURIComponent(match.slice(TOKEN_COOKIE.length + 1)) : "";
+}
+
+/** เทียบรหัสแบบเวลาคงที่ กันการเดาทีละตัวอักษรจากเวลาที่ตอบกลับ */
+function tokenMatches(candidate) {
+  const a = Buffer.from(candidate ?? "", "utf8");
+  const b = Buffer.from(ACCESS_TOKEN, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 const STATIC_MIME = new Map([
   [".html", "text/html; charset=utf-8"], [".js", "text/javascript; charset=utf-8"],
   [".css", "text/css; charset=utf-8"], [".json", "application/json; charset=utf-8"],
@@ -36,12 +74,26 @@ function parseJson(value, fallback = {}) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+function remoteHelpText(request) {
+  let host = "";
+  try { host = new URL(request.url).hostname; } catch { host = ""; }
+  return buildRemoteHelp({ host, allowedHosts: REMOTE_HOSTS, tokenLength: ACCESS_TOKEN.length });
+}
+
+function hostAllowed(hostname) {
+  return LOCAL_HOSTS.has(hostname) || (REMOTE_READY && REMOTE_HOSTS.has(hostname.toLowerCase()));
+}
+
 function localRequestAllowed(request) {
   const url = new URL(request.url);
-  if (!LOCAL_HOSTS.has(url.hostname)) return false;
+  if (!hostAllowed(url.hostname)) return false;
   const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try { return LOCAL_HOSTS.has(new URL(origin).hostname); } catch { return false; }
+  if (origin) {
+    try { if (!hostAllowed(new URL(origin).hostname)) return false; } catch { return false; }
+  }
+  // โฮสต์ระยะไกลต้องมีรหัสเสมอ ส่วนเครื่องตัวเองไม่ต้อง จะได้ไม่เพิ่มขั้นตอนให้คนใช้ปกติ
+  if (LOCAL_HOSTS.has(url.hostname)) return true;
+  return tokenMatches(tokenFromRequest(request, url));
 }
 
 function normalizeScriptChunks(chunks) {
@@ -334,9 +386,25 @@ export async function startLocalServer({ port: requestedPort } = {}) {
     try {
       const request = toWebRequest(req, port);
       if (!localRequestAllowed(request)) {
-        return sendWebResponse(res, new Response("ClipPang Local รับคำขอจากเครื่องนี้เท่านั้น", { status: 403 }), request.method);
+        return sendWebResponse(res, new Response(remoteHelpText(request), {
+          status: 403,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }), request.method);
       }
       const url = new URL(request.url);
+      // เข้ามาด้วย ?token= ครั้งแรก ให้จำไว้ในคุกกี้ แล้วเด้งไป URL ที่ไม่มี token
+      // เพื่อไม่ให้รหัสค้างอยู่ในแถบที่อยู่ ประวัติเบราว์เซอร์ หรือหลุดไปกับ Referer
+      if (!LOCAL_HOSTS.has(url.hostname) && url.searchParams.get("token")) {
+        const clean = new URL(url);
+        clean.searchParams.delete("token");
+        return sendWebResponse(res, new Response(null, {
+          status: 303,
+          headers: {
+            location: clean.pathname + clean.search + clean.hash,
+            "set-cookie": `${TOKEN_COOKIE}=${encodeURIComponent(ACCESS_TOKEN)}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax`,
+          },
+        }), request.method);
+      }
       let response;
       if (url.pathname.startsWith("/api/")) response = await runtime.api(request);
       else {
@@ -366,7 +434,8 @@ export async function startLocalServer({ port: requestedPort } = {}) {
 
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, HOST, resolve);
+    // ผูกกับ 127.0.0.1 เสมอ ยกเว้นเปิดโหมดระยะไกลไว้ครบทั้งโฮสต์และรหัสผ่าน
+    server.listen(port, REMOTE_READY ? "0.0.0.0" : HOST, resolve);
   });
   const url = `http://${HOST}:${port}`;
   let setupReady = false;
