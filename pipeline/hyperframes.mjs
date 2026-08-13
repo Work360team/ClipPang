@@ -128,8 +128,11 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
         color: ${p.fill};
         -webkit-text-stroke: ${p.outline.width}px ${p.outline.color};
         paint-order: stroke fill;
-        ${p.shadow ? `text-shadow: 0 ${p.shadow.offset}px 0 ${p.shadow.color};` : ""}
+        ${p.shadow && !p.gradient ? `text-shadow: 0 ${p.shadow.offset}px 0 ${p.shadow.color};` : ""}
         ${p.glow ? `text-shadow: 0 0 ${p.glow.blur ?? 18}px ${p.glow.color ?? "#38f6ff"}, 0 0 ${(p.glow.blur ?? 18) * 2.4}px ${p.glow.color ?? "#38f6ff"};` : ""}
+        /* ตัวอักษรจะโปร่งใสเพื่อให้เห็นไล่สี ถ้ายังมี text-shadow อยู่ เงาจะทะลุขึ้นมา
+           กลางตัวอักษรเป็นก้อนทึบ ด้านบนจึงตัด text-shadow ทิ้งเมื่อใช้ไล่สี
+           ส่วนเส้นขอบใช้ -webkit-text-stroke ที่วาดอยู่หลังฟิล (paint-order) จึงไม่กวน */
         ${p.gradient ? `background-image: linear-gradient(${p.gradient.angle ?? 100}deg, ${p.gradient.from}, ${p.gradient.to}); -webkit-background-clip: text; background-clip: text; color: transparent;` : ""}
         display: inline-block;
         transform-origin: 50% 78%;

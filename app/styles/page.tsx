@@ -134,8 +134,12 @@ function CaptionPreview({ params, index }: { params?: StyleParams; index: number
       backgroundImage: `linear-gradient(${gradient.angle ?? 100}deg, ${gradient.from}, ${gradient.to})`,
       WebkitBackgroundClip: "text",
       backgroundClip: "text",
+      // ตัวอักษรโปร่งใสแต่ text-shadow ยังวาดอยู่ เงาสี่มุมที่ใช้แทนเส้นขอบจึงทะลุ
+      // ขึ้นมาเป็นก้อนดำกลางตัวอักษร ใช้ drop-shadow แทน เพราะมันเงาของพิกเซลที่วาดจริง
+      textShadow: "none",
     } : {}),
     ...(glow ? { filter: `drop-shadow(0 0 ${Math.max(3, Math.round((glow.blur ?? 18) / 3))}px ${glow.color ?? "#38f6ff"})` } : {}),
+    ...(gradient && !glow ? { filter: "drop-shadow(0 1px 2px rgba(0,0,0,.85)) drop-shadow(0 0 4px rgba(0,0,0,.55))" } : {}),
     transform: state === "now" ? `scale(${params?.animation?.scale ?? 1.12})` : "scale(1)",
     opacity: state === "todo" && !pill ? 0.72 : 1,
     transitionDuration: `${params?.animation?.durationMs ?? 160}ms`,
