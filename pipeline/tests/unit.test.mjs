@@ -143,6 +143,39 @@ test("Gemini repeats the request verbatim when it answers with text instead of a
   assert.ok(fs.existsSync(result.file));
 });
 
+test("finishReason=OTHER is retried rather than failing the render", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  let calls = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    calls += 1;
+    // สองครั้งแรกโมเดลสะดุด ครั้งที่สามได้เสียงตามปกติ เหมือนที่เจอกับ Gemini จริง
+    const payload = calls < 3
+      ? { candidates: [{ finishReason: "OTHER", content: { parts: [] } }] }
+      : {
+        candidates: [{
+          content: {
+            parts: [{ inlineData: { mimeType: "audio/L16;rate=24000", data: pcmTone(24000).toString("base64") } }],
+          },
+        }],
+      };
+    return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  t.after(() => { globalThis.fetch = realFetch; });
+
+  const result = await synthesize({
+    text: "กดตะกร้าด้านล่าง",
+    provider: "gemini",
+    voice: "Kore",
+    outFile: path.join(dir, "out.wav"),
+  });
+
+  assert.equal(calls, 3);
+  assert.ok(fs.existsSync(result.file));
+});
+
 test("a no-audio reply reports the reason Gemini actually gave", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

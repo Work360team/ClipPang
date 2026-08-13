@@ -129,15 +129,19 @@ function abortableDelay(ms, signal) {
 }
 
 
+/** ลองใหม่ได้กี่ครั้งเมื่อโมเดลไม่คืนเสียงโดยไม่มีเหตุผลที่แก้ได้ */
+const MAX_NO_AUDIO_RETRIES = 3;
+
 /** อธิบายว่าทำไม Gemini ตอบ 200 แต่ไม่มีเสียง โดยอิงข้อมูลที่ API ส่งกลับมาจริง */
-function ttsNoAudioMessage({ blocked, finish, spoken, text }) {
+function ttsNoAudioMessage({ blocked, finish, spoken, text, attempts = 1 }) {
   const excerpt = String(text || "").slice(0, 40);
   if (blocked) return `Gemini ปฏิเสธข้อความนี้ (${blocked}) — ลองแก้คำในท่อน "${excerpt}…" แล้วสั่งใหม่`;
   if (finish === "MAX_TOKENS") return `ท่อน "${excerpt}…" ยาวเกินกว่าที่โมเดลจะพากย์ได้ในครั้งเดียว ลองตัดให้สั้นลง`;
   if (finish === "SAFETY" || finish === "PROHIBITED_CONTENT") return `Gemini ตีว่าท่อน "${excerpt}…" ผิดนโยบายเนื้อหา ลองเปลี่ยนคำแล้วสั่งใหม่`;
   if (finish === "RECITATION") return `Gemini ตีว่าท่อน "${excerpt}…" ลอกข้อความมีลิขสิทธิ์ ลองเขียนใหม่ด้วยคำของเราเอง`;
   if (spoken) return `Gemini ตอบกลับเป็นข้อความแทนเสียงแม้สั่งย้ำแล้ว: "${spoken.slice(0, 80)}" — ลองแก้ท่อนนี้ให้เป็นประโยคบอกเล่า`;
-  return `Gemini ไม่ได้คืนเสียงกลับมาและไม่บอกเหตุผล (finishReason=${finish ?? "ไม่ระบุ"}) ลองสั่งใหม่อีกครั้ง`;
+  return `Gemini ไม่คืนเสียงกลับมา ${attempts} ครั้งติด (finishReason=${finish ?? "ไม่ระบุ"}) `
+    + `อาการนี้เป็นที่ฝั่งโมเดลไม่ใช่ที่ข้อความของเรา รอสักครู่แล้วกดสร้างใหม่มักจะผ่าน`;
 }
 
 async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile) {
@@ -149,6 +153,7 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
 
 ${text}`;
   let useStrictPrompt = false;
+  let noAudioRetries = 0;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel()}:generateContent`;
   const requestTimeoutMs = Number(timeoutMs ?? process.env.GEMINI_TTS_TIMEOUT_MS ?? 45_000);
 
@@ -219,7 +224,21 @@ ${text}`;
         if (process.env.TTS_VERBOSE) process.stderr.write("   [tts] ได้ข้อความแทนเสียง → สั่งย้ำให้อ่านตามตัวอักษรแล้วลองใหม่\n");
         continue;
       }
-      throw new Error(ttsNoAudioMessage({ blocked, finish, spoken, text }));
+
+      // finishReason=OTHER คือโมเดลพลาดเอง ไม่ใช่ปัญหาที่ข้อความ — ท่อนเดียวกันส่งซ้ำ
+      // แล้วได้เสียงตามปกติ จึงต้องลองใหม่ ไม่ใช่ล้มทั้งงานเพราะโมเดลสะดุดหนึ่งครั้ง
+      // ต่างจาก SAFETY/RECITATION/MAX_TOKENS ที่ส่งซ้ำอีกกี่ครั้งก็ได้ผลเดิม
+      const permanent = Boolean(blocked) || ["SAFETY", "PROHIBITED_CONTENT", "RECITATION", "MAX_TOKENS"].includes(finish);
+      if (!permanent && noAudioRetries < MAX_NO_AUDIO_RETRIES && attempt < maxAttempts - 1) {
+        noAudioRetries += 1;
+        lastErr = new Error(ttsNoAudioMessage({ blocked, finish, spoken, text }));
+        if (process.env.TTS_VERBOSE) {
+          process.stderr.write(`   [tts] ไม่มีเสียงกลับมา (finishReason=${finish ?? "-"}) → ลองใหม่ครั้งที่ ${noAudioRetries}\n`);
+        }
+        await abortableDelay(1200 * noAudioRetries + Math.random() * 500, signal);
+        continue;
+      }
+      throw new Error(ttsNoAudioMessage({ blocked, finish, spoken, text, attempts: noAudioRetries + 1 }));
     }
     const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || "")?.[1] || 24000);
     fs.writeFileSync(rawFile, wavFromPcm(Buffer.from(part.inlineData.data, "base64"), { rate }));
