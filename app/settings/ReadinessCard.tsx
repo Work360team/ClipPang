@@ -85,13 +85,13 @@ export function ReadinessCard({ engineState }: { engineState: string }) {
       </ul>
 
       <style>{`
-        .ready-card { padding: 20px 22px; border-radius: 14px; border: 1px solid var(--line, #2a312a); background: var(--panel, #141714); margin-bottom: 18px; }
-        .ready-card.ok { border-color: rgba(79,191,139,.35); }
-        .ready-card.warn { border-color: rgba(224,163,60,.35); }
+        .ready-card { padding: 20px 22px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); margin-bottom: 18px; }
+        .ready-card.ok { border-color: rgba(58,154,104,.35); }
+        .ready-card.warn { border-color: rgba(198,155,0,.35); }
         .ready-head { display: grid; grid-template-columns: auto 1fr; gap: 13px; align-items: start; margin-bottom: 14px; }
         .ready-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; }
-        .ready-card.ok .ready-icon { background: rgba(79,191,139,.13); color: #4fbf8b; }
-        .ready-card.warn .ready-icon { background: rgba(224,163,60,.13); color: #e0a33c; }
+        .ready-card.ok .ready-icon { background: rgba(58,154,104,.12); color: var(--green); }
+        .ready-card.warn .ready-icon { background: rgba(198,155,0,.12); color: var(--yellow-dark); }
         .ready-head h2 { margin: 0 0 3px; font-size: 17px; }
         .ready-head p { margin: 0; font-size: 13px; opacity: .68; }
         .ready-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
@@ -99,8 +99,8 @@ export function ReadinessCard({ engineState }: { engineState: string }) {
         .ready-list b { font-weight: 600; white-space: nowrap; }
         .ready-list small { font-size: 12.5px; opacity: .66; }
         .ready-dot { width: 9px; height: 9px; border-radius: 50%; align-self: center; }
-        .ready-list li.ok .ready-dot { background: #4fbf8b; }
-        .ready-list li.warn .ready-dot { background: #e0a33c; }
+        .ready-list li.ok .ready-dot { background: var(--green); }
+        .ready-list li.warn .ready-dot { background: var(--yellow-dark); }
         @media (max-width: 640px) {
           .ready-list li { grid-template-columns: 9px 1fr; }
           .ready-list small { grid-column: 2; }

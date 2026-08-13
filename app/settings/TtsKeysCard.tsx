@@ -216,20 +216,20 @@ export function TtsKeysCard({ engineState }: { engineState: string }) {
 
       <style>{`
         .key-summary { display: flex; align-items: center; gap: 9px; padding: 10px 13px; border-radius: 9px; font-size: 13.5px; margin-bottom: 14px; }
-        .key-summary.ok { background: rgba(79,191,139,.1); border: 1px solid rgba(79,191,139,.3); color: #4fbf8b; }
-        .key-summary.bad { background: rgba(224,163,60,.1); border: 1px solid rgba(224,163,60,.3); color: #e0a33c; }
+        .key-summary.ok { background: rgba(58,154,104,.09); border: 1px solid rgba(58,154,104,.28); color: var(--green); }
+        .key-summary.bad { background: rgba(198,155,0,.09); border: 1px solid rgba(198,155,0,.28); color: var(--yellow-dark); }
         .key-summary b { font-weight: 700; }
         .key-list { display: grid; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
-        .key-row { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 11px; align-items: center; padding: 10px 13px; border: 1px solid var(--line, #2a312a); border-radius: 9px; }
+        .key-row { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 11px; align-items: center; padding: 10px 13px; border: 1px solid var(--line); border-radius: 9px; }
         .key-row.is-down { opacity: .72; }
         .key-row b { display: block; font-size: 13.5px; font-family: ui-monospace, monospace; }
         .key-row small { display: block; font-size: 11.5px; opacity: .65; }
         .key-dot { width: 9px; height: 9px; border-radius: 50%; }
-        .key-dot.ok { background: #4fbf8b; }
-        .key-dot.bad { background: #e0a33c; }
+        .key-dot.ok { background: var(--green); }
+        .key-dot.bad { background: var(--yellow-dark); }
         .key-slot { font-size: 11.5px; opacity: .6; white-space: nowrap; }
-        .key-remove { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--line, #2a312a); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
-        .key-remove:hover:not(:disabled) { border-color: #e4695e; color: #e4695e; }
+        .key-remove { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+        .key-remove:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
         .key-remove:disabled { opacity: .35; cursor: not-allowed; }
         .key-add { display: flex; gap: 8px; align-items: center; }
         .key-add .settings-input-wrap { flex: 1; min-width: 0; }

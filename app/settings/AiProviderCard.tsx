@@ -240,7 +240,7 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
         .ai-choice-list { display: grid; gap: 9px; margin-bottom: 18px; }
         .ai-choice {
           display: grid; gap: 4px; padding: 12px 14px; text-align: left; cursor: pointer;
-          border: 1px solid var(--line, #2a312a); border-radius: 10px; background: transparent; color: inherit; font: inherit;
+          border: 1px solid var(--line); border-radius: 10px; background: transparent; color: inherit; font: inherit;
         }
         .ai-choice.is-selected { border-color: var(--yellow); background: rgba(255, 210, 63, .07); }
         .ai-choice.is-off { opacity: .55; cursor: not-allowed; }
@@ -248,7 +248,7 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
         .ai-choice-title { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; }
         .ai-choice-title b { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: var(--yellow); color: #10161a; }
         .ai-choice-sub { display: flex; align-items: center; gap: 5px; font-size: 12.5px; opacity: .72; }
-        .ai-advanced { margin-top: 18px; border-top: 1px solid var(--line, #2a312a); padding-top: 14px; }
+        .ai-advanced { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
         .ai-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 600; opacity: .78; list-style: none; display: flex; align-items: center; gap: 7px; }
         .ai-advanced > summary::before { content: "▸"; font-size: 11px; transition: transform .15s; }
         .ai-advanced[open] > summary::before { transform: rotate(90deg); }
@@ -256,11 +256,11 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
         .ai-advanced .ai-key-list { margin-top: 14px; }
         .ai-subhead { margin: 20px 0 10px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; opacity: .6; }
         .ai-key-list { display: grid; gap: 14px; }
-        .ai-key-row { padding: 13px 14px; border: 1px solid var(--line, #2a312a); border-radius: 10px; display: grid; gap: 9px; }
+        .ai-key-row { padding: 13px 14px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 9px; }
         .ai-key-row.is-selected { border-color: var(--yellow); }
         .ai-key-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
         .ai-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; opacity: .7; }
-        .ai-badge.ok { color: #4fbf8b; opacity: 1; }
+        .ai-badge.ok { color: var(--green); opacity: 1; }
         .ai-key-inputs { display: flex; gap: 8px; align-items: center; }
         .ai-key-inputs .settings-input-wrap { flex: 1; min-width: 0; }
         .ai-hint { margin: 0; font-size: 12.5px; opacity: .7; }

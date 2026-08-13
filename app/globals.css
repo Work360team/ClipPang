@@ -3301,7 +3301,7 @@ select:focus-visible,
 }
 
 .waveform i.is-past {
-  background: var(--yellow);
+  background: var(--yellow-dark);
   opacity: 0.95;
 }
 
@@ -3352,7 +3352,7 @@ select:focus-visible,
 }
 
 .render-stage.wait { opacity: .45; }
-.render-stage.done .render-stage-mark { color: #4fbf8b; opacity: 1; }
+.render-stage.done .render-stage-mark { color: var(--green); opacity: 1; }
 .render-stage.done b { opacity: .72; }
 
 .render-stage.now {
@@ -3400,10 +3400,10 @@ select:focus-visible,
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--line, #2a312a);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #171b17;
-  color: #98a29a;
+  background: var(--card);
+  color: var(--ink-faint);
   cursor: pointer;
   opacity: 0;
   transition: opacity .14s, color .14s, border-color .14s;
@@ -3415,8 +3415,8 @@ select:focus-visible,
 }
 
 .project-delete:hover:not(:disabled) {
-  border-color: #e4695e;
-  color: #e4695e;
+  border-color: var(--red);
+  color: var(--red);
 }
 
 .project-delete:focus-visible {
@@ -3454,10 +3454,10 @@ select:focus-visible,
   position: relative;
   width: min(430px, 100%);
   padding: 22px 24px;
-  border: 1px solid var(--line, #2a312a);
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #141714;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+  background: var(--card);
+  box-shadow: 0 24px 60px rgba(24, 30, 23, .22);
 }
 
 .confirm-card h2 {
@@ -3467,7 +3467,7 @@ select:focus-visible,
 
 .confirm-card p {
   margin: 0 0 14px;
-  color: #98a29a;
+  color: var(--ink-soft);
   font-size: 13.5px;
   line-height: 1.65;
 }
@@ -3475,12 +3475,12 @@ select:focus-visible,
 .confirm-card code {
   padding: 1px 5px;
   border-radius: 4px;
-  background: #1e231e;
+  background: var(--paper);
   font-size: 12.5px;
 }
 
 .confirm-error {
-  color: #e4695e !important;
+  color: var(--red) !important;
 }
 
 .confirm-actions {
@@ -3490,14 +3490,14 @@ select:focus-visible,
 }
 
 .button-danger {
-  border: 1px solid #e4695e;
-  background: #e4695e;
-  color: #140b0a;
+  border: 1px solid var(--red);
+  background: var(--red);
+  color: #fff;
   font-weight: 700;
 }
 
 .button-danger:hover:not(:disabled) {
-  background: #ef7d72;
+  filter: brightness(1.08);
 }
 
 /* หน้าคลังสไตล์ — สีและน้ำหนักฟอนต์มาจาก params ของไฟล์สไตล์จริงผ่านตัวแปรบน .style-card */
