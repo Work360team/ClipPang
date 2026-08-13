@@ -57,9 +57,14 @@ const captionStyles: CaptionStyle[] = [
 type StyleParams = {
   fill?: string;
   activeFill?: string;
+  emphasisFill?: string;
   outline?: { color?: string; width?: number };
-  font?: { family?: string; weight?: number };
+  font?: { family?: string; weight?: number; size?: number };
   position?: { anchor?: string };
+  pill?: { color?: string; padV?: number; padH?: number; radius?: number };
+  glow?: { color?: string; blur?: number };
+  gradient?: { from?: string; to?: string; angle?: number };
+  animation?: { enter?: string; scale?: number; durationMs?: number };
 };
 
 type EngineStyle = {
@@ -87,39 +92,69 @@ function previewVars(params?: StyleParams): CSSProperties {
   } as CSSProperties;
 }
 
-function CaptionPreview({ mode }: { mode: CaptionStyle["mode"] }) {
-  if (mode === "box") {
-    return (
-      <div className="style-caption style-caption-box" aria-hidden="true">
-        <span>ใช้แล้วผิวดู</span>
-        <strong>ฉ่ำขึ้นทันที!</strong>
-      </div>
-    );
-  }
+/** ประโยคตัวอย่างที่ใช้ทุกสไตล์ ให้เทียบกันได้ว่าจังหวะต่างกันยังไง */
+const PREVIEW_WORDS = ["ตัวนี้", "ต้องมี", "บอกเลย", "ว่าคุ้ม"];
+const WORD_MS = 620;
 
-  if (mode === "reveal") {
-    return (
-      <div className="style-caption style-caption-reveal" aria-hidden="true">
-        <span className="style-word-done">เนื้อเบา</span>{" "}
-        <span className="style-word-now">เกลี่ยง่าย</span>{" "}
-        <span>ไม่เป็นคราบ</span>
-      </div>
-    );
-  }
+/**
+ * ตัวอย่างซับที่ "ขยับจริง" ตามพารามิเตอร์ของสไตล์นั้น ๆ
+ *
+ * ของเดิมเป็นข้อความนิ่ง 4 แบบตายตัว สไตล์ใหม่ทั้งหกจึงตกไปใช้แบบ kanit เหมือนกันหมด
+ * และไม่มีอันไหนขยับเลย ที่นี่อ่าน pill / glow / gradient / animation.enter ชุดเดียว
+ * กับที่ pipeline/hyperframes.mjs ใช้ตอนเรนเดอร์จริง ตัวอย่างกับผลลัพธ์จึงตรงกัน
+ */
+function CaptionPreview({ params, index }: { params?: StyleParams; index: number }) {
+  const [active, setActive] = useState(0);
 
-  if (mode === "kanit") {
-    return (
-      <div className="style-caption style-caption-kanit" aria-hidden="true">
-        ตัวนี้ต้องมี!
-        <span>งานผิวสวยมาก</span>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActive((current) => (current + 1) % (PREVIEW_WORDS.length + 1));
+    }, WORD_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const enter = params?.animation?.enter ?? "blur";
+  const pill = params?.pill;
+  const glow = params?.glow;
+  const gradient = params?.gradient;
+  const anchor = params?.position?.anchor === "top" ? "top" : params?.position?.anchor === "middle" ? "middle" : "bottom";
+  const big = (params?.font?.size ?? 90) >= 110;
+
+  const lineStyle: CSSProperties = {
+    ...(pill ? {
+      background: pill.color ?? "rgba(0,0,0,0.62)",
+      borderRadius: `${Math.round((pill.radius ?? 999) / 3)}px`,
+      padding: `${Math.round((pill.padV ?? 18) / 3)}px ${Math.round((pill.padH ?? 34) / 3)}px`,
+    } : {}),
+  };
+
+  const wordStyle = (state: "done" | "now" | "todo"): CSSProperties => ({
+    color: gradient ? "transparent" : state === "now" ? "var(--style-active)" : "var(--style-fill)",
+    ...(gradient ? {
+      backgroundImage: `linear-gradient(${gradient.angle ?? 100}deg, ${gradient.from}, ${gradient.to})`,
+      WebkitBackgroundClip: "text",
+      backgroundClip: "text",
+    } : {}),
+    ...(glow ? { filter: `drop-shadow(0 0 ${Math.max(3, Math.round((glow.blur ?? 18) / 3))}px ${glow.color ?? "#38f6ff"})` } : {}),
+    transform: state === "now" ? `scale(${params?.animation?.scale ?? 1.12})` : "scale(1)",
+    opacity: state === "todo" && !pill ? 0.72 : 1,
+    transitionDuration: `${params?.animation?.durationMs ?? 160}ms`,
+  });
 
   return (
-    <div className="style-caption style-caption-karaoke" aria-hidden="true">
-      <span>ของดีที่</span> <strong>อยากป้ายยา</strong>
-      <small>ให้ทุกคนลอง!</small>
+    <div
+      className={`style-caption style-caption-live anchor-${anchor}${big ? " style-caption-big" : ""} enter-${enter}`}
+      aria-hidden="true"
+    >
+      {/* key ผูกกับรอบการเล่น เพื่อให้อนิเมชันเข้าเล่นใหม่ทุกครั้งที่วนกลับมา */}
+      <span className="style-caption-line" style={lineStyle} key={`${index}-${active === 0 ? "in" : "hold"}`}>
+        {PREVIEW_WORDS.map((word, wordIndex) => {
+          const state = active === 0 ? "todo" : wordIndex < active - 1 ? "done" : wordIndex === active - 1 ? "now" : "todo";
+          return (
+            <span className="style-caption-word" key={word} style={wordStyle(state)}>{word}</span>
+          );
+        })}
+      </span>
     </div>
   );
 }
@@ -197,7 +232,7 @@ export default function StylesPage() {
                     <source src="/clippang-style-preview.mp4" type="video/mp4" />
                   </video>
                   <div className="style-video-shade" />
-                  <CaptionPreview mode={style.mode} />
+                  <CaptionPreview params={style.params} index={index} />
                   <div className="style-preview-pill">
                     <Play size={10} fill="currentColor" /> {style.live ? "สีจากไฟล์สไตล์จริง" : "ตัวอย่างสไตล์"}
                   </div>
@@ -409,6 +444,66 @@ export default function StylesPage() {
           line-height: 1.13;
           text-shadow: -2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111, 0 3px 7px rgba(0,0,0,.55);
           pointer-events: none;
+        }
+
+        /* ตัวอย่างที่ขยับจริง — ท่าเข้าชุดเดียวกับที่ hyperframes.mjs ใช้ตอนเรนเดอร์ */
+        .style-caption-live { font-size: clamp(15px, 1.45vw, 21px); }
+        .style-caption-live.style-caption-big { font-size: clamp(21px, 2.1vw, 30px); }
+        .style-caption-live.anchor-top { top: 14%; bottom: auto; }
+        .style-caption-live.anchor-middle { top: 50%; bottom: auto; transform: translateY(-50%); }
+
+        .style-caption-line {
+          display: inline-flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: .28em;
+          font-weight: var(--style-weight, 800);
+          text-shadow: var(--style-stroke, none);
+        }
+
+        .style-caption-word {
+          display: inline-block;
+          transform-origin: 50% 78%;
+          transition-property: color, transform, opacity, filter;
+          transition-timing-function: cubic-bezier(.22,1.4,.4,1);
+        }
+
+        .enter-blur .style-caption-line { animation: hf-enter-blur .34s cubic-bezier(.2,.9,.3,1) both; }
+        .enter-slam .style-caption-line { animation: hf-enter-slam .32s cubic-bezier(.2,1.6,.4,1) both; }
+        .enter-wipe .style-caption-line { animation: hf-enter-wipe .42s cubic-bezier(.5,0,.3,1) both; }
+        .enter-rise .style-caption-line { animation: hf-enter-rise .36s cubic-bezier(.16,1,.3,1) both; }
+        /* สองท่านี้มาจากสไตล์เลน ASS ที่มีอยู่เดิม ไม่ใช่ของ HyperFrames */
+        .enter-pop .style-caption-line { animation: hf-enter-pop .3s cubic-bezier(.2,1.5,.4,1) both; }
+        .enter-none .style-caption-line { animation: hf-enter-fade .26s ease-out both; }
+
+        @keyframes hf-enter-blur {
+          from { opacity: 0; transform: translateY(14px); filter: blur(6px); }
+          to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        @keyframes hf-enter-slam {
+          from { opacity: 0; transform: scale(1.75); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes hf-enter-wipe {
+          from { clip-path: inset(0 100% 0 0); }
+          to   { clip-path: inset(0 0 0 0); }
+        }
+        @keyframes hf-enter-pop {
+          from { opacity: 0; transform: scale(.82); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes hf-enter-fade {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes hf-enter-rise {
+          from { opacity: 0; transform: translateY(30px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .style-caption-line { animation: none !important; }
+          .style-caption-word { transition: none !important; }
         }
 
         .style-caption-karaoke { font-size: clamp(16px, 1.55vw, 22px); }
