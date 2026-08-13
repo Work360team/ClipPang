@@ -45,6 +45,7 @@ import {
   type DragEvent,
 } from "react";
 import { AppShell } from "./AppShell";
+import { CaptionIdeas } from "./CaptionIdeas";
 import { HardLink as Link } from "./HardLink";
 import {
   detectLocalEngine,
@@ -2318,7 +2319,8 @@ export function ProjectWizard() {
             </footer>
           </section>
 
-          {/* เรนเดอร์เสร็จแล้วพรีวิวสดไม่มีประโยชน์อีก มีแต่จะแย่งความสนใจกับไฟล์จริง */}
+          {/* เรนเดอร์เสร็จแล้วพรีวิวสดไม่มีประโยชน์อีก งานถัดไปของผู้ใช้คือเขียนแคปชั่น */}
+          {renderDone && <CaptionIdeas projectId={projectId} onToast={setToast} />}
           {!renderDone && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
             <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">

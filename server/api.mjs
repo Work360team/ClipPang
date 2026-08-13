@@ -24,6 +24,7 @@ import {
   installFfmpeg,
   testGeminiApiKey,
 } from "./setup.mjs";
+import { generateCaptions } from "../pipeline/caption.mjs";
 import {
   generateScripts,
   listStyles,
@@ -301,6 +302,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   ensureDirectories();
   let ffmpegInstall = null;
   const generateScriptsImpl = services.generateScripts ?? generateScripts;
+  const generateCaptionsImpl = services.generateCaptions ?? generateCaptions;
   const regenerateChunkImpl = services.regenerateChunk ?? regenerateChunk;
   const getSetupStatusImpl = services.getSetupStatus ?? getSetupStatus;
   const probeVideoImpl = services.probeVideo ?? probe;
@@ -491,6 +493,28 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         const product = { ...existingProduct, brief, scripts };
         store.updateProject(project.id, { product, wizardStep: 4 });
         return json({ ok: true, scripts });
+      }
+
+      // แคปชั่นใต้โพสต์ + แฮชแท็ก สำหรับเอาไปวางตอนอัปโหลดคลิป
+      // เก็บผลไว้ใน product เพื่อให้กลับมาหน้าเดิมแล้วยังเห็นชุดเดิม ไม่ต้องสร้างซ้ำ
+      const captionMatch = /^\/api\/projects\/([^/]+)\/captions$/.exec(pathname);
+      if (captionMatch && (method === "POST" || method === "GET")) {
+        const project = store.getProject(captionMatch[1]);
+        if (!project) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
+        const existingProduct = parseMaybeJson(project.product ?? project.product_json, {});
+        if (method === "GET") return json({ ok: true, captions: existingProduct.captions ?? null });
+
+        const body = await readJson(request, { optional: true });
+        const brief = body.brief ?? existingProduct.brief ?? existingProduct;
+        const scripts = Array.isArray(existingProduct.scripts) ? existingProduct.scripts : [];
+        const chosen = scripts.find((script) => script.id === body.scriptId) ?? scripts[0];
+        const generated = await generateCaptionsImpl(brief, {
+          spoken: Array.isArray(chosen?.chunks) ? chosen.chunks : [],
+          provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
+          signal: request.signal,
+        });
+        store.updateProject(project.id, { product: { ...existingProduct, captions: generated } });
+        return json({ ok: true, captions: generated });
       }
 
       const chunkMatch = /^\/api\/projects\/([^/]+)\/script\/([^/]+)\/chunk\/(\d+)$/.exec(pathname);

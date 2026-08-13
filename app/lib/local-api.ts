@@ -144,6 +144,13 @@ export const localApi = {
   promoteRender: (id: string, body: Record<string, unknown> = {}) => apiFetch<{ ok: true; renderId: string; render: LocalRender }>(`/api/renders/${encodeURIComponent(id)}/promote`, { method: "POST", body: JSON.stringify(body) }),
   cancelRender: (id: string) => apiFetch<{ ok: true; render: LocalRender }>(`/api/renders/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
   openProject: (projectId: string, target: "out" | "project" = "out") => apiFetch<{ ok: true }>("/api/open", { method: "POST", body: JSON.stringify({ projectId, target }) }),
+  captions: (projectId: string) =>
+    apiFetch<{ ok: true; captions: LocalCaptionSet | null }>(`/api/projects/${encodeURIComponent(projectId)}/captions`),
+  generateCaptions: (projectId: string, body: Record<string, unknown> = {}) =>
+    apiFetch<{ ok: true; captions: LocalCaptionSet }>(`/api/projects/${encodeURIComponent(projectId)}/captions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   settings: () => apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings"),
   updateSettings: (patch: Record<string, unknown>) =>
     apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings", {
@@ -178,6 +185,8 @@ export interface LocalTimelineClip {
 export interface LocalScript { id: string; name?: string; tag?: string; score?: number; chunks: string[] }
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
+export interface LocalCaptionIdea { angle: string; label: string; hint: string; text: string; hashtags: string[] }
+export interface LocalCaptionSet { provider: string; fallbackFrom: string | null; captions: LocalCaptionIdea[] }
 export interface LocalOutput { filename: string; url: string; size?: number; durationMs?: number }
 export interface LocalRender {
   id: string; project_id: string; kind: "draft" | "final"; state: string; progress: number;
