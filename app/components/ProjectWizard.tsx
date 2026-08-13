@@ -2293,7 +2293,7 @@ export function ProjectWizard() {
           {/* เรนเดอร์เสร็จแล้ว รางขวาเปลี่ยนจากพรีวิวสดเป็นกล่องดาวน์โหลด
               เหลือแค่ MP4 อย่างเดียว: .srt/.ass/.wav/.json เป็นไฟล์สำหรับดีบัก ไม่ใช่ของที่
               คนโพสต์คลิปต้องใช้ ใครอยากได้กดเปิดโฟลเดอร์เอา */}
-          {renderDone && (
+          {renderDone && activeStep === 5 && (
             <aside className="final-download">
               <span className="final-download-icon"><Film size={26} /></span>
               {/* ชื่อโปรเจกต์บอกได้ว่านี่คือคลิปของสินค้าอะไร ต่างจาก "final.mp4" ที่ทุกโปรเจกต์
@@ -2329,7 +2329,7 @@ export function ProjectWizard() {
           )}
 
           {/* ยังไม่เสร็จค่อยโชว์พรีวิวสด */}
-          {!renderDone && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
+          {!(renderDone && activeStep === 5) && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
             <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">
               <div className="editor-phone">

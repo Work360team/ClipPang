@@ -330,7 +330,7 @@ export default function SettingsPage() {
           border-radius: 12px;
           color: #765f18;
           background: #fff9e7;
-          font-size: 10.5px;
+          font-size: 13px;
         }
 
         .settings-hosted-note > div {
@@ -351,7 +351,7 @@ export default function SettingsPage() {
           color: #66530d;
           background: #fff;
           font: inherit;
-          font-size: 9px;
+          font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
         }
@@ -425,7 +425,7 @@ export default function SettingsPage() {
           border-radius: 999px;
           color: #7a6400;
           background: #fff6cf;
-          font-size: 9px;
+          font-size: 12.5px;
           font-weight: 650;
         }
 
@@ -489,7 +489,7 @@ export default function SettingsPage() {
           gap: 15px;
           margin-top: 7px;
           color: #8a9087;
-          font-size: 10px;
+          font-size: 13px;
         }
 
         .settings-key-assist span,
@@ -517,11 +517,11 @@ export default function SettingsPage() {
           border-radius: 10px;
           background: #fafbf8;
         }
-        .settings-voice-preview > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #70766e; font-size: 9px; }
-        .settings-voice-preview button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #d9dcd4; border-radius: 7px; color: #50584f; background: #fff; font: inherit; font-size: 8.5px; cursor: pointer; }
+        .settings-voice-preview > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #70766e; font-size: 12.5px; }
+        .settings-voice-preview button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #d9dcd4; border-radius: 7px; color: #50584f; background: #fff; font: inherit; font-size: 12px; cursor: pointer; }
         .settings-voice-preview button:disabled { cursor: wait; opacity: .7; }
         .settings-voice-preview audio { width: 100%; height: 31px; }
-        .settings-voice-preview p { margin: 0; color: #a34c43; font-size: 8.5px; line-height: 1.5; }
+        .settings-voice-preview p { margin: 0; color: #a34c43; font-size: 12px; line-height: 1.5; }
 
         .settings-key-actions,
         .settings-folder-actions {
@@ -563,7 +563,7 @@ export default function SettingsPage() {
           align-items: center;
           gap: 6px;
           color: #858b82;
-          font-size: 9.5px;
+          font-size: 12.5px;
         }
 
         .settings-folder-list { display: grid; gap: 10px; }
@@ -597,8 +597,8 @@ export default function SettingsPage() {
           background: #edf0ec;
         }
 
-        .settings-folder-label label { display: block; color: #3d443c; font-size: 10.5px; font-weight: 650; }
-        .settings-folder-label small { display: block; overflow: hidden; margin-top: 2px; color: #92978f; font-size: 8.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+        .settings-folder-label label { display: block; color: #3d443c; font-size: 13px; font-weight: 650; }
+        .settings-folder-label small { display: block; overflow: hidden; margin-top: 2px; color: #92978f; font-size: 12px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 
         .settings-folder-control {
           display: flex;
@@ -619,7 +619,7 @@ export default function SettingsPage() {
           color: #5d635c;
           background: transparent;
           font-family: ui-monospace, "Cascadia Code", monospace;
-          font-size: 9.5px;
+          font-size: 12.5px;
         }
         .settings-folder-control input[readonly] { cursor: default; }
         .settings-readonly-badge {
@@ -631,7 +631,7 @@ export default function SettingsPage() {
           border-left: 1px solid #e1e3dd;
           color: #737a72;
           background: #f3f4f0;
-          font-size: 8.5px;
+          font-size: 12px;
           white-space: nowrap;
         }
         .settings-folder-control button {
@@ -641,7 +641,7 @@ export default function SettingsPage() {
           color: #515850;
           background: #f3f4f0;
           font: inherit;
-          font-size: 9.5px;
+          font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
         }
@@ -652,7 +652,7 @@ export default function SettingsPage() {
           align-items: center;
           gap: 5px;
           color: #8a9087;
-          font-size: 9.5px;
+          font-size: 12.5px;
         }
 
         .settings-section-head-compact { grid-template-columns: auto 1fr; margin-bottom: 16px; }
@@ -665,11 +665,11 @@ export default function SettingsPage() {
           gap: 12px;
           padding: 10px 0;
           border-bottom: 1px solid #eceee8;
-          font-size: 10.5px;
+          font-size: 13px;
         }
         .settings-status-list dt { color: var(--settings-muted); }
         .settings-status-list dd { display: flex; align-items: center; gap: 5px; margin: 0; color: #343a33; font-weight: 600; }
-        .settings-status-list dd span { padding: 2px 5px; border-radius: 999px; color: #347051; background: #e5f4e9; font-size: 7.5px; }
+        .settings-status-list dd span { padding: 2px 5px; border-radius: 999px; color: #347051; background: #e5f4e9; font-size: 11.5px; }
         .settings-status-list dd i { width: 6px; height: 6px; border-radius: 50%; background: #49a16f; box-shadow: 0 0 0 3px #e5f4e9; }
         .settings-status-list dd i[data-ready="false"] { background: #c9786d; box-shadow: 0 0 0 3px #fae7e4; }
 
@@ -683,7 +683,7 @@ export default function SettingsPage() {
           color: #5d650d;
           background: transparent;
           font: inherit;
-          font-size: 9.5px;
+          font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
         }
@@ -718,9 +718,9 @@ export default function SettingsPage() {
           background: var(--settings-accent);
         }
         .settings-privacy-card h2 { margin: 0 0 6px; font-size: 15px; }
-        .settings-privacy-card p { margin: 0; color: #746a4f; font-size: 10.5px; line-height: 1.65; }
+        .settings-privacy-card p { margin: 0; color: #746a4f; font-size: 13px; line-height: 1.65; }
         .settings-privacy-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
-        .settings-privacy-chips span { padding: 4px 7px; border: 1px solid #e7d69b; border-radius: 999px; color: #746a4f; background: rgba(255,255,255,.6); font-size: 8px; }
+        .settings-privacy-chips span { padding: 4px 7px; border: 1px solid #e7d69b; border-radius: 999px; color: #746a4f; background: rgba(255,255,255,.6); font-size: 12px; }
 
         .settings-cache-card { padding: 19px; }
         .settings-cache-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
@@ -736,7 +736,7 @@ export default function SettingsPage() {
           color: #a34c43;
           background: transparent;
           font: inherit;
-          font-size: 9.5px;
+          font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
         }
@@ -751,13 +751,13 @@ export default function SettingsPage() {
           border-radius: 9px;
           color: #7e453e;
           background: #fff0ed;
-          font-size: 8.5px;
+          font-size: 12px;
         }
         .settings-confirm-clear > div { display: flex; gap: 4px; }
-        .settings-confirm-clear button { display: inline-flex; align-items: center; gap: 3px; height: 25px; padding: 0 7px; border: 0; border-radius: 7px; color: #fff; background: #a65349; font: inherit; font-size: 8px; font-weight: 600; cursor: pointer; }
+        .settings-confirm-clear button { display: inline-flex; align-items: center; gap: 3px; height: 25px; padding: 0 7px; border: 0; border-radius: 7px; color: #fff; background: #a65349; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
         .settings-confirm-clear button:last-child { padding: 0 6px; color: #7e453e; background: #ffe1dc; }
         .settings-confirm-clear button:disabled { cursor: wait; opacity: .7; }
-        .settings-cache-error { margin: 9px 0 0; color: #a34c43; font-size: 8.5px; }
+        .settings-cache-error { margin: 9px 0 0; color: #a34c43; font-size: 12px; }
 
         .settings-page button:focus-visible,
         .settings-page a:focus-visible,

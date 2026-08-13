@@ -246,7 +246,7 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
         .ai-choice.is-off { opacity: .55; cursor: not-allowed; }
         .ai-choice:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
         .ai-choice-title { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; }
-        .ai-choice-title b { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: var(--yellow); color: #10161a; }
+        .ai-choice-title b { font-size: 13px; padding: 1px 7px; border-radius: 999px; background: var(--yellow); color: #10161a; }
         .ai-choice-sub { display: flex; align-items: center; gap: 5px; font-size: 12.5px; opacity: .72; }
         .ai-advanced { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
         .ai-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 600; opacity: .78; list-style: none; display: flex; align-items: center; gap: 7px; }

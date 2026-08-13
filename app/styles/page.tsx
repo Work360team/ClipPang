@@ -386,7 +386,7 @@ export default function StylesPage() {
           border-radius: 999px;
           background: rgba(15,17,13,.58);
           color: #fff;
-          font-size: 9px;
+          font-size: 12.5px;
           font-weight: 600;
           line-height: 1;
           backdrop-filter: blur(8px);
@@ -466,7 +466,7 @@ export default function StylesPage() {
           margin-bottom: 3px;
           color: #92978e;
           font-family: ui-monospace, "Cascadia Code", monospace;
-          font-size: 9px;
+          font-size: 12.5px;
           letter-spacing: .11em;
         }
 
@@ -506,7 +506,7 @@ export default function StylesPage() {
           padding-top: 11px;
           border-top: 1px solid #eeefe9;
           color: #777d74;
-          font-size: 10.5px;
+          font-size: 13px;
         }
 
         .style-meta span { display: inline-flex; align-items: center; gap: 5px; }
@@ -562,7 +562,7 @@ export default function StylesPage() {
           background: var(--style-accent);
         }
 
-        .style-selection-summary span { display: block; color: var(--style-muted); font-size: 10px; }
+        .style-selection-summary span { display: block; color: var(--style-muted); font-size: 13px; }
         .style-selection-summary strong { display: block; margin-top: 1px; font-size: 13px; }
         .style-selection-summary p { justify-self: end; margin: 0; color: var(--style-muted); font-size: 11px; }
 
