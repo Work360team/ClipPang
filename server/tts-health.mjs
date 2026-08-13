@@ -79,13 +79,33 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
       // models.get ผ่านไม่ได้แปลว่าโควตาเหลือ — คีย์ที่โควตาหมดยัง get ได้ 200
       // แล้วไปตาย 429 ตอนสร้างเสียงจริง จึงต้องดูสถานะ 429 ครั้งล่าสุดจากการใช้งานจริงด้วย
       const quota = quotaStatus();
+      if (quota.limited && quota.daily) {
+        const hours = Math.floor(quota.retryInMs / 3_600_000);
+        const minutes = Math.round((quota.retryInMs % 3_600_000) / 60_000);
+        const reset = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })
+          .format(new Date(quota.resetAt));
+        const cap = quota.quotaValue ? `วันละ ${quota.quotaValue} คำขอ` : "รายวัน";
+        return (cache = {
+          ...base,
+          ok: false,
+          code: "QUOTA_DAILY",
+          reason:
+            `โควตา Gemini free tier ${cap} สำหรับโมเดลเสียงหมดแล้ว — รีเซ็ตประมาณ ${reset} น. ` +
+            `(อีก ${hours > 0 ? `${hours} ชม. ` : ""}${minutes} นาที) · เปิด billing ในโปรเจกต์ของคีย์เพื่อใช้ต่อได้ทันที`,
+          latencyMs,
+          retryInMs: quota.retryInMs,
+          resetAt: quota.resetAt,
+          quotaId: quota.quotaId,
+          quotaValue: quota.quotaValue,
+        });
+      }
       if (quota.limited) {
         const seconds = Math.ceil(quota.retryInMs / 1000);
         return (cache = {
           ...base,
           ok: false,
           code: "RATE_LIMITED",
-          reason: `โควตา Gemini เต็มเมื่อครู่นี้ — ลองใหม่อีกครั้งในราว ${seconds} วินาที (การเช็คนี้ไม่ได้ใช้โควตา)`,
+          reason: `ยิงถี่เกินโควตาต่อนาที — รออีกราว ${seconds} วินาทีแล้วลองใหม่ (การเช็คนี้ไม่ได้ใช้โควตา)`,
           latencyMs,
           retryInMs: quota.retryInMs,
         });

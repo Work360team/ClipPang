@@ -158,7 +158,7 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
       if (process.env.TTS_VERBOSE) {
         process.stderr.write(`   [tts] ${res.status} รออีก ${Math.round(waitMs / 1000)}s\n`);
       }
-      if (res.status === 429) noteRateLimited({ provider: "gemini", retryAfterMs: waitMs, detail: body.slice(0, 200) });
+      if (res.status === 429) noteRateLimited({ provider: "gemini", retryAfterMs: waitMs, detail: body.slice(0, 1200) });
       await abortableDelay(waitMs + Math.random() * 400, signal);
       continue;
     }
