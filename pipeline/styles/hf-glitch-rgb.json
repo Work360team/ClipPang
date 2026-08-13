@@ -1,0 +1,42 @@
+{
+  "slug": "hf-glitch-rgb",
+  "name": "กลิตช์ RGB",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "ขอบสีฟ้า-แดงเหลื่อมกันแบบจอเสีย พร้อมเส้นสแกนจาง ๆ ทับทั้งเฟรม — อิง Glitch RGB ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-ExtraBold.ttf",
+      "weight": 800,
+      "size": 90
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#00E5FF",
+    "emphasisFill": "#FF2D55",
+    "outline": {
+      "color": "#000000",
+      "width": 5
+    },
+    "glitch": {
+      "offset": 6,
+      "cyan": "#00E5FF",
+      "red": "#FF2D55"
+    },
+    "scanlines": {
+      "alpha": 0.22,
+      "gap": 4
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "slam",
+      "scale": 1.12,
+      "durationMs": 140
+    },
+    "fitChars": 13
+  }
+}

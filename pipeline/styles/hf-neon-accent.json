@@ -1,0 +1,42 @@
+{
+  "slug": "hf-neon-accent",
+  "name": "นีออนส่ายเบา ๆ",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "เรืองแสงหลายสีพร้อมการส่ายเบา ๆ ตลอดคลิป ให้ความรู้สึกมีชีวิต — อิง Neon Accent ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-ExtraBold.ttf",
+      "weight": 800,
+      "size": 88
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#B26BFF",
+    "emphasisFill": "#4DFFB0",
+    "outline": {
+      "color": "#12061F",
+      "width": 6
+    },
+    "glow": {
+      "color": "#B26BFF",
+      "blur": 16
+    },
+    "wiggle": {
+      "amountPx": 5,
+      "rotateDeg": 1.4,
+      "durationMs": 1500
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "blur",
+      "scale": 1.12,
+      "durationMs": 170
+    },
+    "fitChars": 13
+  }
+}

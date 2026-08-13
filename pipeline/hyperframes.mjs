@@ -32,6 +32,15 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
     throw new Error(`ไม่พบฟอนต์ ${p.font.file} ใน pipeline/fonts`);
   }
 
+  // สไตล์ที่สลับน้ำหนักตัวอักษรต้องฝังสองหน้าฟอนต์ ไม่งั้นเบราว์เซอร์จะปลอมตัวหนา
+  // ด้วยการทำ synthetic bold ซึ่งขอบจะเละตอนซ้อนกับเส้นขอบ
+  let altFontCss = "";
+  if (p.weightShift?.file) {
+    const altFile = path.join(ROOT, "fonts", p.weightShift.file);
+    if (!fs.existsSync(altFile)) throw new Error(`ไม่พบฟอนต์ ${p.weightShift.file} ใน pipeline/fonts`);
+    altFontCss = fontFace(p.font.family, altFile, p.weightShift.base ?? 600);
+  }
+
   const dur = (timeline.durationMs / 1000).toFixed(3);
 
   // marginV = ระยะห่างจากขอบที่ยึด ให้ตีความเหมือนเลน A เป๊ะ ๆ
@@ -57,7 +66,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
           // ช่องว่างเดิมถูกผนวกไว้ท้ายคำตอนตัดคำ จึงต้องดูจากข้อความต้นฉบับ ไม่ใช่ช่องว่างระหว่าง index
           const trailingSpace = /\s$/.test(c.text.slice(w.s, w.e));
           return (
-            `<span class="w" id="c${ci}w${wi}">${esc(w.text)}</span>` +
+            `<span class="w${w.emphasis ? " em" : ""}" id="c${ci}w${wi}">${esc(w.text)}</span>` +
             (trailingSpace ? '<span class="sp"> </span>' : "")
           );
         })
@@ -94,6 +103,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
     <title>${esc(style.name)}</title>
     <style>
       ${fontFace(p.font.family, fontFile, p.font.weight)}
+      ${altFontCss}
       html, body { margin: 0; padding: 0; background: transparent; }
       #root {
         position: relative;
@@ -130,6 +140,8 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
         paint-order: stroke fill;
         ${p.shadow && !p.gradient ? `text-shadow: 0 ${p.shadow.offset}px 0 ${p.shadow.color};` : ""}
         ${p.glow ? `text-shadow: 0 0 ${p.glow.blur ?? 18}px ${p.glow.color ?? "#38f6ff"}, 0 0 ${(p.glow.blur ?? 18) * 2.4}px ${p.glow.color ?? "#38f6ff"};` : ""}
+        ${p.glitch ? `text-shadow: ${-(p.glitch.offset ?? 6)}px 0 0 ${p.glitch.cyan ?? "#00E5FF"}, ${p.glitch.offset ?? 6}px 0 0 ${p.glitch.red ?? "#FF2D55"};` : ""}
+        ${p.weightShift ? `font-weight: ${p.weightShift.base ?? 600};` : ""}
         /* ตัวอักษรจะโปร่งใสเพื่อให้เห็นไล่สี ถ้ายังมี text-shadow อยู่ เงาจะทะลุขึ้นมา
            กลางตัวอักษรเป็นก้อนทึบ ด้านบนจึงตัด text-shadow ทิ้งเมื่อใช้ไล่สี
            ส่วนเส้นขอบใช้ -webkit-text-stroke ที่วาดอยู่หลังฟิล (paint-order) จึงไม่กวน */
@@ -139,6 +151,9 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
         white-space: pre;
       }
       .sp { -webkit-text-stroke: 0; }
+      ${p.emphasis ? `.w.em { font-size: ${p.emphasis.scale ?? 1.5}em; ${p.emphasis.weight ? `font-weight: ${p.emphasis.weight};` : ""} }` : ""}
+      ${p.scanlines ? `.cap::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+        background: repeating-linear-gradient(180deg, rgba(0,0,0,${p.scanlines.alpha ?? 0.22}) 0px, rgba(0,0,0,${p.scanlines.alpha ?? 0.22}) 1px, transparent 1px, transparent ${p.scanlines.gap ?? 4}px); }` : ""}
     </style>
   </head>
   <body>
@@ -165,9 +180,13 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
           slam:  { from: { scale: 1.9, opacity: 0 }, to: { scale: 1, opacity: 1 }, duration: 0.22, ease: "back.out(3)" },
           wipe:  { from: { clipPath: "inset(0 100% 0 0)", opacity: 1 }, to: { clipPath: "inset(0 0% 0 0)", opacity: 1 }, duration: 0.26, ease: "power2.inOut" },
           rise:  { from: { y: 70, opacity: 0 }, to: { y: 0, opacity: 1 }, duration: 0.24, ease: "power4.out" },
+          squeeze: { from: { scaleX: 0.35, scaleY: 1.25, opacity: 0 }, to: { scaleX: 1, scaleY: 1, opacity: 1 }, duration: 0.26, ease: "back.out(2.2)" },
           none:  { from: { opacity: 1 }, to: { opacity: 1 }, duration: 0.01, ease: "none" },
         };
         var ENTER = ENTERS[${JSON.stringify(p.animation?.enter ?? "blur")}] || ENTERS.blur;
+        var WEIGHT_ON = ${JSON.stringify(p.weightShift?.active ?? null)};
+        var WEIGHT_OFF = ${JSON.stringify(p.weightShift?.base ?? null)};
+        var WIGGLE = ${JSON.stringify(p.wiggle ?? null)};
         var POP = ${JSON.stringify(p.animation?.scale ?? 1.12)};
         var POP_S = ${JSON.stringify((p.animation?.durationMs ?? 160) / 1000)};
         var BEATS = ${JSON.stringify(beats)};
@@ -179,7 +198,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
           if (b.kind === "enter") {
             tl.fromTo(b.sel, ENTER.from, Object.assign({}, ENTER.to, { duration: ENTER.duration, ease: ENTER.ease }), b.t);
           } else if (b.kind === "on") {
-            tl.set(b.sel, { color: b.color }, b.t);
+            tl.set(b.sel, WEIGHT_ON ? { color: b.color, fontWeight: WEIGHT_ON } : { color: b.color }, b.t);
             tl.fromTo(
               b.sel,
               { scale: POP, y: -8 },
@@ -187,9 +206,19 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
               b.t,
             );
           } else {
-            tl.set(b.sel, { color: FILL }, b.t);
+            tl.set(b.sel, WEIGHT_OFF ? { color: FILL, fontWeight: WEIGHT_OFF } : { color: FILL }, b.t);
           }
         });
+
+        // ส่ายเบา ๆ ตลอดคลิป (Neon Accent) — เล่นวนบนไทม์ไลน์เดียวกัน ไม่ใช่ลูปแยก
+        // เพราะ HyperFrames เรนเดอร์ทีละเฟรมจากตำแหน่งเวลาบนไทม์ไลน์นี้เท่านั้น
+        if (WIGGLE) {
+          var period = (WIGGLE.durationMs || 1600) / 1000;
+          for (var t = 0; t < ${dur}; t += period) {
+            tl.to(".w", { y: "+=" + (WIGGLE.amountPx || 4), rotation: WIGGLE.rotateDeg || 1.2, duration: period / 2, ease: "sine.inOut" }, t);
+            tl.to(".w", { y: "-=" + (WIGGLE.amountPx || 4), rotation: -(WIGGLE.rotateDeg || 1.2), duration: period / 2, ease: "sine.inOut" }, t + period / 2);
+          }
+        }
 
         tl.set({}, {}, ${dur});
         tl.seek(0);

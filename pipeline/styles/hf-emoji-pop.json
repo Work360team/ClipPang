@@ -1,0 +1,37 @@
+{
+  "slug": "hf-emoji-pop",
+  "name": "บีบเด้งสไตล์ป้ายยา",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "ข้อความบีบแคบแล้วดีดออกทางแนวนอน จังหวะสนุกแบบคลิปป้ายยา — อิง Emoji Pop ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-ExtraBold.ttf",
+      "weight": 800,
+      "size": 92
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#FFD400",
+    "emphasisFill": "#FF3B6B",
+    "outline": {
+      "color": "#000000",
+      "width": 10
+    },
+    "shadow": {
+      "color": "rgba(0,0,0,0.4)",
+      "offset": 6
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "squeeze",
+      "scale": 1.18,
+      "durationMs": 180
+    },
+    "fitChars": 12
+  }
+}

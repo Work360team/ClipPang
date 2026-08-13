@@ -1,0 +1,37 @@
+{
+  "slug": "hf-editorial-emphasis",
+  "name": "เน้นคำแบบนิตยสาร",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "คำสำคัญตัวใหญ่กว่าเพื่อนชัด ๆ ให้จังหวะอ่านแบบพาดหัวนิตยสาร — อิง Editorial Emphasis ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-SemiBold.ttf",
+      "weight": 600,
+      "size": 80
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#FFD400",
+    "emphasisFill": "#FFFFFF",
+    "outline": {
+      "color": "#000000",
+      "width": 8
+    },
+    "emphasis": {
+      "scale": 1.55,
+      "weight": 800
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "rise",
+      "scale": 1.06,
+      "durationMs": 160
+    },
+    "fitChars": 12
+  }
+}
