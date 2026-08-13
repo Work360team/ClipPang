@@ -2291,7 +2291,9 @@ export function ProjectWizard() {
                   <div className="final-result">
                     {/* ไม่วางซับซ้อนทับ: ไฟล์ผลลัพธ์เผาซับมาในภาพแล้ว ถ้าวาง <span> ทับอีกชั้น
                         จะเห็นข้อความค้างสองบรรทัดบนเว็บทั้งที่ไฟล์จริงถูกต้อง */}
-                    <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video></div>
+                    <div className="final-video-slot">
+                      <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video></div>
+                    </div>
                     <div className="output-list">
                       <div className="output-head"><span className="output-icon"><Film size={20} /></span><div><h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3><p>1080 × 1920 · H.264 · พร้อมโพสต์</p></div><a className="button button-primary button-small" href={renderedVideoUrl || "/clippang-sample.mp4"} download><Download size={15} /> MP4</a></div>
                       {engineState === "connected" ? downloadableOutputs.filter(([, output]) => !output.filename.toLowerCase().endsWith(".mp4")).map(([key, output]) => (

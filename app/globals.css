@@ -4561,22 +4561,28 @@ select:focus-visible,
 
 .final-result {
   display: grid;
-  /* คอลัมน์ซ้ายกว้างตามคลิป ไม่ใช่สัดส่วนคงที่ เพราะความสูงถูกกำหนดโดยรายการไฟล์
-     ทางขวา ถ้าตรึงความกว้างไว้ คลิปจะเตี้ยกว่าและเหลือช่องว่างใต้กล่องเป็นแถบยาว */
-  grid-template-columns: auto minmax(290px, 1fr);
+  grid-template-columns: minmax(220px, 0.62fr) minmax(290px, 1fr);
   gap: 18px;
   align-items: stretch;
 }
 
-.final-video {
+/* ช่องวางคลิป: กำหนดความสูงของแถวจากรายการไฟล์ฝั่งขวาอย่างเดียว
+   ตัวคลิปวางแบบ absolute จึงไม่ถูกนับเป็นความสูงของแถว ถ้าปล่อยให้นับ
+   ความกว้างของคลิปจะมาจากคอลัมน์ ความสูงมาจากแถว แล้วแถวก็มาจากคลิปอีกที
+   กลายเป็นวงจรที่ทำให้คลิปโตเลยรายการไฟล์บนจอกว้าง */
+.final-video-slot {
   position: relative;
+  min-height: 360px;
+}
+
+.final-video {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   overflow: hidden;
   aspect-ratio: 9 / 16;
-  /* สูงเท่าคอลัมน์ขวา แล้วปล่อยความกว้างไหลตามอัตราส่วน 9:16 */
-  height: 100%;
-  width: auto;
-  min-height: 360px;
-  justify-self: start;
   border-radius: 16px;
   background: #191c18;
 }
@@ -4878,7 +4884,8 @@ select:focus-visible,
   .render-copy { width: 100%; }
   .final-result { grid-template-columns: 1fr; }
   .draft-ready-preview { grid-template-columns: 1fr; }
-  .final-video { max-width: 270px; margin: 0 auto; }
+  /* คอลัมน์เดียว ไม่มีรายการไฟล์ข้าง ๆ มากำหนดความสูง จึงตั้งความสูงให้ช่องตรง ๆ */
+  .final-video-slot { min-height: 480px; }
   .live-preview-panel { display: block; }
   .phone-stage { min-height: 410px; }
   .preview-timeline { border-top: 1px solid #282d28; }
