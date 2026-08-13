@@ -5105,33 +5105,44 @@ select:focus-visible,
 
 /* ---------- หน้าผลลัพธ์: คลิปซ้าย ดาวน์โหลด+แคปชั่นขวา ---------- */
 
-/* อยู่ในรางขวาสุด เกาะขอบบนไว้ระหว่างเลื่อนอ่านแคปชั่น */
+/* อยู่ในรางขวาสุด เกาะขอบบนไว้ระหว่างเลื่อนอ่านแคปชั่น
+   จัตุรัสให้สมดุลกับคลิปแนวตั้งฝั่งซ้าย แล้วจัดทุกอย่างกลางคอลัมน์ */
 .final-download {
   position: sticky;
   top: 84px;
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 12px 13px;
-  padding: 16px;
+  aspect-ratio: 1 / 1;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #fffdf4 0%, #fafbf8 100%);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 90% at 50% -18%, rgba(255, 210, 63, 0.28) 0%, rgba(255, 210, 63, 0) 62%),
+    linear-gradient(180deg, #fffefa 0%, #fbfcf9 100%);
+  text-align: center;
 }
 
 .final-download-icon {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
-  background: rgba(255, 210, 63, 0.22);
+  width: 62px;
+  height: 62px;
+  border-radius: 20px;
+  background: rgba(255, 210, 63, 0.24);
   color: var(--yellow-dark);
+  /* วงแหวนจาง ๆ แทนเงา ให้ดูเป็นตราสถานะไม่ใช่ปุ่ม */
+  box-shadow: 0 0 0 7px rgba(255, 210, 63, 0.1);
 }
 
 .final-download-copy h3 {
   margin: 0 0 3px;
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
 
@@ -5141,20 +5152,48 @@ select:focus-visible,
   color: var(--ink-faint);
 }
 
-.final-download-button {
-  grid-column: 1 / -1;
+.final-download-meta {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.final-download-meta li {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.final-download-button {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
+  margin-top: 2px;
+  justify-content: center;
   font-size: 15px;
+  box-shadow: 0 8px 18px rgba(255, 210, 63, 0.32);
+}
+
+.final-download-button:hover {
+  box-shadow: 0 10px 22px rgba(255, 210, 63, 0.42);
 }
 
 .final-download-more {
-  grid-column: 1 / -1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  padding-top: 2px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 
 .final-download-more .text-button {

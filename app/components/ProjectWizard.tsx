@@ -2292,11 +2292,16 @@ export function ProjectWizard() {
               คนโพสต์คลิปต้องใช้ ใครอยากได้กดเปิดโฟลเดอร์เอา */}
           {renderDone && (
             <aside className="final-download">
-              <span className="final-download-icon"><Film size={22} /></span>
+              <span className="final-download-icon"><Film size={26} /></span>
               <div className="final-download-copy">
                 <h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3>
-                <p>1080 × 1920 · H.264 · {formatDuration(selectedTotalSec)} · พร้อมโพสต์ทันที</p>
+                <p>เรนเดอร์เสร็จแล้ว พร้อมโพสต์ทันที</p>
               </div>
+              <ul className="final-download-meta">
+                <li>1080 × 1920</li>
+                <li>H.264</li>
+                <li>{formatDuration(selectedTotalSec)}</li>
+              </ul>
               <a className="button button-primary final-download-button" href={renderedVideoUrl || "/clippang-sample.mp4"} download>
                 <Download size={17} /> ดาวน์โหลด MP4
               </a>
