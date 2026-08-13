@@ -45,6 +45,7 @@ import {
   type DragEvent,
 } from "react";
 import { AppShell } from "./AppShell";
+import { refreshProjects } from "../lib/project-store";
 import { CaptionIdeas } from "./CaptionIdeas";
 import { HardLink as Link } from "./HardLink";
 import {
@@ -780,6 +781,7 @@ export function ProjectWizard() {
         setToast("ร่างพร้อมแล้ว กดสร้างคลิปตัวจริงได้โดยไม่ยิงเสียงซ้ำ");
       } else {
         setRenderDone(true);
+        void refreshProjects();
         setToast("คลิปตัวจริงพร้อมดาวน์โหลดแล้ว");
       }
     } catch (error) {
@@ -935,6 +937,7 @@ export function ProjectWizard() {
           window.clearInterval(timer);
           setRendering(false);
           setRenderDone(true);
+          void refreshProjects();
         }
         return next;
       });
@@ -1008,6 +1011,7 @@ export function ProjectWizard() {
       product: productOverride ?? projectProduct(),
     });
     setProjectId(result.project.id);
+    void refreshProjects(); // เมนูซ้ายต้องเห็นโปรเจกต์ใหม่ทันที ไม่ใช่รอรอบถัดไป
     projectReadyForAutosaveRef.current = true;
     window.history.replaceState(null, "", `/p/${encodeURIComponent(result.project.id)}`);
     return result.project.id;

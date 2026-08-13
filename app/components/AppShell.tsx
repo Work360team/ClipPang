@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
+import { refreshProjects, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 import { HardLink as Link } from "./HardLink";
 
 const navItems = [
@@ -63,6 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleteNote, setDeleteNote] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -74,14 +76,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
       setEngineState("connected");
       try {
-        const [status, projects, settings] = await Promise.all([
+        const [status, settings] = await Promise.all([
           localApi.setupStatus(),
-          localApi.listProjects(),
           localApi.settings().catch(() => null),
         ]);
         if (active) {
           setSetupReady(Boolean(status.ready));
-          setAllProjects(projects.projects);
           setPinnedIds(parsePinned(settings?.settings?.pinnedProjects));
         }
       } catch {
@@ -90,6 +90,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     });
     return () => { active = false; };
   }, []);
+
+  // รายการโปรเจกต์มาจากคลังกลาง ลบหรือสร้างที่หน้าไหนเมนูซ้ายก็ตามทันที
+  // และสถานะระหว่างเรนเดอร์ก็ไหลเข้ามาเองโดยไม่ต้องรีเฟรชหน้า
+  useEffect(() => subscribeProjects(setAllProjects), []);
 
   // ปิดเมนูสามจุดเมื่อคลิกที่อื่นหรือกด Esc
   useEffect(() => {
@@ -124,18 +128,29 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const confirmDelete = async () => {
     if (!pendingDelete) return;
+    const target = pendingDelete;
     setBusy(true);
+    setDeleteNote("");
     try {
-      await localApi.deleteProject(pendingDelete.id);
-      setAllProjects((current) => current.filter((project) => project.id !== pendingDelete.id));
-      if (pinnedIds.includes(pendingDelete.id)) {
-        void savePinned(pinnedIds.filter((id) => id !== pendingDelete.id));
+      await localApi.deleteProject(target.id);
+    } catch (error) {
+      // 404 แปลว่าโปรเจกต์หายไปแล้ว (เช่นลบจากอีกหน้าหนึ่ง) ซึ่งก็คือผลลัพธ์ที่ต้องการอยู่ดี
+      // ปล่อยให้ error หลุดออกไปจะทำให้รายการค้างอยู่ทั้งที่ของจริงไม่มีแล้ว
+      const code = (error as { code?: string })?.code;
+      if (code !== "PROJECT_NOT_FOUND") {
+        setDeleteNote(error instanceof Error ? error.message : "ลบไม่สำเร็จ ลองใหม่อีกครั้ง");
+        setBusy(false);
+        return;
       }
-      setPendingDelete(null);
-      if (pathname === `/p/${pendingDelete.id}`) window.location.href = "/";
-    } finally {
-      setBusy(false);
     }
+    removeProjectLocally(target.id);
+    void refreshProjects();
+    if (pinnedIds.includes(target.id)) {
+      void savePinned(pinnedIds.filter((id) => id !== target.id));
+    }
+    setPendingDelete(null);
+    setBusy(false);
+    if (pathname === `/p/${target.id}`) window.location.href = "/";
   };
 
   const currentTitle = pathname.startsWith("/p/")
@@ -308,6 +323,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="confirm-card">
             <h3 id="sidebar-delete-title">ลบ “{pendingDelete.title}” ?</h3>
             <p>ไฟล์จะถูกย้ายไปโฟลเดอร์ data/trash ไม่ได้ลบถาวร ถ้ากดพลาดยังกู้กลับมาเองได้</p>
+            {deleteNote && <p className="confirm-note" role="alert">{deleteNote}</p>}
             <div className="confirm-actions">
               <button type="button" className="button button-outline" disabled={busy} onClick={() => setPendingDelete(null)}>
                 ยกเลิก

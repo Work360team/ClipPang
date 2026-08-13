@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "./AppShell";
 import { HardLink as Link } from "./HardLink";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
+import { refreshProjects, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 
 type DashboardCard = {
   id: string | null;
@@ -84,15 +85,12 @@ export function Dashboard() {
       if (!active) return;
       if (!engine) return setEngineState("unavailable");
       setEngineState("connected");
-      try {
-        const result = await localApi.listProjects();
-        if (active) setLocalProjects(result.projects);
-      } catch {
-        if (active) setEngineState("unavailable");
-      }
     });
     return () => { active = false; };
   }, []);
+
+  // ใช้คลังกลางร่วมกับเมนูซ้าย ลบที่นี่เมนูซ้ายหายตาม และกลับกัน
+  useEffect(() => subscribeProjects(setLocalProjects), []);
 
   const projects = useMemo(() => engineState === "connected"
     ? localProjects.map((project) => {
@@ -354,7 +352,8 @@ export function Dashboard() {
                   setDeleteNote("");
                   localApi.deleteProject(target.id)
                     .then(() => {
-                      setLocalProjects((current) => current.filter((project) => project.id !== target.id));
+                      removeProjectLocally(target.id);
+                      void refreshProjects();
                       setPendingDelete(null);
                     })
                     .catch((error) => setDeleteNote(error instanceof Error ? error.message : "ลบไม่สำเร็จ ลองใหม่อีกครั้ง"))
