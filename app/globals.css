@@ -4595,7 +4595,9 @@ select:focus-visible,
 .final-result {
   --final-video-max-h: min(68vh, 600px);
   display: grid;
-  grid-template-columns: minmax(220px, 0.5fr) minmax(320px, 1fr);
+  /* คอลัมน์คลิปกว้างเท่าที่คลิปต้องการจริง ๆ (งบความสูงแปลงกลับเป็นความกว้าง 9:16)
+     ไม่งั้นจะเหลือช่องว่างข้างคลิปเพราะคลิปโตต่อไม่ได้แล้ว */
+  grid-template-columns: minmax(220px, calc(var(--final-video-max-h) * 9 / 16)) minmax(320px, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -5103,14 +5105,10 @@ select:focus-visible,
 
 /* ---------- หน้าผลลัพธ์: คลิปซ้าย ดาวน์โหลด+แคปชั่นขวา ---------- */
 
-.final-side {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
+/* อยู่ในรางขวาสุด เกาะขอบบนไว้ระหว่างเลื่อนอ่านแคปชั่น */
 .final-download {
+  position: sticky;
+  top: 84px;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
   gap: 12px 13px;
