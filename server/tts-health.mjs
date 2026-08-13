@@ -5,6 +5,7 @@
 // (เช็คทุกครั้งก่อนเรนเดอร์ ถ้าไปเรียก generateContent ทดสอบจะเผาโควตาฟรี ๆ)
 import { getGeminiKeyStatus } from "./security.mjs";
 import { resolvedEnvironment } from "../pipeline/providers.mjs";
+import { quotaStatus } from "../pipeline/tts-quota.mjs";
 
 const CACHE_MS = 60_000;
 const TIMEOUT_MS = 8000;
@@ -32,7 +33,9 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
   const model = ttsModelName(env);
   const key = readKey(env);
 
-  if (!force && cache && cache.model === model && Date.now() - cache.checkedAt < CACHE_MS) {
+  // แคชได้ ยกเว้นเพิ่งเจอ 429 จากการใช้งานจริง — กรณีนั้นผลเก่าที่บอกว่าพร้อมจะหลอกผู้ใช้
+  const fresh = cache && cache.model === model && Date.now() - cache.checkedAt < CACHE_MS;
+  if (!force && fresh && !(cache.ok && quotaStatus().limited)) {
     return { ...cache, cached: true };
   }
 
@@ -72,6 +75,21 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
     if (response.ok) {
       const data = await response.json().catch(() => ({}));
       const methods = Array.isArray(data.supportedGenerationMethods) ? data.supportedGenerationMethods : [];
+
+      // models.get ผ่านไม่ได้แปลว่าโควตาเหลือ — คีย์ที่โควตาหมดยัง get ได้ 200
+      // แล้วไปตาย 429 ตอนสร้างเสียงจริง จึงต้องดูสถานะ 429 ครั้งล่าสุดจากการใช้งานจริงด้วย
+      const quota = quotaStatus();
+      if (quota.limited) {
+        const seconds = Math.ceil(quota.retryInMs / 1000);
+        return (cache = {
+          ...base,
+          ok: false,
+          code: "RATE_LIMITED",
+          reason: `โควตา Gemini เต็มเมื่อครู่นี้ — ลองใหม่อีกครั้งในราว ${seconds} วินาที (การเช็คนี้ไม่ได้ใช้โควตา)`,
+          latencyMs,
+          retryInMs: quota.retryInMs,
+        });
+      }
       return (cache = { ...base, ok: true, code: "READY", reason: null, latencyMs, supportedGenerationMethods: methods });
     }
 

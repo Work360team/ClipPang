@@ -212,6 +212,46 @@ const initialScripts = [
   },
 ];
 
+/**
+ * ตัวนับย่อยของแต่ละขั้น เช่น "สร้างเสียงแล้ว 3/9 ท่อน"
+ *
+ * SSE ส่ง current/total มาเฉพาะตอนที่ event เกิดสด ๆ ส่วนตอน client เพิ่งต่อเข้ามา
+ * กลางคัน เซิร์ฟเวอร์จะส่ง snapshot ของ render ที่เก็บใน store ซึ่งไม่ได้เก็บสองค่านี้ไว้
+ * จึงได้ null ทั้งที่ข้อความมีตัวเลขอยู่ — อ่านจากข้อความเป็นทางสำรองให้ตัวนับไม่หาย
+ * ตอนกลับเข้าหน้าเดิม
+ */
+function readCounter(event: { current?: number | null; total?: number | null; message?: string | null }) {
+  if (typeof event.current === "number" && typeof event.total === "number" && event.total > 1) {
+    return { current: event.current, total: event.total };
+  }
+  const match = /(\d+)\s*\/\s*(\d+)/.exec(event.message ?? "");
+  if (!match) return null;
+  const current = Number(match[1]);
+  const total = Number(match[2]);
+  return total > 1 && current <= total ? { current, total } : null;
+}
+
+/** สถานะที่ถือว่างานยังทำอยู่ — ใช้ร่วมกันทุกที่ที่ต้องถามว่า "ยังรันอยู่ไหม" */
+const RUNNING_RENDER_STATES = new Set(["queued", "running", "ingesting", "processing", "retrying"]);
+
+/**
+ * ลำดับงานที่ pipeline ทำจริง (ชื่อ stage ตรงกับที่ pipeline/index.mjs ส่งมาทาง SSE)
+ * ใช้วาดรายการให้ผู้ใช้เห็นว่าตอนนี้อยู่ขั้นไหนและเหลืออะไรบ้าง แทนที่จะเห็นแค่ %
+ */
+const RENDER_STAGES: { id: string; label: string; detail: string }[] = [
+  { id: "preflight", label: "ตรวจเครื่องมือ", detail: "เช็ค FFmpeg และคีย์เสียง" },
+  { id: "ingest", label: "อ่านคลิปต้นฉบับ", detail: "อ่านความยาวและสเปกไฟล์" },
+  { id: "analyze", label: "วิเคราะห์ภาพ", detail: "หาจุดตัดฉากและตรวจซับเดิม" },
+  { id: "script", label: "เตรียมสคริปต์", detail: "แบ่งท่อนให้พอดีจังหวะพูด" },
+  { id: "voice", label: "สร้างเสียงพากย์", detail: "ยิง TTS ทีละท่อนแล้ววัดความยาวจริง" },
+  { id: "timeline", label: "จัด timeline", detail: "จับคู่เสียงกับช่วงภาพ" },
+  { id: "caption", label: "ทำซับ", detail: "คอมไพล์ซับให้ตรงกับเสียง" },
+  { id: "compose", label: "ประกอบภาพ", detail: "ตัดต่อคลิปด้วย FFmpeg" },
+  { id: "mix", label: "รวมเสียง", detail: "ต่อเสียงและปรับระดับ" },
+  { id: "package", label: "รวมไฟล์", detail: "เบิร์นซับและ mux เป็น MP4" },
+  { id: "deliver", label: "ส่งมอบ", detail: "เขียนไฟล์ผลลัพธ์" },
+];
+
 type WizardStyle = { id: string; name: string; note: string; label: string; className: string; speed: string };
 
 /**
@@ -243,7 +283,6 @@ const replacementLines = [
 type ProductBrief = {
   name: string;
   category: string;
-  price: string;
   features: string;
   audience: string;
   tone: string;
@@ -251,14 +290,25 @@ type ProductBrief = {
 };
 
 const initialBrief: ProductBrief = {
-  name: "หัวชาร์จพกพาแม่เหล็ก 5,000 mAh",
-  category: "มือถือและอุปกรณ์เสริม",
-  price: "399 บาท จากปกติ 590 บาท",
-  features: "ชาร์จไร้สายแบบแม่เหล็ก, ติดแน่น, น้ำหนักเบา, ใช้เป็นห่วงจับมือถือได้, พกขึ้นเครื่องได้",
-  audience: "คนทำงาน ครีเอเตอร์ และคนเดินทางบ่อย",
+  name: "",
+  category: "",
+  features: "",
+  audience: "",
   tone: "เหมือนเพื่อนแนะนำ",
-  cta: "กดรับโปรที่ตะกร้าได้เลยค่ะ",
+  cta: "",
 };
+
+/** หมวดหมู่ตั้งต้น — ผู้ใช้พิมพ์เพิ่มเองได้ ค่าที่พิมพ์จะถูกจำไว้ในโปรเจกต์ */
+const CATEGORY_PRESETS = [
+  "มือถือและอุปกรณ์เสริม",
+  "บ้านและไลฟ์สไตล์",
+  "บิวตี้และสกินแคร์",
+  "แฟชั่นและเครื่องประดับ",
+  "สุขภาพและกีฬา",
+  "แม่และเด็ก",
+  "อาหารและเครื่องดื่ม",
+  "สัตว์เลี้ยง",
+];
 
 export function ProjectWizard() {
   const params = useParams<{ id?: string }>();
@@ -316,6 +366,8 @@ export function ProjectWizard() {
   const [renderId, setRenderId] = useState<string | null>(null);
   const [renderKind, setRenderKind] = useState<"draft" | "final">("draft");
   const [renderError, setRenderError] = useState("");
+  const [renderStageId, setRenderStageId] = useState<string | null>(null);
+  const [renderCounter, setRenderCounter] = useState<{ current: number; total: number } | null>(null);
   const [renderOutputs, setRenderOutputs] = useState<Record<string, LocalOutput>>({});
   const [brief, setBrief] = useState<ProductBrief>(initialBrief);
   const [toast, setToast] = useState("");
@@ -675,7 +727,12 @@ export function ProjectWizard() {
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
     setActiveStep(Math.max(1, Math.min(5, Number(project.wizard_step ?? 1))) as WizardStep);
-    const latest = project.renders?.find((render) => !render.stale);
+    // งานที่กำลังรันต้องกลับมาเห็นเสมอ แม้จะถูกมาร์กว่า stale เพราะผู้ใช้แก้ timeline
+    // ต่อหลังกดสร้าง — ไม่งั้นออกไปหน้าอื่นแล้วกลับมาจะเหมือนงานหายไปเฉย ๆ
+    // ทั้งที่ยังทำอยู่เบื้องหลัง
+    const renders = project.renders ?? [];
+    const running = renders.find((render) => RUNNING_RENDER_STATES.has(String(render.state)));
+    const latest = running ?? renders.find((render) => !render.stale);
     if (latest) restoreRender(latest);
   }
 
@@ -722,6 +779,9 @@ export function ProjectWizard() {
       if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
       setRenderProgress(Number(event.progress ?? 0));
       setOperationMessage(event.message || "กำลังประมวลผล");
+      // เก็บ stage และตัวนับย่อยไว้วาดรายการขั้นตอน ไม่ใช่ทิ้งแล้วโชว์แค่ %
+      if (typeof event.stage === "string" && event.stage) setRenderStageId(event.stage);
+      setRenderCounter(readCounter(event));
       if (event.state === "ready") void completeRender(id, kind, expectedEditRevision);
       else if (event.state === "failed") {
         setRendering(false);
@@ -753,11 +813,15 @@ export function ProjectWizard() {
     setRenderKind(render.kind);
     setRenderProgress(Number(render.progress ?? 0));
     setOperationMessage(render.message || "");
+    // กลับเข้าหน้าเดิมกลางคัน ต้องเห็นขั้นตอนและตัวนับทันที ไม่ต้องรอ event ถัดไป
+    // ซึ่งบางขั้น เช่น TTS อาจนานหลายสิบวินาทีกว่าจะมี event ใหม่
+    if (render.stage) setRenderStageId(String(render.stage));
+    setRenderCounter(readCounter(render as { current?: number | null; total?: number | null; message?: string | null }));
     if (render.state === "ready") {
       const revision = editRevisionRef.current;
       activeRenderEditRevisionRef.current = revision;
       void completeRender(render.id, render.kind, revision);
-    } else if (["queued", "running", "ingesting", "processing", "retrying"].includes(render.state)) {
+    } else if (RUNNING_RENDER_STATES.has(String(render.state))) {
       setActiveStep(5);
       setRendering(true);
       const revision = editRevisionRef.current;
@@ -2005,13 +2069,12 @@ export function ProjectWizard() {
                   <p>ยิ่งบอกชัด สคริปต์ยิ่งพูดเหมือนคุณขายเอง ไม่ต้องเขียนเป็นประโยคสวย ๆ</p>
                 </div>
                 <div className="brief-grid">
-                  <label className="field field-span-2"><span>ชื่อสินค้า <b>*</b></span><input value={brief.name} onChange={(event) => setBrief((current) => ({ ...current, name: event.target.value }))} /></label>
-                  <label className="field"><span>หมวดหมู่</span><select value={brief.category} onChange={(event) => setBrief((current) => ({ ...current, category: event.target.value }))}><option>มือถือและอุปกรณ์เสริม</option><option>บ้านและไลฟ์สไตล์</option><option>บิวตี้และสกินแคร์</option></select><ChevronDown size={15} /></label>
-                  <label className="field"><span>ราคา / โปรโมชัน</span><input value={brief.price} onChange={(event) => setBrief((current) => ({ ...current, price: event.target.value }))} /></label>
-                  <label className="field field-span-2"><span>จุดขายหลัก <b>*</b></span><textarea rows={4} value={brief.features} onChange={(event) => setBrief((current) => ({ ...current, features: event.target.value }))} /><small>แยกแต่ละข้อด้วยเครื่องหมายจุลภาคได้</small></label>
-                  <label className="field"><span>กลุ่มลูกค้า</span><input value={brief.audience} onChange={(event) => setBrief((current) => ({ ...current, audience: event.target.value }))} /></label>
+                  <label className="field field-span-2"><span>ชื่อสินค้า <b>*</b></span><input value={brief.name} placeholder="เช่น ที่หนีบมือถือติดกระเป๋าเดินทาง" onChange={(event) => setBrief((current) => ({ ...current, name: event.target.value }))} /></label>
+                  <label className="field field-span-2"><span>หมวดหมู่</span><input list="clippang-categories" value={brief.category} placeholder="พิมพ์เองหรือเลือกจากรายการ" onChange={(event) => setBrief((current) => ({ ...current, category: event.target.value }))} /><datalist id="clippang-categories">{CATEGORY_PRESETS.map((item) => <option value={item} key={item} />)}</datalist></label>
+                  <label className="field field-span-2"><span>จุดขายหลัก <b>*</b></span><textarea rows={4} value={brief.features} placeholder="เช่น หนีบติดคันชักได้เลย, พับเก็บได้ ไม่เกะกะ, หมุนได้ 360 องศา" onChange={(event) => setBrief((current) => ({ ...current, features: event.target.value }))} /><small>แยกแต่ละข้อด้วยเครื่องหมายจุลภาคได้</small></label>
+                  <label className="field"><span>กลุ่มลูกค้า</span><input value={brief.audience} placeholder="เช่น คนชอบเที่ยว เดินทางบ่อย" onChange={(event) => setBrief((current) => ({ ...current, audience: event.target.value }))} /></label>
                   <label className="field"><span>โทนที่อยากได้</span><select value={brief.tone} onChange={(event) => setBrief((current) => ({ ...current, tone: event.target.value }))}><option>เหมือนเพื่อนแนะนำ</option><option>ขายเก่ง จังหวะไว</option><option>รีวิวจริงใจ</option><option>พรีเมียม ดูแพง</option></select><ChevronDown size={15} /></label>
-                  <label className="field field-span-2"><span>คำที่อยากให้พูดปิดท้าย</span><input value={brief.cta} onChange={(event) => setBrief((current) => ({ ...current, cta: event.target.value }))} /></label>
+                  <label className="field field-span-2"><span>คำที่อยากให้พูดปิดท้าย</span><input value={brief.cta} placeholder="เช่น กดตะกร้าส้มด้านล่างเลย" onChange={(event) => setBrief((current) => ({ ...current, cta: event.target.value }))} /></label>
                 </div>
                 <div className="ai-tip"><span><Sparkles size={18} /></span><p><b>ไม่ต้องคิดให้ครบทุกคำ</b> ClipPang จะสร้างสคริปต์ให้เลือก 5 แนว และคุณแก้ทีละท่อนได้ในขั้นถัดไป</p></div>
               </div>
@@ -2132,7 +2195,30 @@ export function ProjectWizard() {
                 {rendering && (
                   <div className="render-progress-card">
                     <div className="render-orbit"><span>{renderProgress}%</span></div>
-                    <div className="render-copy"><span className="live-pill dark"><i /> กำลังสร้าง{renderKind === "draft" ? "ร่าง" : "คลิปตัวจริง"}</span><h3>{renderStage}</h3><p>คุณปิดหน้านี้ได้ งานจะทำต่อและกลับมาดูความคืบหน้าได้เสมอ</p><div className="render-bar"><span style={{ width: `${renderProgress}%` }} /></div><div className="render-time"><span>{renderProgress}% แล้ว</span><span>{operationMessage || "กำลังประมวลผลบนเครื่อง"}</span></div><button type="button" onClick={() => void cancelRender()}>ยกเลิกงาน</button></div>
+                    <div className="render-copy">
+                      <span className="live-pill dark"><i /> กำลังสร้าง{renderKind === "draft" ? "ร่าง" : "คลิปตัวจริง"}</span>
+                      <h3>{renderStage}{renderCounter ? ` · ${renderCounter.current}/${renderCounter.total}` : ""}</h3>
+                      <p>คุณปิดหน้านี้ได้ งานจะทำต่อและกลับมาดูความคืบหน้าได้เสมอ</p>
+                      <div className="render-bar"><span style={{ width: `${renderProgress}%` }} /></div>
+                      <div className="render-time"><span>{renderProgress}% แล้ว</span><span>{operationMessage || "กำลังประมวลผลบนเครื่อง"}</span></div>
+                      <ol className="render-stage-list">
+                        {RENDER_STAGES.map((stage) => {
+                          const activeIndex = RENDER_STAGES.findIndex((item) => item.id === renderStageId);
+                          const index = RENDER_STAGES.findIndex((item) => item.id === stage.id);
+                          const state = activeIndex < 0 ? "wait" : index < activeIndex ? "done" : index === activeIndex ? "now" : "wait";
+                          return (
+                            <li className={`render-stage ${state}`} key={stage.id}>
+                              <span className="render-stage-mark">{state === "done" ? <Check size={12} /> : state === "now" ? <i /> : null}</span>
+                              <div>
+                                <b>{stage.label}{state === "now" && renderCounter ? ` ${renderCounter.current}/${renderCounter.total}` : ""}</b>
+                                <small>{state === "now" ? operationMessage || stage.detail : stage.detail}</small>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                      <button type="button" onClick={() => void cancelRender()}>ยกเลิกงาน</button>
+                    </div>
                   </div>
                 )}
 

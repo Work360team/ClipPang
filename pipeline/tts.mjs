@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { durationMs, ensureDir, ffmpeg, run, sha256, throwIfAborted, toAbortError } from "./lib.mjs";
+import { noteQuotaOk, noteRateLimited } from "./tts-quota.mjs";
 import { graphemeCount } from "./core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -157,6 +158,7 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
       if (process.env.TTS_VERBOSE) {
         process.stderr.write(`   [tts] ${res.status} รออีก ${Math.round(waitMs / 1000)}s\n`);
       }
+      if (res.status === 429) noteRateLimited({ provider: "gemini", retryAfterMs: waitMs, detail: body.slice(0, 200) });
       await abortableDelay(waitMs + Math.random() * 400, signal);
       continue;
     }
@@ -167,6 +169,7 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
     if (!part) throw new Error("Gemini TTS ไม่ได้คืนเสียงกลับมา (อาจโดน safety filter)");
     const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || "")?.[1] || 24000);
     fs.writeFileSync(rawFile, wavFromPcm(Buffer.from(part.inlineData.data, "base64"), { rate }));
+    noteQuotaOk("gemini");
     return rawFile;
   }
   throw lastErr;

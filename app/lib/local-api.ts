@@ -128,6 +128,8 @@ export const localApi = {
   createProject: (body: Record<string, unknown>) => apiFetch<{ ok: true; project: LocalProject }>("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   getProject: (id: string) => apiFetch<{ ok: true; project: LocalProject }>(`/api/projects/${encodeURIComponent(id)}`),
   updateProject: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; project: LocalProject }>(`/api/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  // เซิร์ฟเวอร์ย้ายไป data/trash ไม่ได้ลบทิ้งถาวร จึงกู้คืนเองได้ถ้ากดพลาด
+  deleteProject: (id: string) => apiFetch<{ ok: true; recoverable: boolean; message: string }>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   generateScripts: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; scripts: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script`, { method: "POST", body: JSON.stringify(body) }),
   regenerateChunk: (id: string, variantId: string, index: number, body: Record<string, unknown>) => apiFetch<{ ok: true; chunk: string; scripts?: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script/${encodeURIComponent(variantId)}/chunk/${index}`, { method: "POST", body: JSON.stringify(body) }),
   voices: () => apiFetch<{ ok: true; voices: LocalVoice[] }>("/api/voices"),

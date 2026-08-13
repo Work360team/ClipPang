@@ -11,6 +11,7 @@ import {
   Play,
   Plus,
   Sparkles,
+  Trash2,
   UploadCloud,
   WandSparkles,
   WifiOff,
@@ -20,8 +21,23 @@ import { AppShell } from "./AppShell";
 import { HardLink as Link } from "./HardLink";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
 
-const demoProjects = [
+type DashboardCard = {
+  id: string | null;
+  running: boolean;
+  title: string;
+  meta: string;
+  status: string;
+  statusClass: string;
+  image: string;
+  href: string;
+  updated: string;
+  progress?: number;
+};
+
+const demoProjects: DashboardCard[] = [
   {
+    id: null,
+    running: false,
     title: "หัวชาร์จพกพาแม่เหล็ก",
     meta: "29 วินาที · ซับป๊อปเหลือง",
     status: "พร้อมดาวน์โหลด",
@@ -31,6 +47,8 @@ const demoProjects = [
     updated: "12 นาทีที่แล้ว",
   },
   {
+    id: null,
+    running: false,
     title: "เซรั่มผิวโกลว์ 7 วัน",
     meta: "42 วินาที · ซับมินิมอล",
     status: "ร่าง 3 เวอร์ชัน",
@@ -40,6 +58,8 @@ const demoProjects = [
     updated: "เมื่อวาน 18:24",
   },
   {
+    id: null,
+    running: false,
     title: "แก้วเก็บความเย็น 890 ml",
     meta: "กำลังสร้างเสียงพากย์",
     status: "กำลังทำ 58%",
@@ -53,6 +73,9 @@ const demoProjects = [
 export function Dashboard() {
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
   const [localProjects, setLocalProjects] = useState<LocalProject[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
   const [folderError, setFolderError] = useState("");
 
   useEffect(() => {
@@ -77,6 +100,8 @@ export function Dashboard() {
       const ready = latest?.state === "ready";
       const running = latest && ["queued", "running", "ingesting", "processing", "retrying"].includes(latest.state);
       return {
+        id: project.id,
+        running: Boolean(running),
         title: project.title,
         meta: ready ? (latest.kind === "final" ? "คลิปตัวจริงพร้อมแล้ว" : "ร่างพร้อมให้เลือก") : running ? latest.message || "กำลังประมวลผล" : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`,
         status: ready ? "พร้อมดาวน์โหลด" : running ? `กำลังทำ ${latest.progress ?? 0}%` : "บันทึกแล้ว",
@@ -226,20 +251,35 @@ export function Dashboard() {
               {projects.length === 0 && engineState === "connected" ? (
                 <div className="projects-empty"><Film size={22} /><b>ยังไม่มีโปรเจกต์</b><p>เริ่มจากคลิปแรกได้เลย ทุกไฟล์จะอยู่บนเครื่องนี้</p><Link href="/p/new" className="button button-primary"><Plus size={16} /> สร้างคลิปแรก</Link></div>
               ) : projects.map((project) => (
-                <Link href={project.href} className="project-row" key={project.title}>
-                  <div className="project-thumb">
-                    <img src={project.image} alt="" />
-                    {project.statusClass === "running" && <span className="project-progress-ring">{("progress" in project ? project.progress : 58)}</span>}
-                  </div>
-                  <div className="project-main">
-                    <h3>{project.title}</h3>
-                    <p>{project.meta}</p>
-                    <span className={`project-status ${project.statusClass}`}>
-                      <i /> {project.status}
-                    </span>
-                  </div>
-                  <time>{project.updated}</time>
-                </Link>
+                <div className="project-row-wrap" key={project.id ?? project.title}>
+                  <Link href={project.href} className="project-row">
+                    <div className="project-thumb">
+                      <img src={project.image} alt="" />
+                      {project.statusClass === "running" && <span className="project-progress-ring">{("progress" in project ? project.progress : 58)}</span>}
+                    </div>
+                    <div className="project-main">
+                      <h3>{project.title}</h3>
+                      <p>{project.meta}</p>
+                      <span className={`project-status ${project.statusClass}`}>
+                        <i /> {project.status}
+                      </span>
+                    </div>
+                    <time>{project.updated}</time>
+                  </Link>
+                  {project.id && (
+                    <button
+                      type="button"
+                      className="project-delete"
+                      // ยังทำงานอยู่ก็ลบไม่ได้ ไม่งั้นไฟล์ถูกย้ายทิ้งกลางคันแล้ว worker พังแบบงง ๆ
+                      disabled={project.running || deletingId === project.id}
+                      aria-label={`ลบโปรเจกต์ ${project.title}`}
+                      title={project.running ? "กำลังสร้างคลิปอยู่ ลบไม่ได้ตอนนี้" : "ลบโปรเจกต์"}
+                      onClick={() => { if (project.id) setPendingDelete({ id: project.id, title: project.title }); }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -290,6 +330,43 @@ export function Dashboard() {
             : <span>คุณสร้างคลิปเร็วขึ้น <b>3.2 เท่า</b> จากสัปดาห์แรก</span>}</div>
         </section>
       </div>
+
+      {pendingDelete && (
+        <div className="confirm-backdrop">
+          {/* ปุ่มจริงแทน div ที่ดักคลิก เพื่อให้ปิดด้วยคีย์บอร์ดได้และผ่านเกณฑ์ a11y */}
+          <button type="button" className="confirm-scrim" aria-label="ปิดหน้าต่างยืนยัน" onClick={() => setPendingDelete(null)} />
+          <div className="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+            <h2 id="confirm-title">ลบ “{pendingDelete.title}” ไหม</h2>
+            <p>
+              ไฟล์จะถูกย้ายไปที่โฟลเดอร์ <code>data/trash</code> บนเครื่องคุณ ไม่ได้ลบถาวร
+              ถ้ากดพลาดยังเข้าไปกู้คืนเองได้
+            </p>
+            {deleteNote && <p className="confirm-error">{deleteNote}</p>}
+            <div className="confirm-actions">
+              <button type="button" className="button button-quiet" onClick={() => setPendingDelete(null)} disabled={Boolean(deletingId)}>ยกเลิก</button>
+              <button
+                type="button"
+                className="button button-danger"
+                disabled={Boolean(deletingId)}
+                onClick={() => {
+                  const target = pendingDelete;
+                  setDeletingId(target.id);
+                  setDeleteNote("");
+                  localApi.deleteProject(target.id)
+                    .then(() => {
+                      setLocalProjects((current) => current.filter((project) => project.id !== target.id));
+                      setPendingDelete(null);
+                    })
+                    .catch((error) => setDeleteNote(error instanceof Error ? error.message : "ลบไม่สำเร็จ ลองใหม่อีกครั้ง"))
+                    .finally(() => setDeletingId(null));
+                }}
+              >
+                {deletingId ? "กำลังลบ…" : "ย้ายไปถังขยะ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
