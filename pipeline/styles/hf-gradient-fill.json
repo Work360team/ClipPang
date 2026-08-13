@@ -1,0 +1,38 @@
+{
+  "slug": "hf-gradient-fill",
+  "name": "ไล่สีพรีเมียม",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "ตัวอักษรไล่เฉดส้ม-ชมพู เข้าแบบเด้งยืดหยุ่น ดูแพงขึ้นทันที — อิง Gradient Fill ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-ExtraBold.ttf",
+      "weight": 800,
+      "size": 94
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#FFD400",
+    "emphasisFill": "#FF3B6B",
+    "outline": {
+      "color": "#000000",
+      "width": 9
+    },
+    "gradient": {
+      "from": "#FFB020",
+      "to": "#FF4D8D",
+      "angle": 100
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "slam",
+      "scale": 1.16,
+      "durationMs": 190
+    },
+    "fitChars": 12
+  }
+}

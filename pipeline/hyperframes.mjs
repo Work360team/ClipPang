@@ -118,6 +118,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
         align-items: flex-end;
         max-width: 100%;
         font-size: ${p.font.size}px;
+        ${p.pill ? `padding: ${p.pill.padV ?? 18}px ${p.pill.padH ?? 34}px; border-radius: ${p.pill.radius ?? 999}px; background: ${p.pill.color ?? "rgba(0,0,0,0.62)"};` : ""}
       }
       .w, .sp {
         font-family: '${p.font.family}', sans-serif;
@@ -128,6 +129,8 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
         -webkit-text-stroke: ${p.outline.width}px ${p.outline.color};
         paint-order: stroke fill;
         ${p.shadow ? `text-shadow: 0 ${p.shadow.offset}px 0 ${p.shadow.color};` : ""}
+        ${p.glow ? `text-shadow: 0 0 ${p.glow.blur ?? 18}px ${p.glow.color ?? "#38f6ff"}, 0 0 ${(p.glow.blur ?? 18) * 2.4}px ${p.glow.color ?? "#38f6ff"};` : ""}
+        ${p.gradient ? `background-image: linear-gradient(${p.gradient.angle ?? 100}deg, ${p.gradient.from}, ${p.gradient.to}); -webkit-background-clip: text; background-clip: text; color: transparent;` : ""}
         display: inline-block;
         transform-origin: 50% 78%;
         white-space: pre;
@@ -153,6 +156,15 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
       (function () {
         gsap.defaults({ immediateRender: false });
         var FILL = ${JSON.stringify(p.fill)};
+        // ท่าเข้าของแต่ละบรรทัด อิงจากคอมโพเนนต์ในแคตตาล็อก HyperFrames
+        var ENTERS = {
+          blur:  { from: { y: 34, opacity: 0, filter: "blur(6px)" }, to: { y: 0, opacity: 1, filter: "blur(0px)" }, duration: 0.18, ease: "power3.out" },
+          slam:  { from: { scale: 1.9, opacity: 0 }, to: { scale: 1, opacity: 1 }, duration: 0.22, ease: "back.out(3)" },
+          wipe:  { from: { clipPath: "inset(0 100% 0 0)", opacity: 1 }, to: { clipPath: "inset(0 0% 0 0)", opacity: 1 }, duration: 0.26, ease: "power2.inOut" },
+          rise:  { from: { y: 70, opacity: 0 }, to: { y: 0, opacity: 1 }, duration: 0.24, ease: "power4.out" },
+          none:  { from: { opacity: 1 }, to: { opacity: 1 }, duration: 0.01, ease: "none" },
+        };
+        var ENTER = ENTERS[${JSON.stringify(p.animation?.enter ?? "blur")}] || ENTERS.blur;
         var POP = ${JSON.stringify(p.animation?.scale ?? 1.12)};
         var POP_S = ${JSON.stringify((p.animation?.durationMs ?? 160) / 1000)};
         var BEATS = ${JSON.stringify(beats)};
@@ -162,12 +174,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
 
         BEATS.forEach(function (b) {
           if (b.kind === "enter") {
-            tl.fromTo(
-              b.sel,
-              { y: 34, opacity: 0, filter: "blur(6px)" },
-              { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power3.out" },
-              b.t,
-            );
+            tl.fromTo(b.sel, ENTER.from, Object.assign({}, ENTER.to, { duration: ENTER.duration, ease: ENTER.ease }), b.t);
           } else if (b.kind === "on") {
             tl.set(b.sel, { color: b.color }, b.t);
             tl.fromTo(

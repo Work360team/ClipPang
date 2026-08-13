@@ -1,0 +1,33 @@
+{
+  "slug": "hf-clip-wipe",
+  "name": "กวาดเปิดทีละแถว",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "ข้อความถูกกวาดเปิดจากซ้ายไปขวา นุ่มตา เหมาะกับคลิปรีวิวจริงจัง — อิง Clip Wipe ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-ExtraBold.ttf",
+      "weight": 800,
+      "size": 88
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#7CF5A0",
+    "emphasisFill": "#FFD400",
+    "outline": {
+      "color": "#000000",
+      "width": 10
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "wipe",
+      "scale": 1.08,
+      "durationMs": 150
+    },
+    "fitChars": 13
+  }
+}

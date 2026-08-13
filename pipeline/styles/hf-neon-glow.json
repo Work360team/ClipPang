@@ -1,0 +1,37 @@
+{
+  "slug": "hf-neon-glow",
+  "name": "นีออนเรืองแสง",
+  "lane": "hyperframes",
+  "tier": "pro",
+  "description": "ตัวอักษรเรืองแสงฟ้า-ชมพูแบบป้ายนีออน เด่นบนฉากมืด — อิง Neon Glow ของ HyperFrames",
+  "params": {
+    "font": {
+      "family": "Kanit",
+      "file": "Kanit-ExtraBold.ttf",
+      "weight": 800,
+      "size": 92
+    },
+    "fill": "#FFFFFF",
+    "activeFill": "#FF5FD2",
+    "emphasisFill": "#38F6FF",
+    "outline": {
+      "color": "#0B0D14",
+      "width": 6
+    },
+    "glow": {
+      "color": "#38F6FF",
+      "blur": 20
+    },
+    "position": {
+      "anchor": "bottom",
+      "marginV": 400,
+      "marginH": 80
+    },
+    "animation": {
+      "enter": "blur",
+      "scale": 1.14,
+      "durationMs": 170
+    },
+    "fitChars": 13
+  }
+}

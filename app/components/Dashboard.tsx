@@ -209,8 +209,8 @@ export function Dashboard() {
             <div className="hero-grid-lines" aria-hidden="true" />
             <div className="phone-preview hero-phone">
               <video
-                src="/clippang-sample.mp4"
-                poster="/clippang-sample-poster.jpg"
+                src="/clippang-hero.mp4"
+                poster="/clippang-hero-poster.jpg"
                 muted
                 playsInline
                 loop
