@@ -274,6 +274,39 @@ select:focus-visible,
   position: relative;
 }
 
+/* โปรเจกต์ที่เปิดอยู่ ใช้สัญญาณชุดเดียวกับเมนูหลักด้านบน (พื้นเข้ม + ขีดเหลือง)
+   เพื่อให้อ่านได้ว่า "อยู่ตรงนี้" ไม่ใช่แค่ hover ค้าง */
+.mini-project-row.is-open .mini-project {
+  background: var(--sidebar-soft);
+}
+
+.mini-project-row.is-open .mini-project b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.mini-project-row.is-open .mini-project small {
+  color: var(--yellow-dark);
+  opacity: 1;
+}
+
+.mini-project-row.is-open::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -16px;
+  width: 3px;
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 0 3px 3px 0;
+  background: var(--yellow);
+}
+
+/* แถวที่เปิดอยู่ให้เห็นปุ่มสามจุดตลอด ไม่ต้องเดาว่าต้อง hover ก่อน */
+.mini-project-row.is-open .mini-project-more {
+  opacity: 1;
+}
+
 .mini-project-row .mini-project {
   padding-right: 32px;
 }

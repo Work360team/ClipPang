@@ -209,9 +209,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`;
               const pinned = pinnedIds.includes(project.id);
               const title = project.title || "โปรเจกต์ไม่มีชื่อ";
+              const open = pathname === `/p/${project.id}`;
               return (
-                <div className={`mini-project-row ${openMenu === project.id ? "menu-open" : ""}`} key={project.id}>
-                  <Link href={`/p/${project.id}`} className="mini-project">
+                <div className={`mini-project-row ${openMenu === project.id ? "menu-open" : ""} ${open ? "is-open" : ""}`} key={project.id}>
+                  <Link href={`/p/${project.id}`} className="mini-project" aria-current={open ? "page" : undefined}>
                     <span className={`mini-project-thumb ${index % 2 ? "thumb-mint" : "thumb-peach"}`} aria-hidden="true" />
                     <span>
                       <b>{pinned && <Pin size={11} aria-label="ปักหมุดไว้" />}{title}</b>
