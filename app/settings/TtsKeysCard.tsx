@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, KeyRound, Plus, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { Check, KeyRound, Plus, RefreshCw, Trash2, TriangleAlert, Volume2 } from "lucide-react";
+import { localApi } from "../lib/local-api";
+
+const TEST_SENTENCE = "สวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น";
+const TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT
+
+00:00.000 --> 00:10.000
+${TEST_SENTENCE}`)}`;
 
 type KeyStatus = {
   slot: string;
@@ -32,6 +39,8 @@ export function TtsKeysCard({ engineState }: { engineState: string }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewError, setPreviewError] = useState("");
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -100,8 +109,8 @@ export function TtsKeysCard({ engineState }: { engineState: string }) {
       <div className="settings-section-head">
         <div className="settings-section-icon settings-icon-key"><KeyRound size={20} /></div>
         <div>
-          <h2 id="tts-keys-title">คีย์เสียงพากย์สำรอง</h2>
-          <p>ใส่ได้หลายใบ ถ้าใบหนึ่งโควตาเต็มระบบจะสลับไปใบถัดไปให้เองระหว่างสร้างคลิป</p>
+          <h2 id="tts-keys-title">เสียงพากย์ (Gemini)</h2>
+          <p>คีย์ที่ใช้สร้างเสียง ใส่ได้หลายใบ ถ้าใบหนึ่งโควตาเต็มระบบจะสลับไปใบถัดไปให้เอง</p>
         </div>
         <button type="button" className="text-button" onClick={() => void load(true)} disabled={Boolean(busy)}>
           <RefreshCw size={15} /> ตรวจใหม่
@@ -168,6 +177,35 @@ export function TtsKeysCard({ engineState }: { engineState: string }) {
 
           {message && <p className="key-hint" role="status">{message}</p>}
 
+          {/* ฟังเสียงจริงหนึ่งประโยค — พิสูจน์ว่าคีย์ใช้ได้จริง ไม่ใช่แค่ผ่านการตรวจ */}
+          <div className="key-try">
+            <button
+              type="button"
+              className="button button-outline"
+              disabled={Boolean(busy) || !health?.ok}
+              onClick={() => {
+                setBusy("preview");
+                setPreviewError("");
+                setPreviewUrl("");
+                localApi
+                  .previewVoice("Kore", { text: TEST_SENTENCE, speed: 1, tone: "เป็นกันเอง" })
+                  .then((blob) => setPreviewUrl(URL.createObjectURL(blob)))
+                  .catch((error) => setPreviewError(error instanceof Error ? error.message : "สร้างเสียงทดสอบไม่สำเร็จ"))
+                  .finally(() => setBusy(""));
+              }}
+            >
+              <Volume2 size={15} /> {busy === "preview" ? "กำลังสร้างเสียง…" : "ฟังเสียงทดสอบ"}
+            </button>
+            <small>ใช้โควตา 1 คำขอ</small>
+          </div>
+          {previewUrl && (
+            <audio className="key-audio" controls src={previewUrl}>
+              {/* ประโยคทดสอบเป็นข้อความคงที่ ใส่ track ไว้ให้คนที่ฟังไม่ได้อ่านแทน */}
+              <track kind="captions" srcLang="th" label="คำบรรยาย" src={TEST_CAPTIONS} default />
+            </audio>
+          )}
+          {previewError && <p className="key-hint" role="alert">{previewError}</p>}
+
           <p className="key-note">
             คีย์ใหม่ต้องมาจาก<strong>คนละโปรเจกต์ Google Cloud</strong>ถึงจะได้โควตาเพิ่ม —
             สร้างหลายคีย์ในโปรเจกต์เดียวกันใช้โควตาก้อนเดียวกัน
@@ -195,6 +233,9 @@ export function TtsKeysCard({ engineState }: { engineState: string }) {
         .key-remove:disabled { opacity: .35; cursor: not-allowed; }
         .key-add { display: flex; gap: 8px; align-items: center; }
         .key-add .settings-input-wrap { flex: 1; min-width: 0; }
+        .key-try { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+        .key-try small { font-size: 11.5px; opacity: .6; }
+        .key-audio { width: 100%; margin-top: 10px; height: 38px; }
         .key-hint { margin: 10px 0 0; font-size: 12.5px; opacity: .72; }
         .key-note { margin: 14px 0 0; padding: 10px 13px; border-radius: 9px; font-size: 12.5px; line-height: 1.6; background: rgba(255,210,63,.06); border: 1px solid rgba(255,210,63,.2); }
       `}</style>

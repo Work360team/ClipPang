@@ -154,7 +154,10 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
             ))}
           </div>
 
-          <h3 className="ai-subhead">หรือใช้ API key ของคุณเอง</h3>
+          {/* ช่องคีย์ 4 เจ้าทำให้การ์ดยาวมากทั้งที่คนส่วนใหญ่ใช้ค่าอัตโนมัติอยู่แล้ว
+              ซ่อนไว้หลังหัวข้อที่กดเปิดได้ ใครต้องใช้ค่อยกาง */}
+          <details className="ai-advanced">
+            <summary>ใช้ API key ของคุณเอง (ไม่จำเป็นถ้าใช้โหมดอัตโนมัติ)</summary>
           <div className="ai-key-list">
             {apiProviders.map((provider) => (
               <div key={provider.id} className={`ai-key-row ${selected === provider.id ? "is-selected" : ""}`}>
@@ -222,6 +225,7 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
               </div>
             ))}
           </div>
+          </details>
 
           {message && <p className="ai-hint" role="status">{message}</p>}
 
@@ -244,6 +248,12 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
         .ai-choice-title { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; }
         .ai-choice-title b { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: var(--yellow); color: #10161a; }
         .ai-choice-sub { display: flex; align-items: center; gap: 5px; font-size: 12.5px; opacity: .72; }
+        .ai-advanced { margin-top: 18px; border-top: 1px solid var(--line, #2a312a); padding-top: 14px; }
+        .ai-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 600; opacity: .78; list-style: none; display: flex; align-items: center; gap: 7px; }
+        .ai-advanced > summary::before { content: "▸"; font-size: 11px; transition: transform .15s; }
+        .ai-advanced[open] > summary::before { transform: rotate(90deg); }
+        .ai-advanced > summary:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; border-radius: 4px; }
+        .ai-advanced .ai-key-list { margin-top: 14px; }
         .ai-subhead { margin: 20px 0 10px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; opacity: .6; }
         .ai-key-list { display: grid; gap: 14px; }
         .ai-key-row { padding: 13px 14px; border: 1px solid var(--line, #2a312a); border-radius: 10px; display: grid; gap: 9px; }

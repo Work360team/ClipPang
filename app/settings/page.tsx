@@ -3,18 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { AiProviderCard } from "./AiProviderCard";
 import { TtsKeysCard } from "./TtsKeysCard";
+import { ReadinessCard } from "./ReadinessCard";
 import {
   Check,
   CheckCircle2,
-  ChevronRight,
   CircleHelp,
-  Eye,
-  EyeOff,
   FolderInput,
   FolderOpen,
   FolderOutput,
   HardDrive,
-  KeyRound,
   LoaderCircle,
   LockKeyhole,
   RefreshCw,
@@ -32,8 +29,6 @@ import {
   type SetupStatus,
 } from "../lib/local-api";
 
-type KeyStatus = "idle" | "testing" | "success" | "error";
-const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
 
 type DetailedSetupStatus = Omit<SetupStatus, "node" | "ffmpeg"> & {
   node?: boolean | { ready?: boolean; version?: string };
@@ -54,14 +49,6 @@ export default function SettingsPage() {
   const [loadError, setLoadError] = useState("");
   const [setupStatus, setSetupStatus] = useState<DetailedSetupStatus | null>(null);
   const [appVersion, setAppVersion] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
-  const [savedLast4, setSavedLast4] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [keyStatus, setKeyStatus] = useState<KeyStatus>("idle");
-  const [keyMessage, setKeyMessage] = useState("");
-  const [previewingVoice, setPreviewingVoice] = useState(false);
-  const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
-  const [voicePreviewError, setVoicePreviewError] = useState("");
   const [inputFolder, setInputFolder] = useState("");
   const [projectFolder, setProjectFolder] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -93,17 +80,11 @@ export default function SettingsPage() {
       ]);
       const settings = settingsResponse.settings;
       const status = statusResponse as DetailedSetupStatus;
-      const key = status.key ?? status.gemini ?? (
-        typeof settings.key === "object" && settings.key
-          ? settings.key as { configured?: boolean; last4?: string }
-          : undefined
-      );
 
       setSetupStatus(status);
       setInputFolder(typeof settings.inputFolder === "string" ? settings.inputFolder : status.paths?.input ?? "");
       setProjectFolder(typeof settings.projectFolder === "string" ? settings.projectFolder : status.paths?.projects ?? "");
       setAppVersion(typeof settings.version === "string" ? settings.version : "");
-      setSavedLast4(key?.configured ? key.last4 ?? "" : "");
     } catch (error) {
       setLoadError(errorMessage(error, "อ่านการตั้งค่าจาก ClipPang Local ไม่สำเร็จ"));
     } finally {
@@ -116,66 +97,8 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [loadLocalSettings]);
 
-  useEffect(() => {
-    return () => {
-      if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
-    };
-  }, [voicePreviewUrl]);
 
-  async function playVoicePreview() {
-    if (engineState !== "connected") {
-      setVoicePreviewError("กรุณาเปิด ClipPang Local ก่อนทดสอบเสียง");
-      return false;
-    }
-    setPreviewingVoice(true);
-    setVoicePreviewError("");
-    try {
-      const blob = await localApi.previewVoice("Kore", {
-        text: "สวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น",
-        speed: 1,
-        tone: "เป็นกันเอง",
-      });
-      setVoicePreviewUrl(URL.createObjectURL(blob));
-      return true;
-    } catch (error) {
-      setVoicePreviewError(errorMessage(error, "สร้างเสียงทดสอบไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง"));
-      return false;
-    } finally {
-      setPreviewingVoice(false);
-    }
-  }
 
-  async function testKey() {
-    const cleanKey = geminiKey.trim();
-    if (cleanKey.length < 16) {
-      setKeyStatus("error");
-      setKeyMessage("กรุณาวาง API key ตัวเต็มจาก Google AI Studio");
-      return;
-    }
-
-    if (engineState !== "connected") {
-      setKeyStatus("error");
-      setKeyMessage("เว็บตัวอย่างบันทึกคีย์ไม่ได้ กรุณาเปิด ClipPang Local ก่อน");
-      return;
-    }
-
-    setKeyStatus("testing");
-    setKeyMessage("");
-    try {
-      const result = await localApi.saveKey(cleanKey);
-      setSavedLast4(result.key.last4);
-      setGeminiKey("");
-      setShowKey(false);
-      setKeyStatus("success");
-      const previewReady = await playVoicePreview();
-      setKeyMessage(previewReady
-        ? "เชื่อมต่อสำเร็จ บันทึกคีย์แล้ว และสร้างเสียงทดสอบด้านล่าง"
-        : "บันทึกคีย์แล้ว แต่เสียงทดสอบยังไม่สำเร็จ ดูรายละเอียดด้านล่าง");
-    } catch (error) {
-      setKeyStatus("error");
-      setKeyMessage(errorMessage(error, "ทดสอบ API key ไม่สำเร็จ กรุณาตรวจคีย์และอินเทอร์เน็ต"));
-    }
-  }
 
   async function clearCache() {
     if (engineState !== "connected") return;
@@ -231,88 +154,9 @@ export default function SettingsPage() {
 
         <div className="settings-layout">
           <div className="settings-main-column">
-            <AiProviderCard engineState={engineState} />
+            <ReadinessCard engineState={engineState} />
             <TtsKeysCard engineState={engineState} />
-
-            <section className="settings-card" aria-labelledby="gemini-title">
-              <div className="settings-section-head">
-                <div className="settings-section-icon settings-icon-key"><KeyRound size={20} /></div>
-                <div>
-                  <h2 id="gemini-title">Gemini API key</h2>
-                  <p>ใช้สำหรับสร้างเสียงพากย์และช่วยเขียนสคริปต์</p>
-                </div>
-                <span className="settings-required">จำเป็น</span>
-              </div>
-
-              <div className="settings-key-field">
-                <label htmlFor="gemini-key">API key ของคุณ</label>
-                <div className="settings-input-wrap">
-                  <KeyRound size={17} aria-hidden="true" />
-                  <input
-                    id="gemini-key"
-                    type={showKey ? "text" : "password"}
-                    value={geminiKey}
-                    onChange={(event) => {
-                      setGeminiKey(event.target.value);
-                      setKeyStatus("idle");
-                      setKeyMessage("");
-                    }}
-                    placeholder={savedLast4 ? `ใส่คีย์ใหม่เพื่อเปลี่ยนคีย์ ••••${savedLast4}` : "วาง Gemini API key ตัวเต็ม"}
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-describedby="gemini-key-hint"
-                    disabled={engineState !== "connected" || loading || keyStatus === "testing"}
-                  />
-                  <button
-                    type="button"
-                    className="settings-eye-button"
-                    onClick={() => setShowKey((value) => !value)}
-                    aria-label={showKey ? "ซ่อน API key" : "แสดง API key"}
-                  >
-                    {showKey ? <EyeOff size={17} /> : <Eye size={17} />}
-                  </button>
-                </div>
-                <div className="settings-key-assist" id="gemini-key-hint">
-                  <span className={keyStatus === "success" ? "settings-hint-success" : keyStatus === "error" ? "settings-hint-error" : ""}>
-                    {keyStatus === "success" && <CheckCircle2 size={13} />}
-                    {keyMessage || (savedLast4 ? `คีย์ที่บันทึกไว้ ••••${savedLast4}` : "ยังไม่ได้บันทึก API key")}
-                  </span>
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">
-                    ขอ API key ฟรี <ChevronRight size={13} />
-                  </a>
-                </div>
-                {(voicePreviewUrl || voicePreviewError || previewingVoice) && (
-                  <div className="settings-voice-preview" aria-live="polite">
-                    <div>
-                      <span>เสียงทดสอบ · Kore</span>
-                      <button type="button" onClick={() => void playVoicePreview()} disabled={previewingVoice || engineState !== "connected"}>
-                        {previewingVoice ? <LoaderCircle className="settings-spin" size={13} /> : <Sparkles size={13} />}
-                        {previewingVoice ? "กำลังสร้างเสียง…" : "ฟังอีกครั้ง"}
-                      </button>
-                    </div>
-                    {voicePreviewUrl && (
-                      <audio controls autoPlay src={voicePreviewUrl} aria-label="เสียงทดสอบ Gemini TTS">
-                        <track kind="captions" src={VOICE_TEST_CAPTIONS} srcLang="th" label="คำพูดภาษาไทย" default />
-                      </audio>
-                    )}
-                    {voicePreviewError && <p role="alert">บันทึกคีย์แล้ว แต่เสียงทดสอบไม่สำเร็จ: {voicePreviewError}</p>}
-                  </div>
-                )}
-              </div>
-
-              <div className="settings-key-actions">
-                <button
-                  type="button"
-                  className="settings-button settings-button-primary"
-                  onClick={testKey}
-                  disabled={keyStatus === "testing" || !geminiKey.trim() || engineState !== "connected"}
-                >
-                  {keyStatus === "testing" ? <LoaderCircle className="settings-spin" size={16} /> : keyStatus === "success" ? <Check size={16} strokeWidth={3} /> : <RefreshCw size={15} />}
-                  {keyStatus === "testing" ? "กำลังทดสอบ…" : keyStatus === "success" ? "บันทึกแล้ว" : "บันทึกและทดสอบคีย์"}
-                </button>
-                <div className="settings-security-note"><LockKeyhole size={14} /> หลังบันทึก หน้านี้จะเห็นเพียง 4 ตัวท้าย</div>
-              </div>
-            </section>
+            <AiProviderCard engineState={engineState} />
 
             <section className="settings-card" aria-labelledby="folder-title">
               <div className="settings-section-head">
