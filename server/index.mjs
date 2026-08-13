@@ -9,6 +9,10 @@ import { Readable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createApiHandler } from "./api.mjs";
 import { HOST, DEFAULT_PORT, PATHS, ensureDirectories } from "./config.mjs";
+import {
+  SESSION_COOKIE, createSession, loginPage, noteFailure, noteSuccess,
+  readCookie, readSession, sessionCookie, sessionSecret, throttle, verifyPassword,
+} from "./auth.mjs";
 import { remoteHelpText as buildRemoteHelp } from "./remote-help.mjs";
 import { safeProjectPath } from "./security.mjs";
 import { prepareSources } from "./sources.mjs";
@@ -37,27 +41,11 @@ const REMOTE_HOSTS = new Set(
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean),
 );
-const ACCESS_TOKEN = String(process.env.CLIPPANG_ACCESS_TOKEN || "").trim();
-const REMOTE_READY = REMOTE_HOSTS.size > 0 && ACCESS_TOKEN.length >= 16;
-const TOKEN_COOKIE = "clippang_access";
+const AUTH_USER = String(process.env.CLIPPANG_USER || "").trim();
+const AUTH_HASH = String(process.env.CLIPPANG_PASSWORD_HASH || "").trim();
+const REMOTE_READY = REMOTE_HOSTS.size > 0 && Boolean(AUTH_USER) && AUTH_HASH.startsWith("scrypt$");
+const SECRET = sessionSecret(PATHS.data);
 
-function tokenFromRequest(request, url) {
-  const header = request.headers.get("x-clippang-token");
-  if (header) return header.trim();
-  const query = url.searchParams.get("token");
-  if (query) return query.trim();
-  const cookie = request.headers.get("cookie") || "";
-  const match = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${TOKEN_COOKIE}=`));
-  return match ? decodeURIComponent(match.slice(TOKEN_COOKIE.length + 1)) : "";
-}
-
-/** เทียบรหัสแบบเวลาคงที่ กันการเดาทีละตัวอักษรจากเวลาที่ตอบกลับ */
-function tokenMatches(candidate) {
-  const a = Buffer.from(candidate ?? "", "utf8");
-  const b = Buffer.from(ACCESS_TOKEN, "utf8");
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
 const STATIC_MIME = new Map([
   [".html", "text/html; charset=utf-8"], [".js", "text/javascript; charset=utf-8"],
   [".css", "text/css; charset=utf-8"], [".json", "application/json; charset=utf-8"],
@@ -74,10 +62,41 @@ function parseJson(value, fallback = {}) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+/** ตรวจชื่อผู้ใช้และรหัสผ่าน แล้วออกคุกกี้เซสชันให้ */
+async function handleLogin(request, ip) {
+  const wait = throttle(ip);
+  if (wait > 0) {
+    return new Response(loginPage({ error: `ลองผิดหลายครั้งเกินไป รออีก ${Math.ceil(wait / 1000)} วินาที` }), {
+      status: 429, headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+  const form = new URLSearchParams(await request.text());
+  const username = String(form.get("username") || "");
+  const password = String(form.get("password") || "");
+  const nextPath = String(form.get("next") || "/");
+  const userOk = username.length === AUTH_USER.length
+    && crypto.timingSafeEqual(Buffer.from(username), Buffer.from(AUTH_USER));
+  if (!REMOTE_READY || !userOk || !verifyPassword(password, AUTH_HASH)) {
+    noteFailure(ip);
+    // ไม่บอกว่าผิดที่ชื่อหรือรหัส เพื่อไม่ให้ไล่เดาชื่อผู้ใช้ได้
+    return new Response(loginPage({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", nextPath }), {
+      status: 401, headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+  noteSuccess(ip);
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: /^\/[^\s"']*$/.test(nextPath) ? nextPath : "/",
+      "set-cookie": sessionCookie(createSession(AUTH_USER, SECRET)),
+    },
+  });
+}
+
 function remoteHelpText(request) {
   let host = "";
   try { host = new URL(request.url).hostname; } catch { host = ""; }
-  return buildRemoteHelp({ host, allowedHosts: REMOTE_HOSTS, tokenLength: ACCESS_TOKEN.length });
+  return buildRemoteHelp({ host, allowedHosts: REMOTE_HOSTS, hasUser: Boolean(AUTH_USER), hasHash: AUTH_HASH.startsWith("scrypt$") });
 }
 
 function hostAllowed(hostname) {
@@ -93,7 +112,7 @@ function localRequestAllowed(request) {
   }
   // โฮสต์ระยะไกลต้องมีรหัสเสมอ ส่วนเครื่องตัวเองไม่ต้อง จะได้ไม่เพิ่มขั้นตอนให้คนใช้ปกติ
   if (LOCAL_HOSTS.has(url.hostname)) return true;
-  return tokenMatches(tokenFromRequest(request, url));
+  return Boolean(readSession(readCookie(request.headers.get("cookie"), SESSION_COOKIE), SECRET));
 }
 
 function normalizeScriptChunks(chunks) {
@@ -385,26 +404,38 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   const server = http.createServer({ requestTimeout: 0, headersTimeout: 30_000 }, async (req, res) => {
     try {
       const request = toWebRequest(req, port);
+      const requestUrl = new URL(request.url);
+      const ip = req.socket.remoteAddress || "?";
+
+      // เส้นทางล็อกอิน/ออกจากระบบต้องเข้าถึงได้ก่อนผ่านด่าน ไม่งั้นจะล็อกอินไม่ได้เลย
+      if (requestUrl.pathname === "/api/auth/login" && request.method === "POST") {
+        return sendWebResponse(res, await handleLogin(request, ip), request.method);
+      }
+      if (requestUrl.pathname === "/api/auth/logout") {
+        return sendWebResponse(res, new Response(null, {
+          status: 303,
+          headers: { location: "/", "set-cookie": sessionCookie("", { clear: true }) },
+        }), request.method);
+      }
+
       if (!localRequestAllowed(request)) {
+        // โฮสต์ที่อนุญาตไว้แล้วแต่ยังไม่ล็อกอิน → ให้หน้าล็อกอิน ไม่ใช่กำแพงเปล่า
+        if (REMOTE_READY && REMOTE_HOSTS.has(requestUrl.hostname.toLowerCase())) {
+          if (requestUrl.pathname.startsWith("/api/")) {
+            return sendWebResponse(res, new Response(JSON.stringify({ ok: false, error: { code: "AUTH_REQUIRED", message: "ต้องเข้าสู่ระบบก่อน" } }), {
+              status: 401, headers: { "content-type": "application/json; charset=utf-8" },
+            }), request.method);
+          }
+          return sendWebResponse(res, new Response(loginPage({ nextPath: requestUrl.pathname }), {
+            status: 401, headers: { "content-type": "text/html; charset=utf-8" },
+          }), request.method);
+        }
         return sendWebResponse(res, new Response(remoteHelpText(request), {
           status: 403,
           headers: { "content-type": "text/plain; charset=utf-8" },
         }), request.method);
       }
-      const url = new URL(request.url);
-      // เข้ามาด้วย ?token= ครั้งแรก ให้จำไว้ในคุกกี้ แล้วเด้งไป URL ที่ไม่มี token
-      // เพื่อไม่ให้รหัสค้างอยู่ในแถบที่อยู่ ประวัติเบราว์เซอร์ หรือหลุดไปกับ Referer
-      if (!LOCAL_HOSTS.has(url.hostname) && url.searchParams.get("token")) {
-        const clean = new URL(url);
-        clean.searchParams.delete("token");
-        return sendWebResponse(res, new Response(null, {
-          status: 303,
-          headers: {
-            location: clean.pathname + clean.search + clean.hash,
-            "set-cookie": `${TOKEN_COOKIE}=${encodeURIComponent(ACCESS_TOKEN)}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax`,
-          },
-        }), request.method);
-      }
+      const url = requestUrl;
       let response;
       if (url.pathname.startsWith("/api/")) response = await runtime.api(request);
       else {
