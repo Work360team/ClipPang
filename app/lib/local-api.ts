@@ -145,6 +145,11 @@ export const localApi = {
   cancelRender: (id: string) => apiFetch<{ ok: true; render: LocalRender }>(`/api/renders/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
   openProject: (projectId: string, target: "out" | "project" = "out") => apiFetch<{ ok: true }>("/api/open", { method: "POST", body: JSON.stringify({ projectId, target }) }),
   settings: () => apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings"),
+  updateSettings: (patch: Record<string, unknown>) =>
+    apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   clearCache: () => apiFetch<{ ok: true; removed: number }>("/api/settings/cache/clear", { method: "POST", body: "{}" }),
 };
 

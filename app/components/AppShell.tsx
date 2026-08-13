@@ -9,10 +9,14 @@ import {
   FolderKanban,
   LayoutDashboard,
   Menu,
+  MoreVertical,
+  Pin,
+  PinOff,
   Plus,
   Radio,
   Settings,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -32,12 +36,33 @@ const pageTitles: Record<string, string> = {
   "/settings": "ตั้งค่า",
 };
 
+/** ค่าที่เก็บใน settings เป็น JSON string (ฝั่งเซิร์ฟเวอร์ stringify ให้) */
+function parsePinned(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((id): id is string => typeof id === "string");
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function isRunning(project: LocalProject) {
+  const latest = project.renders?.[0];
+  return Boolean(latest && ["queued", "running", "processing"].includes(latest.state));
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
   const [setupReady, setSetupReady] = useState(false);
-  const [recentProjects, setRecentProjects] = useState<LocalProject[]>([]);
+  const [allProjects, setAllProjects] = useState<LocalProject[]>([]);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -49,13 +74,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
       setEngineState("connected");
       try {
-        const [status, projects] = await Promise.all([
+        const [status, projects, settings] = await Promise.all([
           localApi.setupStatus(),
           localApi.listProjects(),
+          localApi.settings().catch(() => null),
         ]);
         if (active) {
           setSetupReady(Boolean(status.ready));
-          setRecentProjects(projects.projects.slice(0, 2));
+          setAllProjects(projects.projects);
+          setPinnedIds(parsePinned(settings?.settings?.pinnedProjects));
         }
       } catch {
         if (active) setSetupReady(false);
@@ -63,6 +90,53 @@ export function AppShell({ children }: { children: ReactNode }) {
     });
     return () => { active = false; };
   }, []);
+
+  // ปิดเมนูสามจุดเมื่อคลิกที่อื่นหรือกด Esc
+  useEffect(() => {
+    if (!openMenu) return undefined;
+    const close = () => setOpenMenu(null);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpenMenu(null); };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openMenu]);
+
+  // ที่ปักหมุดขึ้นก่อนเสมอ ที่เหลือเติมด้วยโปรเจกต์ล่าสุดจนครบสี่รายการ
+  const pinnedProjects = pinnedIds
+    .map((id) => allProjects.find((project) => project.id === id))
+    .filter((project): project is LocalProject => Boolean(project));
+  const restProjects = allProjects.filter((project) => !pinnedIds.includes(project.id));
+  const sidebarProjects = [...pinnedProjects, ...restProjects.slice(0, Math.max(0, 4 - pinnedProjects.length))];
+
+  const savePinned = async (ids: string[]) => {
+    const previous = pinnedIds;
+    setPinnedIds(ids);
+    setOpenMenu(null);
+    try {
+      await localApi.updateSettings({ pinnedProjects: ids });
+    } catch {
+      setPinnedIds(previous);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setBusy(true);
+    try {
+      await localApi.deleteProject(pendingDelete.id);
+      setAllProjects((current) => current.filter((project) => project.id !== pendingDelete.id));
+      if (pinnedIds.includes(pendingDelete.id)) {
+        void savePinned(pinnedIds.filter((id) => id !== pendingDelete.id));
+      }
+      setPendingDelete(null);
+      if (pathname === `/p/${pendingDelete.id}`) window.location.href = "/";
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const currentTitle = pathname.startsWith("/p/")
     ? "สร้างคลิปใหม่"
@@ -125,21 +199,67 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           {engineState === "connected" ? (
-            recentProjects.length ? recentProjects.map((project, index) => {
+            sidebarProjects.length ? sidebarProjects.map((project, index) => {
               const latest = project.renders?.[0];
+              const running = isRunning(project);
               const status = latest?.state === "ready"
                 ? (latest.kind === "final" ? "ตัวจริงพร้อมดาวน์โหลด" : "ร่างพร้อมให้เลือก")
-                : latest && ["queued", "running", "processing"].includes(latest.state)
-                  ? latest.message || `กำลังทำ ${latest.progress ?? 0}%`
+                : running
+                  ? latest?.message || `กำลังทำ ${latest?.progress ?? 0}%`
                   : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`;
+              const pinned = pinnedIds.includes(project.id);
+              const title = project.title || "โปรเจกต์ไม่มีชื่อ";
               return (
-                <Link href={`/p/${project.id}`} className="mini-project" key={project.id}>
-                  <span className={`mini-project-thumb ${index % 2 ? "thumb-mint" : "thumb-peach"}`} aria-hidden="true" />
-                  <span>
-                    <b>{project.title || "โปรเจกต์ไม่มีชื่อ"}</b>
-                    <small>{status}</small>
-                  </span>
-                </Link>
+                <div className={`mini-project-row ${openMenu === project.id ? "menu-open" : ""}`} key={project.id}>
+                  <Link href={`/p/${project.id}`} className="mini-project">
+                    <span className={`mini-project-thumb ${index % 2 ? "thumb-mint" : "thumb-peach"}`} aria-hidden="true" />
+                    <span>
+                      <b>{pinned && <Pin size={11} aria-label="ปักหมุดไว้" />}{title}</b>
+                      <small>{status}</small>
+                    </span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="mini-project-more"
+                    aria-label={`ตัวเลือกของ ${title}`}
+                    aria-expanded={openMenu === project.id}
+                    aria-haspopup="menu"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setOpenMenu((current) => (current === project.id ? null : project.id));
+                    }}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                  {openMenu === project.id && (
+                    // ไม่ต้อง stopPropagation: ปุ่มข้างในทำงานก่อน แล้ว listener ที่ window
+                    // ค่อยปิดเมนู ซึ่งเป็นสิ่งที่ทั้งสองคำสั่งทำอยู่แล้ว
+                    <div className="mini-menu" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void savePinned(pinned ? pinnedIds.filter((id) => id !== project.id) : [...pinnedIds, project.id])}
+                      >
+                        {pinned ? <PinOff size={15} /> : <Pin size={15} />}
+                        {pinned ? "เลิกปักหมุด" : "ปักหมุดไว้ในเมนู"}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="mini-menu-danger"
+                        disabled={running}
+                        title={running ? "กำลังสร้างคลิปอยู่ ลบไม่ได้ตอนนี้" : undefined}
+                        onClick={() => {
+                          setOpenMenu(null);
+                          setPendingDelete({ id: project.id, title });
+                        }}
+                      >
+                        <Trash2 size={15} />
+                        ลบโปรเจกต์
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             }) : (
               <Link href="/p/new" className="mini-project">
@@ -180,6 +300,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
       </aside>
+
+      {pendingDelete && (
+        <div className="confirm-backdrop" role="dialog" aria-modal="true" aria-labelledby="sidebar-delete-title">
+          <button type="button" className="confirm-scrim" aria-label="ยกเลิก" onClick={() => setPendingDelete(null)} />
+          <div className="confirm-card">
+            <h3 id="sidebar-delete-title">ลบ “{pendingDelete.title}” ?</h3>
+            <p>ไฟล์จะถูกย้ายไปโฟลเดอร์ data/trash ไม่ได้ลบถาวร ถ้ากดพลาดยังกู้กลับมาเองได้</p>
+            <div className="confirm-actions">
+              <button type="button" className="button button-outline" disabled={busy} onClick={() => setPendingDelete(null)}>
+                ยกเลิก
+              </button>
+              <button type="button" className="button button-danger" disabled={busy} onClick={() => void confirmDelete()}>
+                {busy ? "กำลังลบ…" : "ลบโปรเจกต์"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {menuOpen && (
         <button
