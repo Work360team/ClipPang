@@ -88,6 +88,77 @@ test("Gemini exposes the complete 30-voice catalog", async () => {
   assert.ok(voices.every((voice) => voice.provider === "gemini"));
   assert.ok(voices.some((voice) => voice.id === "Kore" && voice.isDefault));
   assert.ok(voices.some((voice) => voice.id === "Sulafat"));
+  // หน้าเลือกเสียงกรองด้วยเพศ เสียงที่ไม่มี gender จะหายไปจากทั้งสองตัวกรอง
+  assert.ok(voices.every((voice) => voice.gender === "ชาย" || voice.gender === "หญิง"));
+  assert.equal(voices.filter((voice) => voice.gender === "หญิง").length, 14);
+});
+
+/** PCM 16-bit mono 24kHz หนึ่งวินาที ใช้แทนเสียงที่ Gemini ส่งกลับมาในเทสต์ */
+function pcmTone(samples) {
+  const buffer = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i += 1) {
+    buffer.writeInt16LE(Math.round(Math.sin((i / 24000) * 2 * Math.PI * 220) * 9000), i * 2);
+  }
+  return buffer;
+}
+
+test("Gemini repeats the request verbatim when it answers with text instead of audio", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const prompts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    prompts.push(JSON.parse(init.body).contents[0].parts[0].text);
+    const payload = prompts.length === 1
+      ? { candidates: [{ content: { parts: [{ text: "คุณอยากให้ช่วยเรื่องอะไรคะ" }] }, finishReason: "STOP" }] }
+      : {
+        candidates: [{
+          content: {
+            parts: [{
+              inlineData: {
+                mimeType: "audio/L16;codec=pcm;rate=24000",
+                // ต้องเป็นเสียงจริง ไม่ใช่ศูนย์ล้วน เพราะ pipeline มีฟิลเตอร์ตัดความเงียบหัวไฟล์
+                data: pcmTone(24000).toString("base64"),
+              },
+            }],
+          },
+        }],
+      };
+    return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  t.after(() => { globalThis.fetch = realFetch; });
+
+  const result = await synthesize({
+    text: "หิวจุกจิกทั้งวัน ตัวนี้ช่วยได้",
+    provider: "gemini",
+    voice: "Kore",
+    styleHint: "พูดโทนเป็นกันเอง",
+    outFile: path.join(dir, "out.wav"),
+  });
+
+  assert.equal(prompts.length, 2, "ต้องลองใหม่หนึ่งรอบเมื่อได้ข้อความแทนเสียง");
+  assert.match(prompts[1], /verbatim/i);
+  assert.ok(prompts[1].includes("หิวจุกจิกทั้งวัน"));
+  assert.ok(fs.existsSync(result.file));
+});
+
+test("a no-audio reply reports the reason Gemini actually gave", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+  t.after(() => { globalThis.fetch = realFetch; });
+
+  await assert.rejects(
+    synthesize({ text: "ประโยคยาวมาก", provider: "gemini", voice: "Kore", outFile: path.join(dir, "out.wav") }),
+    // เดิมบอกว่า "อาจโดน safety filter" ทุกกรณี ซึ่งพาไปแก้ผิดจุด
+    (error) => /ยาวเกิน/.test(error.message) && !/safety/i.test(error.message),
+  );
 });
 
 test("ordered edit plan preserves split/repeated source order and exact trims", () => {

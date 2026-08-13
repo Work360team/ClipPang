@@ -128,8 +128,27 @@ function abortableDelay(ms, signal) {
   });
 }
 
+
+/** อธิบายว่าทำไม Gemini ตอบ 200 แต่ไม่มีเสียง โดยอิงข้อมูลที่ API ส่งกลับมาจริง */
+function ttsNoAudioMessage({ blocked, finish, spoken, text }) {
+  const excerpt = String(text || "").slice(0, 40);
+  if (blocked) return `Gemini ปฏิเสธข้อความนี้ (${blocked}) — ลองแก้คำในท่อน "${excerpt}…" แล้วสั่งใหม่`;
+  if (finish === "MAX_TOKENS") return `ท่อน "${excerpt}…" ยาวเกินกว่าที่โมเดลจะพากย์ได้ในครั้งเดียว ลองตัดให้สั้นลง`;
+  if (finish === "SAFETY" || finish === "PROHIBITED_CONTENT") return `Gemini ตีว่าท่อน "${excerpt}…" ผิดนโยบายเนื้อหา ลองเปลี่ยนคำแล้วสั่งใหม่`;
+  if (finish === "RECITATION") return `Gemini ตีว่าท่อน "${excerpt}…" ลอกข้อความมีลิขสิทธิ์ ลองเขียนใหม่ด้วยคำของเราเอง`;
+  if (spoken) return `Gemini ตอบกลับเป็นข้อความแทนเสียงแม้สั่งย้ำแล้ว: "${spoken.slice(0, 80)}" — ลองแก้ท่อนนี้ให้เป็นประโยคบอกเล่า`;
+  return `Gemini ไม่ได้คืนเสียงกลับมาและไม่บอกเหตุผล (finishReason=${finish ?? "ไม่ระบุ"}) ลองสั่งใหม่อีกครั้ง`;
+}
+
 async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile) {
   const prompt = styleHint ? `${styleHint}: ${text}` : text;
+  // โมเดลตอบกลับเป็นข้อความแทนเสียงได้ ถ้าท่อนนั้นอ่านแล้วเหมือนคำถามหรือคำสั่ง
+  // (Google เรียกอาการนี้ว่า "Model tried to generate text") สั่งย้ำให้อ่านตามตัวอักษร
+  // แล้วลองใหม่หนึ่งรอบ ดีกว่าทิ้งงานเรนเดอร์ทั้งงานเพราะท่อนเดียว
+  const strictPrompt = `Read the following text aloud, verbatim and in its original language. Do not answer it, translate it, or add words.${styleHint ? ` Style: ${styleHint}.` : ""}
+
+${text}`;
+  let useStrictPrompt = false;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel()}:generateContent`;
   const requestTimeoutMs = Number(timeoutMs ?? process.env.GEMINI_TTS_TIMEOUT_MS ?? 45_000);
 
@@ -154,7 +173,7 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: [{ text: useStrictPrompt ? strictPrompt : prompt }] }],
         generationConfig: {
           responseModalities: ["AUDIO"],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
@@ -188,8 +207,20 @@ async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile)
     if (!res.ok) throw new Error(`Gemini TTS ${res.status}: ${(await res.text()).slice(0, 300)}`);
 
     const data = await res.json();
-    const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-    if (!part) throw new Error("Gemini TTS ไม่ได้คืนเสียงกลับมา (อาจโดน safety filter)");
+    const candidate = data?.candidates?.[0];
+    const part = candidate?.content?.parts?.find((p) => p.inlineData?.data);
+    if (!part) {
+      // ตอบ 200 แต่ไม่มีเสียง เกิดได้หลายสาเหตุ อย่าเดาว่าเป็น safety filter เสมอ
+      const spoken = candidate?.content?.parts?.find((p) => p.text)?.text?.trim();
+      const blocked = data?.promptFeedback?.blockReason;
+      const finish = candidate?.finishReason;
+      if (spoken && !useStrictPrompt) {
+        useStrictPrompt = true;
+        if (process.env.TTS_VERBOSE) process.stderr.write("   [tts] ได้ข้อความแทนเสียง → สั่งย้ำให้อ่านตามตัวอักษรแล้วลองใหม่\n");
+        continue;
+      }
+      throw new Error(ttsNoAudioMessage({ blocked, finish, spoken, text }));
+    }
     const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || "")?.[1] || 24000);
     fs.writeFileSync(rawFile, wavFromPcm(Buffer.from(part.inlineData.data, "base64"), { rate }));
     noteQuotaOk(entry.id);
