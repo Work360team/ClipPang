@@ -12,8 +12,6 @@ import {
   CircleAlert,
   Clock3,
   Download,
-  FileAudio,
-  FileText,
   Film,
   FolderOpen,
   Gauge,
@@ -437,7 +435,6 @@ export function ProjectWizard() {
   const previewVideoUrl = activeClip?.previewUrl || activeClip?.url || videoUrl;
   const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clippang-sample.mp4";
   const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
-  const downloadableOutputs = Object.entries(renderOutputs).filter(([, output]) => output?.url && output?.filename);
 
   /* ---------- พรีวิวสด: เล่น Timeline จริง ไม่ใช่คลิปเดียวค้างไว้ ---------- */
 
@@ -1824,33 +1821,6 @@ export function ProjectWizard() {
     setOperationMessage("");
   };
 
-  const downloadText = (type: "srt" | "json") => {
-    const content =
-      type === "srt"
-        ? currentChunks
-            .map((line, index) => `${index + 1}\n00:00:0${index * 6},000 --> 00:00:${String((index + 1) * 6).padStart(2, "0")},000\n${line}\n`)
-            .join("\n")
-        : JSON.stringify(
-            {
-              product: "หัวชาร์จพกพาแม่เหล็ก",
-              voice: selectedVoiceData.name,
-              speed,
-              style: selectedStyleData.name,
-              position: captionPosition,
-              script: currentChunks,
-            },
-            null,
-            2,
-          );
-    const blob = new Blob([content], { type: type === "srt" ? "text/plain;charset=utf-8" : "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `clippang-${type === "srt" ? "captions.srt" : "project.json"}`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
   const toggleVideo = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -2299,13 +2269,29 @@ export function ProjectWizard() {
                     <div className="final-video-slot">
                       <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video></div>
                     </div>
-                    <div className="output-list">
-                      <div className="output-head"><span className="output-icon"><Film size={20} /></span><div><h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3><p>1080 × 1920 · H.264 · พร้อมโพสต์</p></div><a className="button button-primary button-small" href={renderedVideoUrl || "/clippang-sample.mp4"} download><Download size={15} /> MP4</a></div>
-                      {engineState === "connected" ? downloadableOutputs.filter(([, output]) => !output.filename.toLowerCase().endsWith(".mp4")).map(([key, output]) => (
-                        <a className="output-row" href={output.url} download key={key}><span>{output.filename.endsWith(".wav") ? <FileAudio size={17} /> : <FileText size={17} />}</span><div><b>{output.filename}</b><small>ไฟล์ประกอบจาก ClipPang</small></div><Download size={16} /></a>
-                      )) : <><button type="button" className="output-row" onClick={() => downloadText('srt')}><span><FileText size={17} /></span><div><b>captions.srt</b><small>ไฟล์ซับตัวอย่าง</small></div><Download size={16} /></button><button type="button" className="output-row" onClick={() => downloadText('json')}><span><FileAudio size={17} /></span><div><b>project.json</b><small>การตั้งค่าตัวอย่าง</small></div><Download size={16} /></button></>}
-                      <button type="button" className="button button-outline output-folder" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้") }><FolderOpen size={17} /> เปิดโฟลเดอร์ผลงาน</button>
-                      <button type="button" className="text-button" onClick={() => { setRenderDone(false); setRenderProgress(0); }}>กลับไปแก้แล้วสร้างใหม่</button>
+                    {/* เหลือแค่ MP4 อย่างเดียว: ไฟล์ .srt/.ass/.wav/.json เป็นของสำหรับดีบัก
+                        ไม่ใช่ของที่คนโพสต์คลิปต้องใช้ ใครอยากได้กดเปิดโฟลเดอร์เอาได้ */}
+                    <div className="final-side">
+                      <div className="final-download">
+                        <span className="final-download-icon"><Film size={22} /></span>
+                        <div className="final-download-copy">
+                          <h3>{renderedVideoUrl ? "final.mp4" : "คลิปตัวอย่าง"}</h3>
+                          <p>1080 × 1920 · H.264 · {formatDuration(selectedTotalSec)} · พร้อมโพสต์ทันที</p>
+                        </div>
+                        <a className="button button-primary final-download-button" href={renderedVideoUrl || "/clippang-sample.mp4"} download>
+                          <Download size={17} /> ดาวน์โหลด MP4
+                        </a>
+                        <div className="final-download-more">
+                          <button type="button" className="text-button" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้")}>
+                            <FolderOpen size={15} /> เปิดโฟลเดอร์ผลงาน
+                          </button>
+                          <button type="button" className="text-button" onClick={() => { setRenderDone(false); setRenderProgress(0); }}>
+                            <RotateCcw size={15} /> กลับไปแก้แล้วสร้างใหม่
+                          </button>
+                        </div>
+                      </div>
+
+                      <CaptionIdeas projectId={projectId} onToast={setToast} variant="inline" />
                     </div>
                   </div>
                 )}
@@ -2323,8 +2309,7 @@ export function ProjectWizard() {
             </footer>
           </section>
 
-          {/* เรนเดอร์เสร็จแล้วพรีวิวสดไม่มีประโยชน์อีก งานถัดไปของผู้ใช้คือเขียนแคปชั่น */}
-          {renderDone && <CaptionIdeas projectId={projectId} onToast={setToast} />}
+          {/* เรนเดอร์เสร็จแล้วพรีวิวสดไม่มีประโยชน์อีก และแคปชั่นย้ายไปอยู่ในหน้าผลลัพธ์ */}
           {!renderDone && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
             <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
             <div className="phone-stage">

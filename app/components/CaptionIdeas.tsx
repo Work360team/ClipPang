@@ -10,7 +10,12 @@ import { localApi, type LocalCaptionSet } from "../lib/local-api";
  * แทนที่กล่องพรีวิวสดหลังเรนเดอร์เสร็จ เพราะถึงตอนนั้นพรีวิวไม่บอกอะไรเพิ่มแล้ว
  * แต่สิ่งที่ผู้ใช้ต้องทำต่อทันทีคือเขียนแคปชั่น ซึ่งเป็นงานที่คนส่วนใหญ่ติด
  */
-export function CaptionIdeas({ projectId, onToast }: { projectId: string | null; onToast: (message: string) => void }) {
+export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
+  projectId: string | null;
+  onToast: (message: string) => void;
+  /** panel = การ์ดเข้มในรางขวา, inline = การ์ดสว่างที่วางรวมในหน้าผลลัพธ์ */
+  variant?: "panel" | "inline";
+}) {
   const [data, setData] = useState<LocalCaptionSet | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -53,7 +58,7 @@ export function CaptionIdeas({ projectId, onToast }: { projectId: string | null;
   };
 
   return (
-    <aside className="caption-ideas-panel">
+    <aside className={`caption-ideas-panel caption-ideas-${variant}`}>
       <div className="preview-panel-head">
         <div>
           <span className="live-dot idea-dot"><Sparkles size={13} /> แคปชั่นสำหรับโพสต์</span>

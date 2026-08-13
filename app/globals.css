@@ -4593,27 +4593,33 @@ select:focus-visible,
 }
 
 .final-result {
+  --final-video-max-h: min(68vh, 600px);
   display: grid;
-  grid-template-columns: minmax(220px, 0.62fr) minmax(290px, 1fr);
+  grid-template-columns: minmax(220px, 0.5fr) minmax(320px, 1fr);
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 /* ช่องวางคลิป: กำหนดความสูงของแถวจากรายการไฟล์ฝั่งขวาอย่างเดียว
    ตัวคลิปวางแบบ absolute จึงไม่ถูกนับเป็นความสูงของแถว ถ้าปล่อยให้นับ
    ความกว้างของคลิปจะมาจากคอลัมน์ ความสูงมาจากแถว แล้วแถวก็มาจากคลิปอีกที
    กลายเป็นวงจรที่ทำให้คลิปโตเลยรายการไฟล์บนจอกว้าง */
+/* ความสูงกำหนดตายตัว ไม่ยืดตามคอลัมน์ขวา: ฝั่งขวามีรายการแคปชั่นที่ยาวได้เรื่อย ๆ
+   ถ้าคลิปยืดตาม ความกว้างที่คำนวณจาก 9:16 จะล้นออกนอกคอลัมน์ตัวเอง
+   sticky ไว้ให้คลิปยังอยู่ในสายตาระหว่างเลื่อนอ่านแคปชั่น */
 .final-video-slot {
-  position: relative;
-  min-height: 360px;
+  position: sticky;
+  top: 84px;
+  align-self: start;
 }
 
 .final-video {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
+  /* กว้างได้ไม่เกินสองอย่าง: คอลัมน์ของตัวเอง และงบความสูงที่ตั้งไว้แปลงกลับเป็นความกว้าง
+     ตามอัตราส่วน 9:16 — ทำให้ไม่ล้นคอลัมน์และไม่สูงจนต้องเลื่อนหาปุ่มเล่น */
+  width: min(100%, calc(var(--final-video-max-h) * 9 / 16));
+  max-width: 100%;
+  margin: 0 auto;
   overflow: hidden;
   aspect-ratio: 9 / 16;
   border-radius: 16px;
@@ -5093,4 +5099,130 @@ select:focus-visible,
   color: var(--red);
   font-size: 12.5px;
   line-height: 1.6;
+}
+
+/* ---------- หน้าผลลัพธ์: คลิปซ้าย ดาวน์โหลด+แคปชั่นขวา ---------- */
+
+.final-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.final-download {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 12px 13px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffdf4 0%, #fafbf8 100%);
+}
+
+.final-download-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(255, 210, 63, 0.22);
+  color: var(--yellow-dark);
+}
+
+.final-download-copy h3 {
+  margin: 0 0 3px;
+  font-size: 16px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.final-download-copy p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+.final-download-button {
+  grid-column: 1 / -1;
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  font-size: 15px;
+}
+
+.final-download-more {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding-top: 2px;
+}
+
+.final-download-more .text-button {
+  font-size: 12.5px;
+}
+
+/* แคปชั่นแบบวางรวมในหน้า ใช้โทนสว่างให้เข้ากับการ์ดรอบข้าง ไม่ใช่กล่องดำลอยมา */
+.caption-ideas-inline {
+  position: static;
+  max-height: none;
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.caption-ideas-inline .preview-panel-head {
+  padding: 15px 16px 9px;
+}
+
+.caption-ideas-inline .preview-panel-head > div > p,
+.caption-ideas-inline .idea-empty p,
+.caption-ideas-inline .idea-note {
+  color: var(--ink-faint);
+}
+
+.caption-ideas-inline .text-button {
+  color: var(--ink-soft);
+}
+
+.caption-ideas-inline .text-button:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.caption-ideas-inline .idea-dot {
+  color: var(--yellow-dark);
+}
+
+.caption-ideas-inline .idea-list {
+  overflow: visible;
+  gap: 10px;
+}
+
+.caption-ideas-inline .idea-card {
+  border-color: var(--line);
+  background: #fafbf8;
+}
+
+.caption-ideas-inline .idea-card-head b {
+  color: var(--ink);
+}
+
+.caption-ideas-inline .idea-copy {
+  border-color: #dfe2da;
+  color: var(--ink-soft);
+}
+
+.caption-ideas-inline .idea-copy:hover {
+  border-color: var(--yellow-dark);
+  color: var(--yellow-dark);
+}
+
+.caption-ideas-inline .idea-tags {
+  color: var(--ink-faint);
+}
+
+.caption-ideas-inline .idea-error {
+  color: var(--red);
 }
