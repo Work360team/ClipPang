@@ -22,7 +22,12 @@ const OUT_DIR = path.join(ROOT, "public", "voice-samples");
 const TMP_DIR = path.join(ROOT, ".cache", "voice-samples");
 
 // ประโยคเดียวกันทุกเสียง เพื่อให้เทียบกันได้ว่าเสียงไหนเข้ากับคลิปมากกว่า
-const SAMPLE_TEXT = "สวัสดีค่ะ ตัวนี้ใช้ดีมาก บอกเลยว่าคุ้มมาก กดตะกร้าส้มได้เลยค่ะ";
+// แยกคำลงท้ายตามเพศของเสียง: เสียงผู้ชายพูด "ค่ะ" ฟังแล้วขัดทันที
+const SAMPLE_TEXT = {
+  "หญิง": "สวัสดีค่ะ ตัวนี้ใช้ดีมาก บอกเลยว่าคุ้มมาก กดตะกร้าส้มได้เลยค่ะ",
+  "ชาย": "สวัสดีครับ ตัวนี้ใช้ดีมาก บอกเลยว่าคุ้มมาก กดตะกร้าส้มได้เลยครับ",
+};
+const sampleTextFor = (voice) => SAMPLE_TEXT[voice.gender] ?? SAMPLE_TEXT["หญิง"];
 
 const args = process.argv.slice(2);
 const force = args.includes("--force");
@@ -61,7 +66,7 @@ for (const [index, voice] of voices.entries()) {
     const preview = await synthesizePreview({
       voiceId: voice.id,
       provider: "gemini",
-      text: SAMPLE_TEXT,
+      text: sampleTextFor(voice),
       speed: 1,
       tone: "เป็นกันเอง",
       outDir: TMP_DIR,

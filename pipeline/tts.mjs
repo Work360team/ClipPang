@@ -12,6 +12,11 @@ import { graphemeCount } from "./core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * ป้าย gender มาจากการวัด F0 ของเสียงตัวอย่างจริง ไม่ใช่จากเอกสารของ Google
+ * ซึ่งระบุไว้แค่ลักษณะเสียง (Bright, Firm, …) ไม่ได้บอกเพศ
+ * ตรวจซ้ำได้ด้วย scripts/audit-voice-gender.mjs
+ */
 export const VOICES = {
   gemini: [
     { id: "Zephyr", label: "สว่าง เป็นมิตร", gender: "หญิง" },
