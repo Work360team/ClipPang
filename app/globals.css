@@ -4731,7 +4731,11 @@ select:focus-visible,
   border: 0;
   background: transparent;
   color: #7b827a;
-  font-size: 7.5px;
+  /* เดิม 7.5px ซึ่งเล็กจนอ่านภาษาไทยไม่ออก และไอคอนข้างหน้าตกลงมาคนละบรรทัด */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -5187,17 +5191,51 @@ select:focus-visible,
 }
 
 .final-download-more {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 7px;
   width: 100%;
   padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 
-.final-download-more .text-button {
-  font-size: 12.5px;
+/* ปุ่มจริง ไม่ใช่ลิงก์ขีดเส้นใต้: ไอคอนกับข้อความอยู่บรรทัดเดียวกัน
+   เรียงลงมาปุ่มละบรรทัด กดง่ายกว่าและเห็นขอบเขตที่กดได้ชัด */
+.final-download-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+}
+
+.final-download-secondary svg {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+
+.final-download-secondary:hover {
+  border-color: var(--ink-faint);
+  background: #fbfcf9;
+  color: var(--ink);
+}
+
+.final-download-secondary:hover svg {
+  opacity: 1;
+}
+
+.final-download-secondary:active {
+  transform: translateY(1px);
 }
 
 /* แคปชั่นแบบวางรวมในหน้า ใช้โทนสว่างให้เข้ากับการ์ดรอบข้าง ไม่ใช่กล่องดำลอยมา */

@@ -2306,11 +2306,13 @@ export function ProjectWizard() {
                 <Download size={17} /> ดาวน์โหลด MP4
               </a>
               <div className="final-download-more">
-                <button type="button" className="text-button" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้")}>
-                  <FolderOpen size={15} /> เปิดโฟลเดอร์ผลงาน
+                <button type="button" className="final-download-secondary" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้")}>
+                  <FolderOpen size={16} />
+                  <span>เปิดโฟลเดอร์ผลงาน</span>
                 </button>
-                <button type="button" className="text-button" onClick={() => { setRenderDone(false); setRenderProgress(0); }}>
-                  <RotateCcw size={15} /> กลับไปแก้แล้วสร้างใหม่
+                <button type="button" className="final-download-secondary" onClick={() => { setRenderDone(false); setRenderProgress(0); }}>
+                  <RotateCcw size={16} />
+                  <span>กลับไปแก้แล้วสร้างใหม่</span>
                 </button>
               </div>
             </aside>
