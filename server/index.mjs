@@ -22,9 +22,29 @@ import { getSetupStatus } from "./setup.mjs";
 import { runPipeline } from "../pipeline/index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** อ่าน .env แบบง่าย ๆ ไม่ทับค่าที่ตั้งมาจากภายนอกอยู่แล้ว */
+function loadDotEnv(file) {
+  let text = "";
+  try { text = fs.readFileSync(file, "utf8"); } catch { return; }
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (process.env[key] != null) continue;
+    process.env[key] = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+  }
+}
+
 const CLIENT_ROOT = path.join(ROOT, "dist", "client");
 const WORKER_ENTRY = path.join(ROOT, "dist", "server", "index.js");
 const VERSION = "0.3.0";
+// อ่าน .env ก่อนคำนวณค่าคงที่ด้านล่าง — ค่าพวกนี้ถูกอ่านตอน import ครั้งเดียว
+// ถ้าปล่อยให้ pipeline ไปโหลด .env ทีหลัง โหมดระยะไกลจะไม่มีวันเปิดเลย
+loadDotEnv(path.join(ROOT, ".env"));
+
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /**
