@@ -960,13 +960,32 @@ export function ProjectWizard() {
     return task;
   };
 
+  /**
+   * ชื่อโปรเจกต์ที่ส่งให้เซิร์ฟเวอร์ ต้องไม่ว่างเด็ดขาด
+   *
+   * ขั้นที่ 1 เกิดก่อนหน้ากรอกชื่อสินค้า ถ้าส่ง brief.name ตรง ๆ จะได้ค่าว่าง
+   * แล้วเซิร์ฟเวอร์ตอบ "ชื่อโปรเจกต์ต้องเป็นข้อความที่ไม่ว่าง" ตั้งแต่ปุ่มแรก
+   * จึงไล่หาชื่อจากสิ่งที่มีอยู่จริงตามลำดับ แล้วค่อยถูกแทนด้วยชื่อสินค้าจริง
+   * เมื่อผู้ใช้กรอกในขั้นที่ 2
+   */
+  const projectTitle = (override?: string) => {
+    const candidates = [
+      override,
+      brief.name,
+      orderedClipAssets[0] ? pathlessName(orderedClipAssets[0].originalName || orderedClipAssets[0].name) : "",
+      fileName ? pathlessName(fileName) : "",
+    ];
+    const picked = candidates.map((value) => (value ?? "").trim()).find(Boolean);
+    return picked || `โปรเจกต์ ${new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short" })}`;
+  };
+
   const ensureProject = async (
     productOverride?: Record<string, unknown>,
     titleOverride?: string,
   ) => {
     if (projectId) return projectId;
     const result = await localApi.createProject({
-      title: titleOverride || brief.name || fileName || "โปรเจกต์ใหม่",
+      title: projectTitle(titleOverride),
       product: productOverride ?? projectProduct(),
     });
     setProjectId(result.project.id);
@@ -999,7 +1018,7 @@ export function ProjectWizard() {
     try {
       const id = await ensureProject();
       await queueProjectUpdate(id, {
-        title: brief.name || fileName || "โปรเจกต์ใหม่",
+        title: projectTitle(),
         wizardStep: activeStep,
         product: projectProduct(),
       });
@@ -1190,7 +1209,7 @@ export function ProjectWizard() {
           asset: savedAssets[0],
           timelineClips: nextTimeline,
         });
-        const nextTitle = brief.name || pathlessName(firstNew.originalName || firstNew.name);
+        const nextTitle = projectTitle(pathlessName(firstNew.originalName || firstNew.name));
         const id = await ensureProject(nextProduct, nextTitle);
         await queueProjectUpdate(id, {
           title: nextTitle,
@@ -1585,7 +1604,7 @@ export function ProjectWizard() {
           return;
         }
         setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
-        await queueProjectUpdate(id, { title: brief.name, product: projectProduct(), wizardStep: 2 });
+        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 2 });
         const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: selectedTotalSec });
         if (result.scripts.length) {
           setScriptVariants(result.scripts);
@@ -1593,7 +1612,7 @@ export function ProjectWizard() {
           setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
         }
       } else {
-        await queueProjectUpdate(id, { title: brief.name, product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
+        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
       }
       if (activeStep < 4) setActiveStep((activeStep + 1) as WizardStep);
       else if (activeStep === 4) {
@@ -1692,7 +1711,7 @@ export function ProjectWizard() {
       // Promotion compares the draft hash with the persisted project. Flush the
       // latest edit first so a quick trim-then-render can never reuse a stale draft.
       await queueProjectUpdate(id, {
-        title: brief.name || fileName || "โปรเจกต์ใหม่",
+        title: projectTitle(),
         wizardStep: 5,
         product: projectProduct(),
       });
