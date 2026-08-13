@@ -27,6 +27,7 @@ const STATIC_MIME = new Map([
   [".jpeg", "image/jpeg"], [".webp", "image/webp"], [".ico", "image/x-icon"],
   [".woff", "font/woff"], [".woff2", "font/woff2"], [".ttf", "font/ttf"],
   [".mp4", "video/mp4"], [".webm", "video/webm"], [".map", "application/json"],
+  [".mp3", "audio/mpeg"], [".wav", "audio/wav"], [".m4a", "audio/mp4"],
 ]);
 
 function parseJson(value, fallback = {}) {

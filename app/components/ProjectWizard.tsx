@@ -140,6 +140,10 @@ const steps: { id: WizardStep; label: string; helper: string; icon: typeof Film 
   { id: 5, label: "ผลลัพธ์", helper: "เรนเดอร์และโหลด", icon: Download },
 ];
 
+/** ตัวกรองที่เทียบกับเพศของเสียง ที่เหลือในแถวเดียวกันเทียบกับคำอธิบายโทน */
+const GENDER_FILTERS = ["หญิง", "ชาย"];
+const VOICE_FILTERS = ["ทั้งหมด", ...GENDER_FILTERS, "สดใส", "นุ่ม", "หนักแน่น"];
+
 const voices = [
   { id: "Kore", name: "เมษา", gender: "หญิง", tone: "หนักแน่น น่าเชื่อถือ", color: "#ffd6a6", initials: "ม", provider: "gemini" },
   { id: "Aoede", name: "น้ำมนต์", gender: "หญิง", tone: "นุ่มนวล โปร่งใส", color: "#d9d4ff", initials: "น", provider: "gemini" },
@@ -348,6 +352,7 @@ export function ProjectWizard() {
   captionStylesRef.current = captionStyles;
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [voiceFilter, setVoiceFilter] = useState("ทั้งหมด");
+  const [sampleVoices, setSampleVoices] = useState<Set<string>>(new Set());
   const [voicePlaying, setVoicePlaying] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [tone, setTone] = useState("เป็นกันเอง");
@@ -394,7 +399,20 @@ export function ProjectWizard() {
   const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData.chunks;
 
-  const filteredVoices = voiceLibrary.filter((voice) => voiceFilter === "ทั้งหมด" || voice.tone.includes(voiceFilter));
+  // เสียงไหนมีไฟล์ตัวอย่างพร้อมแล้วบ้าง — โหลดครั้งเดียวแทนการยิง 404 ทีละไฟล์
+  useEffect(() => {
+    let active = true;
+    fetch("/voice-samples/index.json")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (active && Array.isArray(data?.voices)) setSampleVoices(new Set(data.voices as string[]));
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const filteredVoices = voiceLibrary.filter((voice) => voiceFilter === "ทั้งหมด"
+    || (GENDER_FILTERS.includes(voiceFilter) ? voice.gender === voiceFilter : voice.tone.includes(voiceFilter)));
   const orderedClipAssets = useMemo(() => [...clipAssets].sort((a, b) => a.order - b.order), [clipAssets]);
   const orderedTimelineClips = useMemo(() => [...timelineClips].sort((a, b) => a.order - b.order), [timelineClips]);
   const activeClip = orderedClipAssets.find((asset) => asset.clientId === activeClipId) ?? orderedClipAssets[0] ?? null;
@@ -1632,6 +1650,24 @@ export function ProjectWizard() {
       setVoicePlaying(null);
       return;
     }
+
+    // เล่นตัวอย่างที่สร้างไว้ล่วงหน้าใน public/voice-samples ก่อนเสมอ — ได้ยินทันที
+    // และไม่กินโควตา Gemini ซึ่ง free tier ให้วันละ 10 คำขอต่อคีย์ ถ้าเรียกสดทุกครั้ง
+    // ที่กดฟัง โควตาจะหมดตั้งแต่ยังเลือกเสียงไม่เสร็จ
+    if (sampleVoices.has(voiceId)) {
+      const sample = new Audio(`/voice-samples/${encodeURIComponent(voiceId)}.mp3`);
+      sample.playbackRate = speed;
+      previewAudioRef.current = sample;
+      sample.onended = () => setVoicePlaying(null);
+      try {
+        setVoicePlaying(voiceId);
+        await sample.play();
+        return;
+      } catch {
+        setVoicePlaying(null); // เล่นไฟล์ไม่ได้ด้วยเหตุใดก็ตาม ค่อยเรียกสด
+      }
+    }
+
     if (engineState === "connected") {
       try {
         setVoicePlaying(voiceId);
@@ -2106,7 +2142,16 @@ export function ProjectWizard() {
                   <span className="library-count">{voiceLibrary.length} เสียง</span>
                 </div>
                 <div className="filter-row">
-                  {['ทั้งหมด','สดใส','นุ่ม','หนักแน่น'].map((filter) => <button type="button" key={filter} className={voiceFilter === filter ? "active" : ""} onClick={() => setVoiceFilter(filter)}>{filter}</button>)}
+                  {VOICE_FILTERS.map((filter) => {
+                    const count = filter === "ทั้งหมด"
+                      ? voiceLibrary.length
+                      : voiceLibrary.filter((voice) => GENDER_FILTERS.includes(filter) ? voice.gender === filter : voice.tone.includes(filter)).length;
+                    return (
+                      <button type="button" key={filter} className={voiceFilter === filter ? "active" : ""} disabled={count === 0} onClick={() => setVoiceFilter(filter)}>
+                        {filter} <em>{count}</em>
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="voice-grid">
                   {filteredVoices.map((voice) => (
@@ -2116,8 +2161,9 @@ export function ProjectWizard() {
                       <span
                         role="button"
                         tabIndex={0}
-                        className="voice-play"
+                        className={`voice-play ${sampleVoices.has(voice.id) ? "" : "voice-play-live"}`}
                         aria-label={`ฟังเสียง ${voice.name}`}
+                        title={sampleVoices.has(voice.id) ? "ฟังตัวอย่างที่เตรียมไว้ ไม่กินโควตา" : "ยังไม่มีตัวอย่างสำเร็จรูป จะสร้างสดและใช้โควตา 1 คำขอ"}
                         onClick={(event) => { event.stopPropagation(); previewVoice(voice.id); }}
                         onKeyDown={(event) => { if (event.key === "Enter") previewVoice(voice.id); }}
                       >{voicePlaying === voice.id ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</span>

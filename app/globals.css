@@ -3808,8 +3808,21 @@ select:focus-visible,
   border-radius: 9px;
   background: #fff;
   color: #737b72;
-  font-size: 8px;
+  /* เดิม 8px ซึ่งอ่านภาษาไทยไม่ออก สระบนล่างเบียดกันจนเป็นก้อนเดียว */
+  font-size: 12.5px;
   cursor: pointer;
+}
+
+.filter-row button em {
+  margin-left: 3px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+}
+
+.filter-row button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .filter-row button.active,
@@ -3896,6 +3909,14 @@ select:focus-visible,
   border-radius: 9px;
   background: #f6f7f3;
   color: #555d54;
+}
+
+/* เสียงที่ยังไม่มีไฟล์ตัวอย่าง กดแล้วจะไปเรียก Gemini สดและกินโควตา จึงทำให้จางลง
+   ให้เห็นว่าไม่เหมือนปุ่มอื่นตั้งแต่ยังไม่กด */
+.voice-play-live {
+  border-style: dashed;
+  background: transparent;
+  color: #9aa198;
 }
 
 .selected-check {
