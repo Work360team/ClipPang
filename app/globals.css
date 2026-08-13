@@ -5308,3 +5308,51 @@ select:focus-visible,
 .caption-ideas-inline .idea-error {
   color: var(--red);
 }
+
+/* ---------- มือถือ: กันหน้าจอเลื่อนออกด้านข้าง ---------- */
+
+@media (max-width: 720px) {
+  /* แถบขั้นตอนกว้างเกินจอเสมอเพราะมีห้าขั้นเรียงกัน ให้เลื่อนในกล่องตัวเอง
+     แทนที่จะดันทั้งหน้าให้กว้างกว่าจอ (เดิมหน้ากว้าง 431px บนจอ 375px) */
+  .wizard-stepper {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .wizard-stepper::-webkit-scrollbar { display: none; }
+
+  .wizard-stepper > button {
+    flex: 0 0 auto;
+  }
+
+  /* ชื่อโปรเจกต์กับป้าย "บันทึกอัตโนมัติ" อยู่บรรทัดเดียวกันแล้วดันจนล้น
+     ให้ป้ายตกลงมาบรรทัดใหม่ได้ */
+  .title-line {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    min-width: 0;
+  }
+
+  .title-line h1 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* ชิปสถานะเหลือแค่ไอคอน ข้อความเต็มไปอยู่ใน title ให้กดค้างดูได้ */
+  .topbar-actions { gap: 7px; min-width: 0; }
+
+  .engine-chip {
+    max-width: 34px;
+    padding: 0 8px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-indent: -999px;
+  }
+
+  .engine-chip svg { flex: 0 0 auto; text-indent: 0; }
+
+  /* กันทุกอย่างที่หลุดออกนอกจอในอนาคตด้วย ไม่ใช่แก้ทีละจุด */
+  html, body { max-width: 100%; overflow-x: hidden; }
+}
