@@ -289,11 +289,21 @@ async function moveProjectToTrash(id) {
   return destination;
 }
 
+/** เปิดโฟลเดอร์ในตัวจัดการไฟล์ของเครื่อง */
 function openLocalPath(target) {
   let child;
-  if (process.platform === "win32") child = spawn("explorer.exe", [target], { detached: true, stdio: "ignore", windowsHide: true, shell: false });
-  else if (process.platform === "darwin") child = spawn("open", [target], { detached: true, stdio: "ignore", shell: false });
-  else child = spawn("xdg-open", [target], { detached: true, stdio: "ignore", shell: false });
+  if (process.platform === "win32") {
+    // ห้ามใส่ windowsHide ตรงนี้: Node แปลเป็น CREATE_NO_WINDOW ซึ่งทำให้ explorer.exe
+    // ไม่ได้ผูกกับ window station ตามปกติ หน้าต่างจึงเปิดอยู่หลังเบราว์เซอร์และ Explorer
+    // ก็มองไม่เห็นหน้าต่างเดิมของตัวเอง กดปุ่มทีก็เปิดใหม่ทีจนกองเป็นสิบบานโดยผู้ใช้
+    // ไม่เห็นอะไรเลย — explorer.exe ไม่มีหน้าต่างคอนโซลอยู่แล้ว จึงไม่ต้องซ่อนอะไร
+    child = spawn("explorer.exe", [target], { detached: true, stdio: "ignore", shell: false });
+  } else if (process.platform === "darwin") {
+    child = spawn("open", [target], { detached: true, stdio: "ignore", shell: false });
+  } else {
+    child = spawn("xdg-open", [target], { detached: true, stdio: "ignore", shell: false });
+  }
+  child.on("error", () => undefined);
   child.unref();
 }
 
@@ -818,32 +828,6 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
       if (method === "POST" && pathname === "/api/settings/cache/clear") {
         const result = store.clearVoiceCache?.({ removeFiles: true }) ?? 0;
         return json({ ok: true, removed: result });
-      }
-
-      // เปิดโฟลเดอร์ผลงานใน File Explorer / Finder — ทำได้เพราะเป็นแอปที่รันบนเครื่อง
-      // ผู้ใช้เอง ไม่ใช่เซิร์ฟเวอร์กลาง พาธถูกบีบให้อยู่ใต้ projects/ ด้วย safeProjectPath
-      // และส่งเป็น argument แยก ไม่ผ่าน shell จึงไม่มีช่องให้แทรกคำสั่ง
-      if (method === "POST" && pathname === "/api/open") {
-        const body = await readJson(request);
-        const folder = body.target === "project"
-          ? safeProjectPath(String(body.projectId ?? ""))
-          : safeProjectPath(String(body.projectId ?? ""), "out");
-        if (!fs.existsSync(folder)) return apiError(404, "FOLDER_NOT_FOUND", "ยังไม่มีโฟลเดอร์นี้ ลองสร้างคลิปให้เสร็จก่อน");
-
-        const opener = process.platform === "win32"
-          ? { command: "explorer.exe", args: [folder] }
-          : process.platform === "darwin"
-            ? { command: "open", args: [folder] }
-            : { command: "xdg-open", args: [folder] };
-        try {
-          // explorer.exe คืน exit code 1 แม้เปิดหน้าต่างสำเร็จ จึงไม่รอผลลัพธ์
-          const child = spawn(opener.command, opener.args, { detached: true, stdio: "ignore" });
-          child.on("error", () => undefined);
-          child.unref();
-        } catch (error) {
-          return apiError(500, "OPEN_FAILED", `เปิดโฟลเดอร์ไม่สำเร็จ: ${error?.message ?? error}`);
-        }
-        return json({ ok: true, folder });
       }
 
       return apiError(404, "API_NOT_FOUND", "ไม่พบ API ที่เรียกใช้");
