@@ -26,6 +26,7 @@ import {
 } from "./setup.mjs";
 import { generateCaptions } from "../pipeline/caption.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
+import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import {
   generateScripts,
@@ -333,6 +334,8 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
     // ห้ามอ่านจากพารามิเตอร์ใน request เด็ดขาด ไม่งั้นใครก็ปลอมเป็นคนอื่นได้
     const viewer = context.viewer ?? null;
     const viewerId = viewer?.id ?? null;
+    // คำขอจากเครื่องที่รันโปรแกรมเองเท่านั้นที่แตะของระดับเครื่องได้
+    const isLocal = context.local !== false;
 
     /** โปรเจกต์นี้เป็นของผู้ขอไหม — ใช้ก่อนแตะข้อมูลของโปรเจกต์ทุกครั้ง */
     const ownsProject = (id) => {
@@ -592,8 +595,15 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
       const previewMatch = /^\/api\/voices\/([^/]+)\/preview$/.exec(pathname);
       if (previewMatch && method === "POST") {
         const body = await readJson(request, { optional: true });
+        const previewGate = quotaGate(store, viewerId, { needed: 1 });
+        if (!previewGate.allowed) {
+          return apiError(429, "USER_QUOTA_EXCEEDED",
+            `วันนี้ใช้ครบเพดาน ${previewGate.cap} คำขอแล้ว — ใส่คีย์ Gemini ของตัวเองในหน้าตั้งค่าเพื่อใช้ต่อได้ทันที`);
+        }
         const preview = await synthesizePreview({
           voiceId: previewMatch[1],
+          geminiEnv: userKeyEnvironment(store, viewerId) ?? undefined,
+          onRequest: viewerId ? () => store.recordUsage?.(viewerId, 1) : undefined,
           text: String(body.text || "สวัสดีค่ะ ClipPang พร้อมช่วยให้คลิปสินค้าของคุณน่าฟังขึ้น"),
           speed: Number(body.speed ?? 1),
           tone: body.tone ?? "เป็นกันเอง",
@@ -614,7 +624,18 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         // ครึ่งทางแล้วค่อยตายตอนพากย์เสียง ซึ่งเสียเวลา ingest ไปฟรี ๆ
         // การเช็คใช้ models.get จึงไม่กินโควตา TTS (ดู server/tts-health.mjs)
         if (!mockTtsEnabled) {
-          const health = await checkTtsHealthImpl({ signal: request.signal });
+          // เพดานรายวันของคนที่ใช้คีย์ร่วมของเครื่อง — กันคนเดียวยิงจนคนอื่นใช้ไม่ได้
+          // ใครใส่คีย์ของตัวเองไว้จะไม่ติดเพดานนี้ เพราะเขาจ่ายโควตาเอง
+          const gate = quotaGate(store, viewerId, { needed: 1 });
+          if (!gate.allowed) {
+            return apiError(429, "USER_QUOTA_EXCEEDED",
+              `วันนี้ใช้ครบเพดาน ${gate.cap} คำขอแล้ว — ใส่คีย์ Gemini ของตัวเองในหน้าตั้งค่าเพื่อใช้ต่อได้ทันที`,
+              { cap: gate.cap, used: gate.used });
+          }
+          const health = await checkTtsHealthImpl({
+            signal: request.signal,
+            environment: userKeyEnvironment(store, viewerId) ?? undefined,
+          });
           if (!health.ok) {
             return apiError(503, `TTS_${health.code}`, health.reason, { model: health.model, checkedAt: health.checkedAt });
           }
@@ -806,28 +827,74 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         const body = await readJson(request);
         const key = String(body.key ?? "").trim();
         if (key.length < 16) return apiError(400, "INVALID_API_KEY", "API key ดูไม่ครบ กรุณาคัดลอกมาใหม่ทั้งชุด");
+        // ยืนยันว่าคีย์ใช้ได้จริงก่อนบันทึก ไม่งั้นผู้ใช้จะเพิ่งรู้ตอนเรนเดอร์ล้ม
+        await testGeminiApiKey(key, { signal: request.signal });
+
+        // คีย์ของใครของมัน — เก็บในฐานข้อมูลผูกกับบัญชี ไม่ใช่ .env ของเครื่อง
+        // ซึ่งเป็นวิธีเดียวที่ทำให้โควตา Google แยกกันจริงระหว่างผู้ใช้
+        if (viewerId) {
+          try {
+            const saved = store.addUserKey(viewerId, key, { maxKeys: MAX_KEYS });
+            resetTtsHealthCache();
+            return json({ ok: true, slot: `USER_${saved.slot}`, last4: key.slice(-4), scope: "user" });
+          } catch (error) {
+            const status = error?.code === "STORE_CONFLICT" ? 409 : 400;
+            return apiError(status, error?.code ?? "KEY_REJECTED", error.message);
+          }
+        }
+
+        if (!isLocal) {
+          return apiError(403, "MACHINE_KEY", "เพิ่มคีย์ของเครื่องได้จากเครื่องที่รัน ClipPang เท่านั้น");
+        }
         const existing = listGeminiKeys();
         if (existing.some((entry) => entry.key === key)) {
           return apiError(409, "DUPLICATE_KEY", "คีย์นี้ใส่ไว้แล้ว — คีย์ซ้ำไม่ได้เพิ่มโควตา");
         }
         const slot = nextFreeSlot();
         if (!slot) return apiError(409, "NO_FREE_SLOT", `ใส่คีย์ได้สูงสุด ${MAX_KEYS} ใบ`);
-        // ยืนยันว่าคีย์ใช้ได้จริงก่อนบันทึก ไม่งั้นผู้ใช้จะเพิ่งรู้ตอนเรนเดอร์ล้ม
-        await testGeminiApiKey(key, { signal: request.signal });
         await saveGeminiApiKey(key, { keyName: slot });
         process.env[slot] = key;
         resetTtsHealthCache();
-        return json({ ok: true, slot, last4: key.slice(-4) });
+        return json({ ok: true, slot, last4: key.slice(-4), scope: "machine" });
       }
 
-      const ttsKeyMatch = /^\/api\/tts\/keys\/([A-Z0-9_]+)$/.exec(pathname);
+      const ttsKeyMatch = /^\/api\/tts\/keys\/([A-Za-z0-9_]+)$/.exec(pathname);
       if (ttsKeyMatch && method === "DELETE") {
         const slot = ttsKeyMatch[1];
+        const userSlot = /^USER_(\d+)$/.exec(slot);
+        if (userSlot) {
+          if (!viewerId) return apiError(403, "NO_VIEWER", "ต้องเข้าสู่ระบบก่อน");
+          const removed = store.removeUserKey?.(viewerId, Number(userSlot[1]));
+          if (!removed) return apiError(404, "UNKNOWN_SLOT", "ไม่พบคีย์นี้ในบัญชีของคุณ");
+          resetTtsHealthCache();
+          return json({ ok: true, slot });
+        }
+        // คีย์ของเครื่องแก้ได้จากเครื่องที่รันโปรแกรมเท่านั้น
+        // เดิมเช็คว่า "ผู้ใช้มีคีย์ของตัวเองไหม" ซึ่งพลาด: คนที่ยังไม่มีคีย์ของตัวเอง
+        // ลบคีย์ใน .env ของเจ้าของเครื่องได้ ทดสอบแล้วเจอว่าลบได้จริง
+        if (!isLocal) {
+          return apiError(403, "MACHINE_KEY", "คีย์นี้เป็นของเครื่อง แก้ได้จากเครื่องที่รัน ClipPang เท่านั้น");
+        }
         if (!keySlots().includes(slot)) return apiError(404, "UNKNOWN_SLOT", "ไม่รู้จักช่องคีย์นี้");
         removeEnvValue(slot);
         delete process.env[slot];
         resetTtsHealthCache();
         return json({ ok: true, slot });
+      }
+
+      // สรุปโควตาของผู้ใช้คนนี้ — ใช้คีย์ของใคร ใช้ไปเท่าไหร่วันนี้ เหลือเท่าไหร่
+      if (method === "GET" && pathname === "/api/tts/quota") {
+        const source = keySourceFor(store, viewerId);
+        const gate = quotaGate(store, viewerId);
+        return json({
+          ok: true,
+          scope: source.scope,
+          keyCount: source.scope === "user" ? source.count : listGeminiKeys().length,
+          usedToday: viewerId ? store.usageToday?.(viewerId) ?? 0 : 0,
+          cap: gate.cap,
+          remaining: Number.isFinite(gate.remaining) ? gate.remaining : null,
+          history: viewerId ? store.usageHistory?.(viewerId, 7) ?? [] : [],
+        });
       }
 
       // ---- ผู้ให้บริการ AI สำหรับเขียนสคริปต์ ----

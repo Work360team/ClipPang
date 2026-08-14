@@ -229,6 +229,8 @@ export async function regenerateChunk({
 export async function synthesizePreview({
   voiceId,
   provider,
+  geminiEnv,
+  onRequest,
   text = "สวัสดีค่ะ ClipPang พร้อมช่วยให้คลิปสินค้าของคุณน่าฟังขึ้น",
   speed = 1,
   tone = "เป็นกันเอง",
@@ -253,6 +255,8 @@ export async function synthesizePreview({
     outFile: file,
     cacheDir: ensureDir(path.join(root, "cache")),
     signal,
+    geminiEnv,
+    onRequest,
   });
 }
 
@@ -618,6 +622,9 @@ export async function runPipeline(options = {}) {
           cacheDir,
           signal,
           timeoutMs: options.ttsTimeoutMs,
+          // คีย์ของเจ้าของงานนี้ และตัวนับที่ฝั่งเซิร์ฟเวอร์ใช้บันทึกการใช้งานรายคน
+          geminiEnv: options.geminiEnv,
+          onRequest: options.onTtsRequest,
         },
         concurrencyFor(provider),
         (current, total) => emit(

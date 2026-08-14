@@ -12,7 +12,16 @@ import { resolvedEnvironment } from "../pipeline/providers.mjs";
 const CACHE_MS = 60_000;
 const TIMEOUT_MS = 8000;
 
-let cache = null;
+/**
+ * แคชแยกตาม "ชุดคีย์" ไม่ใช่ช่องเดียวทั้งระบบ
+ *
+ * พอผู้ใช้แต่ละคนมีคีย์ของตัวเอง แคชช่องเดียวจะทำให้คนหนึ่งได้ผลตรวจของอีกคน
+ * (เงื่อนไขเดิมเทียบแค่ชื่อโมเดลกับจำนวนคีย์ ซึ่งบังเอิญตรงกันได้ง่ายมาก)
+ * ผลคืออาจบอกว่า "พร้อม" ทั้งที่คีย์ของคนนั้นใช้ไม่ได้
+ */
+const caches = new Map();
+
+const cacheKeyFor = (entries) => entries.map((entry) => entry.id).sort().join(",") || "(none)";
 
 export function ttsModelName(environment = process.env) {
   return environment.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
@@ -68,13 +77,16 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
 
   // แคชได้ ยกเว้นสถานะโควตาเปลี่ยนไปจากตอนที่แคชไว้ (คีย์เพิ่งเต็ม หรือเพิ่งคืน)
   const liveAvailable = entries.filter((entry) => !keyQuotaStatus(entry.id).limited).length;
-  const fresh = cache && cache.model === model && cache.totalKeys === entries.length && Date.now() - cache.checkedAt < CACHE_MS;
+  const cacheKey = cacheKeyFor(entries);
+  const cache = caches.get(cacheKey);
+  const fresh = cache && cache.model === model && Date.now() - cache.checkedAt < CACHE_MS;
   if (!force && fresh && cache.availableKeys === liveAvailable) return { ...cache, cached: true };
+  const remember = (value) => { caches.set(cacheKey, value); return value; };
 
   const base = { model, checkedAt: Date.now(), cached: false, totalKeys: entries.length };
 
   if (!entries.length) {
-    return (cache = {
+    return remember({
       ...base,
       ok: false,
       code: "NO_KEY",
@@ -107,7 +119,7 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
 
   const usable = keys.filter((key) => key.usable);
   if (usable.length) {
-    return (cache = {
+    return remember({
       ...base,
       ok: true,
       code: "READY",
@@ -123,7 +135,7 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
   if (quota.limited && quota.daily) {
     const { reset, hours, minutes, cap } = describeDaily(quota);
     const many = entries.length > 1 ? `ทั้ง ${entries.length} คีย์` : "คีย์ที่ใส่ไว้";
-    return (cache = {
+    return remember({
       ...base,
       ok: false,
       code: "QUOTA_DAILY",
@@ -137,7 +149,7 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
     });
   }
   if (quota.limited) {
-    return (cache = {
+    return remember({
       ...base,
       ok: false,
       code: "RATE_LIMITED",
@@ -149,7 +161,7 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
   }
 
   const first = keys.find((key) => key.note) ?? keys[0];
-  return (cache = {
+  return remember({
     ...base,
     ok: false,
     code: first?.code ?? "UNAVAILABLE",
@@ -163,5 +175,5 @@ export async function checkTtsHealth({ force = false, signal, environment } = {}
 
 /** ล้างแคชเมื่อผู้ใช้เปลี่ยนคีย์ ไม่งั้นจะยังเห็นสถานะเก่าอีกนาทีหนึ่ง */
 export function resetTtsHealthCache() {
-  cache = null;
+  caches.clear();
 }

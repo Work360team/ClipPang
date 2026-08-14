@@ -149,7 +149,7 @@ function ttsNoAudioMessage({ blocked, finish, spoken, text, attempts = 1 }) {
     + `อาการนี้เป็นที่ฝั่งโมเดลไม่ใช่ที่ข้อความของเรา รอสักครู่แล้วกดสร้างใหม่มักจะผ่าน`;
 }
 
-async function geminiTts({ text, voice, styleHint, signal, timeoutMs }, rawFile) {
+async function geminiTts({ text, voice, styleHint, signal, timeoutMs, geminiEnv, onRequest }, rawFile) {
   const prompt = styleHint ? `${styleHint}: ${text}` : text;
   // โมเดลตอบกลับเป็นข้อความแทนเสียงได้ ถ้าท่อนนั้นอ่านแล้วเหมือนคำถามหรือคำสั่ง
   // (Google เรียกอาการนี้ว่า "Model tried to generate text") สั่งย้ำให้อ่านตามตัวอักษร
@@ -162,8 +162,14 @@ ${text}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel()}:generateContent`;
   const requestTimeoutMs = Number(timeoutMs ?? process.env.GEMINI_TTS_TIMEOUT_MS ?? 45_000);
 
-  const keys = listGeminiKeys();
-  if (!keys.length) throw new Error("ยังไม่ได้ตั้ง GEMINI_API_KEY ใน .env");
+  // geminiEnv = คีย์ของผู้ใช้คนที่สั่งงานนี้ ถ้าไม่ส่งมาก็ใช้คีย์ของเครื่องตามเดิม
+  // โควตาของ Google ผูกกับคีย์ การใช้คีย์คนละชุดจึงเป็นการแยกโควตาจริง ๆ
+  const keys = listGeminiKeys(geminiEnv);
+  if (!keys.length) {
+    throw new Error(geminiEnv
+      ? "บัญชีนี้ยังไม่ได้ใส่คีย์ Gemini ของตัวเอง — เพิ่มได้ในหน้าตั้งค่า"
+      : "ยังไม่ได้ตั้ง GEMINI_API_KEY ใน .env");
+  }
 
   // ลองได้อย่างน้อยหนึ่งรอบต่อคีย์ บวกอีกสองรอบไว้เผื่อ backoff ของคีย์สุดท้าย
   const maxAttempts = keys.length + 4;
@@ -179,6 +185,9 @@ ${text}`;
     const key = entry.key;
 
     const signals = [signal, AbortSignal.timeout(requestTimeoutMs)].filter(Boolean);
+    // นับก่อนยิง: คำขอที่โดน 429 ก็ถูกนับที่ฝั่ง Google เหมือนกัน การนับหลังสำเร็จ
+    // อย่างเดียวจะทำให้ตัวเลขต่ำกว่าความจริงตอนโควตาใกล้หมด
+    onRequest?.();
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
@@ -314,6 +323,8 @@ export async function synthesize({
   cacheDir,
   signal,
   timeoutMs,
+  geminiEnv,
+  onRequest,
 }) {
   throwIfAborted(signal);
   if (!text?.trim()) throw new Error("TTS text ต้องไม่ว่าง");
@@ -349,7 +360,7 @@ export async function synthesize({
 
   const rawFile = `${outFile}.raw.wav`;
   try {
-    const providerOpts = { text, voice, speed, styleHint, signal, timeoutMs };
+    const providerOpts = { text, voice, speed, styleHint, signal, timeoutMs, geminiEnv, onRequest };
     if (provider === "gemini") await geminiTts(providerOpts, rawFile);
     else if (provider === "edge") await edgeTts(providerOpts, rawFile);
     else if (provider === "silence") await silenceTts(providerOpts, rawFile);

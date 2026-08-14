@@ -14,6 +14,7 @@ import {
 } from "./auth.mjs";
 import { remoteHelpText as buildRemoteHelp } from "./remote-help.mjs";
 import { safeProjectPath } from "./security.mjs";
+import { keySourceFor } from "./user-keys.mjs";
 import { prepareSources } from "./sources.mjs";
 import { createStore } from "./store/index.mjs";
 import { RenderQueue } from "./queue.mjs";
@@ -213,6 +214,10 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       signal: render.signal,
       onProgress: render.onProgress,
     });
+    // งานนี้ใช้โควตาของเจ้าของโปรเจกต์ ไม่ใช่ของเครื่อง — คนที่ใส่คีย์ตัวเองไว้
+    // จะยิงเข้าโควตาตัวเอง ส่วนคนที่ยังไม่ใส่ก็ใช้คีย์ของเครื่องเหมือนเดิม
+    const ownerId = project.ownerId ?? project.owner_id ?? null;
+    const keySource = keySourceFor(store, ownerId);
     return runPipeline({
       projectDir: safeProjectPath(project.id),
       sourceFile: prepared.sourceFiles[0],
@@ -238,6 +243,8 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       } : {}),
       reuseFrom: config.reuseRenderId ? { renderId: config.reuseRenderId, timeline: config.timeline, outputs: config.draftOutputs } : null,
       mockTts: config.mockTts === true || process.env.CLIPPANG_MOCK_TTS === "1",
+      geminiEnv: keySource.environment,
+      onTtsRequest: ownerId ? () => store.recordUsage?.(ownerId, 1) : undefined,
       signal: render.signal,
       onProgress: render.onProgress,
     });
@@ -496,7 +503,11 @@ export async function startLocalServer({ port: requestedPort } = {}) {
         ? runtime.store.getUser?.(session.id) ?? null
         : bootstrapOwner;
       let response;
-      if (url.pathname.startsWith("/api/")) response = await runtime.api(request, { viewer });
+      if (url.pathname.startsWith("/api/")) {
+        // local = คำขอมาจากเครื่องที่รัน ClipPang เอง ไม่ใช่ผู้ใช้ที่ล็อกอินจากที่อื่น
+        // ใช้แยกสิทธิ์ระดับเครื่อง (เช่นคีย์ใน .env) ออกจากสิทธิ์ระดับบัญชี
+        response = await runtime.api(request, { viewer, local: LOCAL_HOSTS.has(url.hostname) });
+      }
       else {
         const directAsset = await assetFetch(request);
         if (directAsset.status !== 404) response = directAsset;

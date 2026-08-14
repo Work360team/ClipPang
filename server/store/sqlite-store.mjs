@@ -17,7 +17,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const RENDER_KINDS = Object.freeze(["draft", "final"]);
 export const RENDER_LANES = Object.freeze(["ass", "hyperframes"]);
@@ -124,6 +124,24 @@ const SCHEMA_SQL = `
 
   -- การตั้งค่าที่เป็นของแต่ละคน (โปรเจกต์ที่ปักหมุด เวลาที่อ่านแจ้งเตือนล่าสุด)
   -- แยกจาก settings เดิมที่เป็นค่าระดับเครื่อง เช่นผู้ให้บริการ AI ที่เลือกไว้
+  -- คีย์ Gemini ของแต่ละคน โควตาของ Google ผูกกับคีย์ ไม่ใช่กับระบบเรา
+  -- การแยกคีย์จึงเป็นวิธีเดียวที่ทำให้โควตาแยกกันจริง ไม่ใช่แค่จำกัดโดยพลการ
+  CREATE TABLE IF NOT EXISTS user_keys (
+    user_id     TEXT NOT NULL,
+    slot        INTEGER NOT NULL,
+    api_key     TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (user_id, slot)
+  );
+
+  -- นับคำขอ TTS ที่แต่ละคนใช้ไปในแต่ละวัน เพื่อดูย้อนหลังและกันคนเดียวใช้จนหมด
+  CREATE TABLE IF NOT EXISTS usage_daily (
+    user_id   TEXT NOT NULL,
+    day       TEXT NOT NULL,
+    requests  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+  );
+
   CREATE TABLE IF NOT EXISTS user_settings (
     user_id  TEXT NOT NULL,
     key      TEXT NOT NULL,
@@ -840,6 +858,69 @@ export class SqliteStore {
    * ผู้ใช้ทั้งหมด เรียงตามเวลาที่สร้าง — คนแรกคือเจ้าของเครื่องเสมอ
    * คืน password_hash มาด้วยเพราะชั้นตรวจรหัสต้องใช้ ห้ามส่งต่อออก API
    */
+  /* ---------- คีย์ Gemini รายคน ---------- */
+
+  listUserKeys(userId) {
+    return this.#db()
+      .prepare("SELECT slot, api_key, created_at FROM user_keys WHERE user_id = ? ORDER BY slot ASC")
+      .all(String(userId ?? ""))
+      .map((row) => ({ slot: Number(row.slot), key: row.api_key, createdAt: Number(row.created_at) }));
+  }
+
+  addUserKey(userId, apiKey, { maxKeys = 9 } = {}) {
+    const owner = String(userId ?? "");
+    if (!owner) throw new StoreValidationError("ต้องระบุผู้ใช้");
+    const key = String(apiKey ?? "").trim();
+    if (key.length < 16) throw new StoreValidationError("API key ดูไม่ครบ");
+    const existing = this.listUserKeys(owner);
+    if (existing.some((entry) => entry.key === key)) {
+      throw new StoreConflictError("คีย์นี้ใส่ไว้แล้ว — คีย์ซ้ำไม่ได้เพิ่มโควตา");
+    }
+    if (existing.length >= maxKeys) throw new StoreConflictError(`ใส่คีย์ได้สูงสุด ${maxKeys} ใบ`);
+    const used = new Set(existing.map((entry) => entry.slot));
+    let slot = 1;
+    while (used.has(slot)) slot += 1;
+    this.#db().prepare("INSERT INTO user_keys (user_id, slot, api_key, created_at) VALUES (?, ?, ?, ?)")
+      .run(owner, slot, key, this.#timestamp());
+    return { slot, key, createdAt: this.#timestamp() };
+  }
+
+  removeUserKey(userId, slot) {
+    return Number(this.#db().prepare("DELETE FROM user_keys WHERE user_id = ? AND slot = ?")
+      .run(String(userId ?? ""), Number(slot)).changes) > 0;
+  }
+
+  /* ---------- การใช้งานรายวัน ---------- */
+
+  /** วันตามเขตเวลาแปซิฟิก ให้ตรงกับรอบรีเซ็ตโควตาของ Google ไม่ใช่เที่ยงคืนบ้านเรา */
+  static usageDay(now = Date.now()) {
+    return new Date(now).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  }
+
+  recordUsage(userId, amount = 1, now = Date.now()) {
+    const owner = String(userId ?? "");
+    if (!owner) return 0;
+    const day = SqliteStore.usageDay(now);
+    this.#db().prepare(`
+      INSERT INTO usage_daily (user_id, day, requests) VALUES (?, ?, ?)
+      ON CONFLICT(user_id, day) DO UPDATE SET requests = requests + excluded.requests
+    `).run(owner, day, Number(amount) || 0);
+    return this.usageToday(owner, now);
+  }
+
+  usageToday(userId, now = Date.now()) {
+    const row = this.#db().prepare("SELECT requests FROM usage_daily WHERE user_id = ? AND day = ?")
+      .get(String(userId ?? ""), SqliteStore.usageDay(now));
+    return row ? Number(row.requests) : 0;
+  }
+
+  usageHistory(userId, days = 7) {
+    return this.#db()
+      .prepare("SELECT day, requests FROM usage_daily WHERE user_id = ? ORDER BY day DESC LIMIT ?")
+      .all(String(userId ?? ""), Number(days))
+      .map((row) => ({ day: row.day, requests: Number(row.requests) }));
+  }
+
   listUsers() {
     return this.#db()
       .prepare("SELECT * FROM users ORDER BY created_at ASC, id ASC")
