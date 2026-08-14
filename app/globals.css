@@ -5440,3 +5440,79 @@ a.notification-link:hover { background: #fafbf8; }
 @media (prefers-reduced-motion: reduce) {
   .notification-icon.tone-progress svg { animation: none; }
 }
+
+/* ---------- พรีวิวตอนยังไม่มีคลิป ---------- */
+
+.live-dot.is-idle { color: #8b9289; }
+.live-dot.is-idle i { background: #5f675f; box-shadow: none; }
+
+.preview-empty {
+  display: grid;
+  justify-items: center;
+  gap: 15px;
+  padding: 26px 18px 22px;
+}
+
+/* กรอบมือถือเปล่า สัดส่วนเดียวกับพรีวิวจริง ให้เห็นว่าอะไรจะมาอยู่ตรงนี้ */
+.preview-empty-phone {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  aspect-ratio: 9 / 16;
+  border: 2px dashed #333a33;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #4d554d;
+}
+
+.preview-checklist {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: #8b9289;
+}
+
+.preview-checklist li span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 1px solid #333a33;
+  border-radius: 7px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-checklist li.is-now {
+  color: #fff;
+  font-weight: 550;
+}
+
+.preview-checklist li.is-now span {
+  border-color: var(--yellow);
+  background: rgba(255, 210, 63, 0.16);
+  color: var(--yellow);
+}
+
+.preview-empty-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  text-align: center;
+  color: #6f776f;
+}
+
+/* แถวสรุปที่ยังไม่ได้เลือก จางลงให้ต่างจากค่าที่เลือกจริง */
+.preview-config .is-pending { opacity: 0.55; }
+.preview-config .is-pending .config-icon { background: rgba(255, 255, 255, 0.06); color: #8b9289; }

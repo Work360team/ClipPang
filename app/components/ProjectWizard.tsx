@@ -341,6 +341,7 @@ export function ProjectWizard() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [operationMessage, setOperationMessage] = useState("");
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
+  const [furthestStep, setFurthestStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
   const [videoUrl, setVideoUrl] = useState("/clippang-sample.mp4");
   const [fileName, setFileName] = useState("คลิปตัวอย่าง.mp4");
@@ -431,7 +432,16 @@ export function ProjectWizard() {
   });
   const totalDurationInvalid = selectedTotalSec <= 0 || selectedTotalSec > MAX_TOTAL_DURATION_SEC + 0.001;
   const clipSelectionInvalid = orderedClipAssets.length === 0 || orderedTimelineClips.length === 0 || clipDurationInvalid || totalDurationInvalid;
+  // ที่เดียวที่อัปเดตขั้นไกลสุด ครอบคลุมทุกทางที่เปลี่ยนขั้น (ปุ่มถัดไป แถบขั้นตอน เปิดโปรเจกต์เดิม)
+  useEffect(() => {
+    setFurthestStep((current) => (activeStep > current ? activeStep : current));
+  }, [activeStep]);
+
   const hasChosenClip = orderedClipAssets.length > 0;
+  // "เลือกแล้ว" = เคยเดินผ่านขั้นนั้นมาแล้ว ไม่ใช่แค่มีค่า default ค้างอยู่ใน state
+  // ใช้ขั้นที่ไปไกลสุด ไม่ใช่ขั้นปัจจุบัน ไม่งั้นย้อนกลับมาขั้น 1 แล้วค่าที่เลือกไว้จะหายไป
+  const voiceChosen = furthestStep > 3;
+  const styleChosen = furthestStep > 4;
   const previewVideoUrl = activeClip?.previewUrl || activeClip?.url || videoUrl;
   const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clippang-sample.mp4";
   const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
@@ -2330,7 +2340,37 @@ export function ProjectWizard() {
 
           {/* ยังไม่เสร็จค่อยโชว์พรีวิวสด */}
           {!(renderDone && activeStep === 5) && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
-            <div className="preview-panel-head"><div><span className="live-dot"><i /> พรีวิวสด</span><p>{hasProgram ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน` : "อัปเดตตามที่คุณเลือก"}</p></div><span className="preview-quality">9:16 · HD</span></div>
+            <div className="preview-panel-head">
+              <div>
+                <span className={`live-dot${hasChosenClip ? "" : " is-idle"}`}><i /> {hasChosenClip ? "พรีวิวสด" : "ยังไม่มีอะไรให้พรีวิว"}</span>
+                <p>{hasProgram
+                  ? `${programSegments.length} ช่วง · ซับ ${captionCues.length} ท่อน`
+                  : hasChosenClip ? "อัปเดตตามที่คุณเลือก" : "วางคลิปก่อน แล้วที่นี่จะแสดงของจริง"}</p>
+              </div>
+              <span className="preview-quality">9:16 · HD</span>
+            </div>
+            {/* ยังไม่มีคลิป = ยังไม่มีอะไรจะพรีวิว โชว์ว่าเหลืออีกกี่ขั้นถึงจะได้ดูของจริง
+                ดีกว่าเอาคลิปตัวอย่างของคนอื่นมาแปะให้เข้าใจผิดว่าเป็นงานตัวเอง */}
+            {!hasChosenClip ? (
+              <div className="preview-empty">
+                <div className="preview-empty-phone" aria-hidden="true"><Film size={26} /></div>
+                <ol className="preview-checklist">
+                  {[
+                    { step: 1, label: "วางคลิปสินค้า", done: false },
+                    { step: 2, label: "บอกจุดขาย", done: false },
+                    { step: 3, label: "เลือกเสียงพากย์", done: false },
+                    { step: 4, label: "เลือกสไตล์ซับ", done: false },
+                    { step: 5, label: "เรนเดอร์และดาวน์โหลด", done: false },
+                  ].map((row) => (
+                    <li key={row.step} className={row.step === activeStep ? "is-now" : ""}>
+                      <span>{row.step}</span>{row.label}
+                    </li>
+                  ))}
+                </ol>
+                <p className="preview-empty-note">วางคลิปแล้วกล่องนี้จะเล่นงานจริงของคุณ พร้อมซับและเสียงตามที่เลือก</p>
+              </div>
+            ) : (
+            <>
             <div className="phone-stage">
               <div className="editor-phone">
                 <video ref={videoRef} src={hasProgram ? undefined : previewVideoUrl} poster={stillPoster} preload="metadata" muted playsInline loop={!hasProgram} onLoadedMetadata={(event) => {
@@ -2392,10 +2432,23 @@ export function ProjectWizard() {
               </div>
               {hasProgram && <p className="preview-timeline-note">จังหวะซับเป็นค่าประมาณจากจำนวนตัวอักษร เวลาจริงจะล็อกตามไฟล์เสียงตอนสร้างคลิป</p>}
             </div>
+            </>
+            )}
+            {/* ค่าเริ่มต้นไม่ใช่ค่าที่ผู้ใช้เลือก จึงยังไม่แสดงจนกว่าจะผ่านขั้นนั้นจริง ๆ
+                ไม่งั้นขั้นที่ 1 จะบอกว่าเลือกเสียง Kore กับสไตล์ป๊อปขายดีไว้แล้วทั้งที่ยังไม่ได้แตะ */}
             <div className="preview-config">
-              <div><span className="config-icon" style={{background:selectedVoiceData.color}}><Mic2 size={15}/></span><p><small>เสียงพากย์</small><b>{selectedVoiceData.name} · {speed.toFixed(1)}×</b></p></div>
-              <div><span className="config-icon yellow"><Captions size={15}/></span><p><small>สไตล์ซับ</small><b>{selectedStyleData.name}</b></p></div>
-              <div><span className="config-icon blue"><Gauge size={15}/></span><p><small>ความยาว Timeline</small><b>{hasChosenClip ? formatDuration(selectedTotalSec) : "ยังไม่เลือกคลิป"}</b></p></div>
+              <div className={voiceChosen ? "" : "is-pending"}>
+                <span className="config-icon" style={voiceChosen ? { background: selectedVoiceData.color } : undefined}><Mic2 size={15}/></span>
+                <p><small>เสียงพากย์</small><b>{voiceChosen ? `${selectedVoiceData.name} · ${speed.toFixed(1)}×` : "ยังไม่ได้เลือก"}</b></p>
+              </div>
+              <div className={styleChosen ? "" : "is-pending"}>
+                <span className={`config-icon${styleChosen ? " yellow" : ""}`}><Captions size={15}/></span>
+                <p><small>สไตล์ซับ</small><b>{styleChosen ? selectedStyleData.name : "ยังไม่ได้เลือก"}</b></p>
+              </div>
+              <div className={hasChosenClip ? "" : "is-pending"}>
+                <span className={`config-icon${hasChosenClip ? " blue" : ""}`}><Gauge size={15}/></span>
+                <p><small>ความยาว Timeline</small><b>{hasChosenClip ? formatDuration(selectedTotalSec) : "ยังไม่ได้เลือก"}</b></p>
+              </div>
             </div>
           </aside>}
         </div>
