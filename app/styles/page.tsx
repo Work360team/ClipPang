@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronRight,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { HardLink as Link } from "../components/HardLink";
+import { StyleCaptionPreview, stylePreviewVars, type StylePreviewParams } from "../components/StyleCaptionPreview";
 
 type CaptionStyle = {
   id: string;
@@ -54,132 +55,14 @@ const captionStyles: CaptionStyle[] = [
   },
 ];
 
-type StyleParams = {
-  fill?: string;
-  activeFill?: string;
-  emphasisFill?: string;
-  outline?: { color?: string; width?: number };
-  font?: { family?: string; weight?: number; size?: number };
-  position?: { anchor?: string };
-  pill?: { color?: string; padV?: number; padH?: number; radius?: number };
-  glow?: { color?: string; blur?: number };
-  gradient?: { from?: string; to?: string; angle?: number };
-  animation?: { enter?: string; scale?: number; durationMs?: number };
-  glitch?: { offset?: number; cyan?: string; red?: string };
-  scanlines?: { alpha?: number; gap?: number };
-  emphasis?: { scale?: number; weight?: number };
-  weightShift?: { base?: number; active?: number };
-  wiggle?: { amountPx?: number; rotateDeg?: number; durationMs?: number };
-};
-
 type EngineStyle = {
   id: string;
   name: string;
   description?: string;
   lane?: string;
   tier?: string;
-  params?: StyleParams;
+  params?: StylePreviewParams;
 };
-
-/**
- * สีและฟอนต์ในตัวอย่างมาจากไฟล์สไตล์จริงที่ engine ใช้เรนเดอร์
- * ถ้าใครแก้ไฟล์ใน pipeline/styles หน้านี้จะเปลี่ยนตามทันที ไม่ต้องมาแก้ CSS ซ้ำอีกที่
- */
-function previewVars(params?: StyleParams): CSSProperties {
-  if (!params) return {};
-  const outlineWidth = Math.max(1, Math.round((params.outline?.width ?? 7) / 5));
-  const outlineColor = params.outline?.color ?? "#111";
-  return {
-    "--style-fill": params.fill ?? "#fff",
-    "--style-active": params.activeFill ?? "var(--yellow)",
-    "--style-weight": String(params.font?.weight ?? 800),
-    "--style-stroke": `${-outlineWidth}px ${-outlineWidth}px 0 ${outlineColor}, ${outlineWidth}px ${-outlineWidth}px 0 ${outlineColor}, ${-outlineWidth}px ${outlineWidth}px 0 ${outlineColor}, ${outlineWidth}px ${outlineWidth}px 0 ${outlineColor}`,
-  } as CSSProperties;
-}
-
-/** ประโยคตัวอย่างที่ใช้ทุกสไตล์ ให้เทียบกันได้ว่าจังหวะต่างกันยังไง */
-const PREVIEW_WORDS = ["ตัวนี้", "ต้องมี", "บอกเลย", "ว่าคุ้ม"];
-const WORD_MS = 620;
-
-/**
- * ตัวอย่างซับที่ "ขยับจริง" ตามพารามิเตอร์ของสไตล์นั้น ๆ
- *
- * ของเดิมเป็นข้อความนิ่ง 4 แบบตายตัว สไตล์ใหม่ทั้งหกจึงตกไปใช้แบบ kanit เหมือนกันหมด
- * และไม่มีอันไหนขยับเลย ที่นี่อ่าน pill / glow / gradient / animation.enter ชุดเดียว
- * กับที่ pipeline/hyperframes.mjs ใช้ตอนเรนเดอร์จริง ตัวอย่างกับผลลัพธ์จึงตรงกัน
- */
-function CaptionPreview({ params, index }: { params?: StyleParams; index: number }) {
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActive((current) => (current + 1) % (PREVIEW_WORDS.length + 1));
-    }, WORD_MS);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const enter = params?.animation?.enter ?? "blur";
-  const pill = params?.pill;
-  const glow = params?.glow;
-  const gradient = params?.gradient;
-  const glitch = params?.glitch;
-  const emphasis = params?.emphasis;
-  const weightShift = params?.weightShift;
-  const anchor = params?.position?.anchor === "top" ? "top" : params?.position?.anchor === "middle" ? "middle" : "bottom";
-  const big = (params?.font?.size ?? 90) >= 110;
-
-  const lineStyle: CSSProperties = {
-    ...(pill ? {
-      background: pill.color ?? "rgba(0,0,0,0.62)",
-      borderRadius: `${Math.round((pill.radius ?? 999) / 3)}px`,
-      padding: `${Math.round((pill.padV ?? 18) / 3)}px ${Math.round((pill.padH ?? 34) / 3)}px`,
-    } : {}),
-  };
-
-  const wordStyle = (state: "done" | "now" | "todo", isEmphasis: boolean): CSSProperties => ({
-    color: gradient ? "transparent" : state === "now" ? "var(--style-active)" : "var(--style-fill)",
-    ...(gradient ? {
-      backgroundImage: `linear-gradient(${gradient.angle ?? 100}deg, ${gradient.from}, ${gradient.to})`,
-      WebkitBackgroundClip: "text",
-      backgroundClip: "text",
-      // ตัวอักษรโปร่งใสแต่ text-shadow ยังวาดอยู่ เงาสี่มุมที่ใช้แทนเส้นขอบจึงทะลุ
-      // ขึ้นมาเป็นก้อนดำกลางตัวอักษร ใช้ drop-shadow แทน เพราะมันเงาของพิกเซลที่วาดจริง
-      textShadow: "none",
-    } : {}),
-    ...(glow ? { filter: `drop-shadow(0 0 ${Math.max(3, Math.round((glow.blur ?? 18) / 3))}px ${glow.color ?? "#38f6ff"})` } : {}),
-    ...(gradient && !glow ? { filter: "drop-shadow(0 1px 2px rgba(0,0,0,.85)) drop-shadow(0 0 4px rgba(0,0,0,.55))" } : {}),
-    ...(glitch ? {
-      textShadow: `${-(glitch.offset ?? 6) / 3}px 0 0 ${glitch.cyan ?? "#00E5FF"}, ${(glitch.offset ?? 6) / 3}px 0 0 ${glitch.red ?? "#FF2D55"}`,
-    } : {}),
-    ...(emphasis && isEmphasis ? { fontSize: `${emphasis.scale ?? 1.5}em`, fontWeight: emphasis.weight ?? 800 } : {}),
-    ...(weightShift ? { fontWeight: state === "now" ? (weightShift.active ?? 800) : (weightShift.base ?? 600) } : {}),
-    transform: state === "now" ? `scale(${params?.animation?.scale ?? 1.12})` : "scale(1)",
-    opacity: state === "todo" && !pill ? 0.72 : 1,
-    transitionDuration: `${params?.animation?.durationMs ?? 160}ms`,
-  });
-
-  return (
-    <div
-      className={`style-caption style-caption-live anchor-${anchor}${big ? " style-caption-big" : ""} enter-${enter}${params?.wiggle ? " has-wiggle" : ""}`}
-      aria-hidden="true"
-      style={params?.scanlines ? {
-        "--scan-alpha": String(params.scanlines.alpha ?? 0.22),
-        "--scan-gap": `${params.scanlines.gap ?? 4}px`,
-      } as CSSProperties : undefined}
-    >
-      {/* key ผูกกับรอบการเล่น เพื่อให้อนิเมชันเข้าเล่นใหม่ทุกครั้งที่วนกลับมา */}
-      <span className="style-caption-line" style={lineStyle} key={`${index}-${active === 0 ? "in" : "hold"}`}>
-        {PREVIEW_WORDS.map((word, wordIndex) => {
-          const state = active === 0 ? "todo" : wordIndex < active - 1 ? "done" : wordIndex === active - 1 ? "now" : "todo";
-          const isEmphasis = wordIndex === PREVIEW_WORDS.length - 1;
-          return (
-            <span className="style-caption-word" key={word} style={wordStyle(state, isEmphasis)}>{word}</span>
-          );
-        })}
-      </span>
-    </div>
-  );
-}
 
 export default function StylesPage() {
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
@@ -201,7 +84,7 @@ export default function StylesPage() {
       return captionStyles.map((style) => ({
         ...style,
         lane: style.id === "kanit-hf" ? "hyperframes" : "ass",
-        params: undefined as StyleParams | undefined,
+        params: undefined as StylePreviewParams | undefined,
         live: false,
       }));
     }
@@ -285,7 +168,7 @@ export default function StylesPage() {
               <article
                 className={`style-card${isSelected ? " style-card-selected" : ""}`}
                 key={style.id}
-                style={previewVars(style.params)}
+                style={stylePreviewVars(style.params)}
               >
                 <div className="style-video-frame">
                   <video
@@ -300,7 +183,7 @@ export default function StylesPage() {
                     <source src="/clippang-style-preview.mp4" type="video/mp4" />
                   </video>
                   <div className="style-video-shade" />
-                  <CaptionPreview params={style.params} index={index} />
+                  <StyleCaptionPreview params={style.params} index={index} />
                   <div className="style-preview-pill">
                     <Play size={10} fill="currentColor" /> {style.live ? "สีจากไฟล์สไตล์จริง" : "ตัวอย่างสไตล์"}
                   </div>
@@ -549,105 +432,6 @@ export default function StylesPage() {
         .style-preview-pill { left: 10px; }
         .style-quality-pill { right: 10px; color: #352900; background: rgba(255,210,63,.95); border-color: transparent; }
 
-        .style-caption {
-          position: absolute;
-          z-index: 2;
-          left: 8%;
-          right: 8%;
-          bottom: 15%;
-          color: #fff;
-          text-align: center;
-          font-family: "Kanit", "Leelawadee UI", sans-serif;
-          font-weight: 800;
-          letter-spacing: -.02em;
-          line-height: 1.13;
-          text-shadow: -2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111, 0 3px 7px rgba(0,0,0,.55);
-          pointer-events: none;
-        }
-
-        /* ตัวอย่างที่ขยับจริง — ท่าเข้าชุดเดียวกับที่ hyperframes.mjs ใช้ตอนเรนเดอร์ */
-        .style-caption-live { font-size: clamp(15px, 1.45vw, 21px); }
-        .style-caption-live.style-caption-big { font-size: clamp(21px, 2.1vw, 30px); }
-        .style-caption-live.anchor-top { top: 14%; bottom: auto; }
-        .style-caption-live.anchor-middle { top: 50%; bottom: auto; transform: translateY(-50%); }
-
-        .style-caption-line {
-          display: inline-flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: .28em;
-          font-weight: var(--style-weight, 800);
-          text-shadow: var(--style-stroke, none);
-        }
-
-        .style-caption-word {
-          display: inline-block;
-          transform-origin: 50% 78%;
-          transition-property: color, transform, opacity, filter;
-          transition-timing-function: cubic-bezier(.22,1.4,.4,1);
-        }
-
-        .enter-blur .style-caption-line { animation: hf-enter-blur .34s cubic-bezier(.2,.9,.3,1) both; }
-        .enter-slam .style-caption-line { animation: hf-enter-slam .32s cubic-bezier(.2,1.6,.4,1) both; }
-        .enter-wipe .style-caption-line { animation: hf-enter-wipe .42s cubic-bezier(.5,0,.3,1) both; }
-        .enter-rise .style-caption-line { animation: hf-enter-rise .36s cubic-bezier(.16,1,.3,1) both; }
-        /* สองท่านี้มาจากสไตล์เลน ASS ที่มีอยู่เดิม ไม่ใช่ของ HyperFrames */
-        /* เส้นสแกนคลุมทั้งกรอบพรีวิว เหมือนที่เรนเดอร์คลุมทั้งเฟรม */
-        .style-caption-live[style*="--scan-alpha"]::after {
-          content: "";
-          position: absolute;
-          inset: -100% -20%;
-          pointer-events: none;
-          background: repeating-linear-gradient(180deg,
-            rgba(0,0,0,var(--scan-alpha, .22)) 0px,
-            rgba(0,0,0,var(--scan-alpha, .22)) 1px,
-            transparent 1px,
-            transparent var(--scan-gap, 4px));
-        }
-
-        .has-wiggle .style-caption-line { animation-name: hf-enter-blur, hf-wiggle; animation-duration: .34s, 1.5s; animation-iteration-count: 1, infinite; animation-timing-function: cubic-bezier(.2,.9,.3,1), ease-in-out; }
-        @keyframes hf-wiggle {
-          0%, 100% { transform: translateY(0) rotate(-1.2deg); }
-          50%      { transform: translateY(-4px) rotate(1.2deg); }
-        }
-
-        .enter-squeeze .style-caption-line { animation: hf-enter-squeeze .34s cubic-bezier(.2,1.5,.4,1) both; }
-        .enter-pop .style-caption-line { animation: hf-enter-pop .3s cubic-bezier(.2,1.5,.4,1) both; }
-        .enter-none .style-caption-line { animation: hf-enter-fade .26s ease-out both; }
-
-        @keyframes hf-enter-blur {
-          from { opacity: 0; transform: translateY(14px); filter: blur(6px); }
-          to   { opacity: 1; transform: translateY(0); filter: blur(0); }
-        }
-        @keyframes hf-enter-slam {
-          from { opacity: 0; transform: scale(1.75); }
-          to   { opacity: 1; transform: scale(1); }
-        }
-        @keyframes hf-enter-wipe {
-          from { clip-path: inset(0 100% 0 0); }
-          to   { clip-path: inset(0 0 0 0); }
-        }
-        @keyframes hf-enter-squeeze {
-          from { opacity: 0; transform: scale(.35, 1.25); }
-          to   { opacity: 1; transform: scale(1, 1); }
-        }
-        @keyframes hf-enter-pop {
-          from { opacity: 0; transform: scale(.82); }
-          to   { opacity: 1; transform: scale(1); }
-        }
-        @keyframes hf-enter-fade {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-        @keyframes hf-enter-rise {
-          from { opacity: 0; transform: translateY(30px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .style-caption-line { animation: none !important; }
-          .style-caption-word { transition: none !important; }
-        }
 
         .style-caption-karaoke { font-size: clamp(16px, 1.55vw, 22px); }
         .style-caption-karaoke strong { color: #ffe039; font-weight: 800; }

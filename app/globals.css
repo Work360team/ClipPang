@@ -5516,3 +5516,106 @@ a.notification-link:hover { background: #fafbf8; }
 /* แถวสรุปที่ยังไม่ได้เลือก จางลงให้ต่างจากค่าที่เลือกจริง */
 .preview-config .is-pending { opacity: 0.55; }
 .preview-config .is-pending .config-icon { background: rgba(255, 255, 255, 0.06); color: #8b9289; }
+
+
+/* ---------- ตัวอย่างสไตล์ซับที่ขยับได้ (ใช้ร่วมกันระหว่างหน้าสไตล์ซับกับขั้นที่ 4) ---------- */
+
+.style-caption {
+  position: absolute;
+  z-index: 2;
+  left: 8%;
+  right: 8%;
+  bottom: 15%;
+  color: #fff;
+  text-align: center;
+  font-family: "Kanit", "Leelawadee UI", sans-serif;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.13;
+  text-shadow: -2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111, 0 3px 7px rgba(0,0,0,.55);
+  pointer-events: none;
+}
+
+/* ตัวอย่างที่ขยับจริง — ท่าเข้าชุดเดียวกับที่ hyperframes.mjs ใช้ตอนเรนเดอร์ */
+.style-caption-live { font-size: clamp(15px, 1.45vw, 21px); }
+.style-caption-live.style-caption-big { font-size: clamp(21px, 2.1vw, 30px); }
+.style-caption-live.anchor-top { top: 14%; bottom: auto; }
+.style-caption-live.anchor-middle { top: 50%; bottom: auto; transform: translateY(-50%); }
+
+.style-caption-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .28em;
+  font-weight: var(--style-weight, 800);
+  text-shadow: var(--style-stroke, none);
+}
+
+.style-caption-word {
+  display: inline-block;
+  transform-origin: 50% 78%;
+  transition-property: color, transform, opacity, filter;
+  transition-timing-function: cubic-bezier(.22,1.4,.4,1);
+}
+
+.enter-blur .style-caption-line { animation: hf-enter-blur .34s cubic-bezier(.2,.9,.3,1) both; }
+.enter-slam .style-caption-line { animation: hf-enter-slam .32s cubic-bezier(.2,1.6,.4,1) both; }
+.enter-wipe .style-caption-line { animation: hf-enter-wipe .42s cubic-bezier(.5,0,.3,1) both; }
+.enter-rise .style-caption-line { animation: hf-enter-rise .36s cubic-bezier(.16,1,.3,1) both; }
+/* สองท่านี้มาจากสไตล์เลน ASS ที่มีอยู่เดิม ไม่ใช่ของ HyperFrames */
+/* เส้นสแกนคลุมทั้งกรอบพรีวิว เหมือนที่เรนเดอร์คลุมทั้งเฟรม */
+.style-caption-live[style*="--scan-alpha"]::after {
+  content: "";
+  position: absolute;
+  inset: -100% -20%;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg,
+    rgba(0,0,0,var(--scan-alpha, .22)) 0px,
+    rgba(0,0,0,var(--scan-alpha, .22)) 1px,
+    transparent 1px,
+    transparent var(--scan-gap, 4px));
+}
+
+.has-wiggle .style-caption-line { animation-name: hf-enter-blur, hf-wiggle; animation-duration: .34s, 1.5s; animation-iteration-count: 1, infinite; animation-timing-function: cubic-bezier(.2,.9,.3,1), ease-in-out; }
+@keyframes hf-wiggle {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+  50%      { transform: translateY(-4px) rotate(1.2deg); }
+}
+
+.enter-squeeze .style-caption-line { animation: hf-enter-squeeze .34s cubic-bezier(.2,1.5,.4,1) both; }
+.enter-pop .style-caption-line { animation: hf-enter-pop .3s cubic-bezier(.2,1.5,.4,1) both; }
+.enter-none .style-caption-line { animation: hf-enter-fade .26s ease-out both; }
+
+@keyframes hf-enter-blur {
+  from { opacity: 0; transform: translateY(14px); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes hf-enter-slam {
+  from { opacity: 0; transform: scale(1.75); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes hf-enter-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+@keyframes hf-enter-squeeze {
+  from { opacity: 0; transform: scale(.35, 1.25); }
+  to   { opacity: 1; transform: scale(1, 1); }
+}
+@keyframes hf-enter-pop {
+  from { opacity: 0; transform: scale(.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes hf-enter-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes hf-enter-rise {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .style-caption-line { animation: none !important; }
+  .style-caption-word { transition: none !important; }
+}

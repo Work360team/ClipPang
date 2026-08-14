@@ -45,6 +45,7 @@ import {
 import { AppShell } from "./AppShell";
 import { refreshProjects } from "../lib/project-store";
 import { CaptionIdeas } from "./CaptionIdeas";
+import { StyleCaptionPreview, stylePreviewVars, type StylePreviewParams } from "./StyleCaptionPreview";
 import { HardLink as Link } from "./HardLink";
 import {
   detectLocalEngine,
@@ -903,7 +904,7 @@ export function ProjectWizard() {
         try {
           const styleResult = await localApi.styles();
           if (active && Array.isArray(styleResult.styles) && styleResult.styles.length) {
-            setCaptionStyles(styleResult.styles.map((style: { id: string; name?: string; description?: string; lane?: string }) => {
+            setCaptionStyles(styleResult.styles.map((style: { id: string; name?: string; description?: string; lane?: string; params?: StylePreviewParams }) => {
               const fallback = fallbackCaptionStyles.find((item) => item.id === style.id);
               return {
                 id: style.id,
@@ -912,6 +913,7 @@ export function ProjectWizard() {
                 label: fallback?.label || "ตัวอย่างซับ",
                 className: STYLE_CLASSNAMES[style.id] || "caption-pop",
                 speed: style.lane === "hyperframes" ? "ละเอียด" : "เร็ว",
+                params: style.params,
               };
             }));
           }
@@ -2211,7 +2213,12 @@ export function ProjectWizard() {
                 <div className="caption-style-grid">
                   {captionStyles.map((style) => (
                     <button type="button" className={`caption-style-card ${selectedStyle === style.id ? "selected" : ""}`} onClick={() => setSelectedStyle(style.id)} key={style.id}>
-                      <span className="style-preview"><img src={stillPoster} alt="" /><b className={style.className}>{style.label}</b></span>
+                      {/* ตัวอย่างเดียวกับหน้าแกลเลอรี — ขยับตามพารามิเตอร์ของสไตล์นั้นจริง ๆ
+                          ของเดิมเป็นข้อความนิ่งทับรูปนิ่ง เลือกยากเพราะความต่างอยู่ที่การเคลื่อนไหว */}
+                      <span className="style-preview" style={stylePreviewVars(style.params)}>
+                        <img src={stillPoster} alt="" />
+                        <StyleCaptionPreview params={style.params} />
+                      </span>
                       <span className="style-info"><b>{style.name}</b><small>{style.note}</small></span>
                       <em>{style.speed}</em>
                       {selectedStyle === style.id && <i className="style-selected"><Check size={12} /></i>}
