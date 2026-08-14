@@ -153,6 +153,14 @@ export const localApi = {
     }),
   notifications: () => apiFetch<{ ok: true; items: LocalNotification[]; unread: number; seenAt: number }>("/api/notifications"),
   markNotificationsSeen: () => apiFetch<{ ok: true; seenAt: number }>("/api/notifications", { method: "POST", body: "{}" }),
+  users: () => apiFetch<{ ok: true; users: LocalUser[]; unownedProjects: number; me: string }>("/api/users"),
+  createUser: (body: { username: string; password: string; role?: string }) =>
+    apiFetch<{ ok: true; user: LocalUser }>("/api/users", { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id: string, body: Record<string, unknown>) =>
+    apiFetch<{ ok: true; user?: LocalUser; moved?: number; to?: string }>(`/api/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteUser: (id: string) =>
+    apiFetch<{ ok: true; removed: string; orphanedProjects: number }>(`/api/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  quota: () => apiFetch<LocalQuota>("/api/tts/quota"),
   settings: () => apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings"),
   updateSettings: (patch: Record<string, unknown>) =>
     apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings", {
@@ -187,6 +195,25 @@ export interface LocalTimelineClip {
 export interface LocalScript { id: string; name?: string; tag?: string; score?: number; chunks: string[] }
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
+export interface LocalUser {
+  id: string;
+  username: string;
+  role: string;
+  disabled: boolean;
+  createdAt: number;
+  projects: number;
+  keys: number;
+  usedToday: number;
+}
+export interface LocalQuota {
+  ok: true;
+  scope: "user" | "machine";
+  keyCount: number;
+  usedToday: number;
+  cap: number;
+  remaining: number | null;
+  history: { day: string; requests: number }[];
+}
 export interface LocalNotification {
   id: string;
   tone: "success" | "error" | "warning" | "progress";

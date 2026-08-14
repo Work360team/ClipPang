@@ -27,6 +27,7 @@ import {
 import { generateCaptions } from "../pipeline/caption.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
+import { hashPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import {
   generateScripts,
@@ -895,6 +896,100 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           remaining: Number.isFinite(gate.remaining) ? gate.remaining : null,
           history: viewerId ? store.usageHistory?.(viewerId, 7) ?? [] : [],
         });
+      }
+
+      // ---- จัดการบัญชีผู้ใช้ (เฉพาะเจ้าของระบบ) ----
+
+      if (pathname === "/api/users" || pathname.startsWith("/api/users/")) {
+        // เจ้าของเท่านั้น — สมาชิกทั่วไปไม่ควรเห็นแม้แต่รายชื่อคนอื่น
+        // เครื่องที่รันโปรแกรมเองถือเป็นเจ้าของอยู่แล้วผ่าน bootstrap owner
+        if (!viewer || viewer.role !== "owner") {
+          return apiError(403, "OWNER_ONLY", "ต้องเป็นเจ้าของระบบจึงจะจัดการบัญชีได้");
+        }
+
+        const publicUser = (user) => ({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          disabled: user.disabled,
+          createdAt: user.createdAt,
+          projects: store.listProjects?.({ ownerId: user.id })?.length ?? 0,
+          keys: store.listUserKeys?.(user.id)?.length ?? 0,
+          usedToday: store.usageToday?.(user.id) ?? 0,
+        });
+
+        if (method === "GET" && pathname === "/api/users") {
+          return json({
+            ok: true,
+            users: (store.listUsers?.() ?? []).map(publicUser),
+            unownedProjects: store.listProjects?.({ ownerId: null })?.length ?? 0,
+            me: viewer.id,
+          });
+        }
+
+        if (method === "POST" && pathname === "/api/users") {
+          const body = await readJson(request);
+          const username = String(body.username ?? "").trim();
+          const password = String(body.password ?? "");
+          if (password.length < 8) return apiError(400, "WEAK_PASSWORD", "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+          try {
+            const created = store.createUser({
+              username,
+              passwordHash: hashPassword(password),
+              role: body.role === "owner" ? "owner" : "member",
+            });
+            return json({ ok: true, user: publicUser(created) }, { status: 201 });
+          } catch (error) {
+            return apiError(error?.code === "STORE_CONFLICT" ? 409 : 400, error?.code ?? "INVALID_USER", error.message);
+          }
+        }
+
+        const userMatch = /^\/api\/users\/([^/]+)$/.exec(pathname);
+        if (userMatch && (method === "PATCH" || method === "DELETE")) {
+          const target = store.getUser?.(userMatch[1]);
+          if (!target) return apiError(404, "USER_NOT_FOUND", "ไม่พบผู้ใช้นี้");
+
+          if (method === "DELETE") {
+            // กันลบตัวเอง และกันลบเจ้าของคนสุดท้ายจนไม่มีใครเข้าระบบจัดการได้อีก
+            if (target.id === viewer.id) return apiError(409, "SELF_DELETE", "ลบบัญชีที่กำลังใช้อยู่ไม่ได้");
+            const owners = (store.listUsers?.() ?? []).filter((user) => user.role === "owner" && !user.disabled);
+            if (target.role === "owner" && owners.length <= 1) {
+              return apiError(409, "LAST_OWNER", "ต้องเหลือเจ้าของระบบอย่างน้อยหนึ่งคน");
+            }
+            const owned = store.listProjects?.({ ownerId: target.id })?.length ?? 0;
+            store.deleteUser?.(target.id);
+            return json({ ok: true, removed: target.username, orphanedProjects: owned });
+          }
+
+          const body = await readJson(request);
+          const patch = {};
+          if (body.password != null) {
+            if (String(body.password).length < 8) return apiError(400, "WEAK_PASSWORD", "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+            patch.passwordHash = hashPassword(String(body.password));
+          }
+          if (body.disabled != null) {
+            if (target.id === viewer.id && body.disabled) return apiError(409, "SELF_DISABLE", "ปิดบัญชีที่กำลังใช้อยู่ไม่ได้");
+            patch.disabled = Boolean(body.disabled);
+          }
+          if (body.role != null) {
+            const owners = (store.listUsers?.() ?? []).filter((user) => user.role === "owner" && !user.disabled);
+            if (target.role === "owner" && body.role !== "owner" && owners.length <= 1) {
+              return apiError(409, "LAST_OWNER", "ต้องเหลือเจ้าของระบบอย่างน้อยหนึ่งคน");
+            }
+            patch.role = body.role === "owner" ? "owner" : "member";
+          }
+          if (body.transferTo != null) {
+            const receiver = store.getUser?.(String(body.transferTo));
+            if (!receiver) return apiError(404, "USER_NOT_FOUND", "ไม่พบผู้ใช้ปลายทาง");
+            let moved = 0;
+            for (const project of store.listProjects?.({ ownerId: target.id }) ?? []) {
+              if (store.setProjectOwner?.(project.id, receiver.id)) moved += 1;
+            }
+            return json({ ok: true, moved, to: receiver.username });
+          }
+          const updated = store.updateUser?.(target.id, patch);
+          return json({ ok: true, user: publicUser(updated) });
+        }
       }
 
       // ---- ผู้ให้บริการ AI สำหรับเขียนสคริปต์ ----

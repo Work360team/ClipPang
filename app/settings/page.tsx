@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AiProviderCard } from "./AiProviderCard";
+import { UsersCard } from "./UsersCard";
 import { TtsKeysCard } from "./TtsKeysCard";
 import { ReadinessCard } from "./ReadinessCard";
 import {
@@ -157,6 +158,7 @@ export default function SettingsPage() {
             <ReadinessCard engineState={engineState} />
             <TtsKeysCard engineState={engineState} />
             <AiProviderCard engineState={engineState} />
+            <UsersCard engineState={engineState} />
 
             <section className="settings-card" aria-labelledby="folder-title">
               <div className="settings-section-head">
