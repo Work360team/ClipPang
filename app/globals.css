@@ -123,13 +123,14 @@ select:focus-visible,
   position: relative;
   width: 35px;
   height: 35px;
-  display: grid;
-  place-items: center;
+  flex: 0 0 35px;
+  padding: 3px;
   overflow: hidden;
   border-radius: 11px;
-  background: var(--yellow);
-  color: #171b16;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+  /* พื้นเข้ม ไม่ใช่พื้นเหลืองเหมือนตอนเป็นตัวอักษร — โลโก้เป็นสีเหลืองบนพื้นใส
+     ถ้าวางบนพื้นเหลืองจะจมหายไปทั้งรูป และรายละเอียดสีขาวข้างในก็ต้องมีพื้นเข้มหนุน */
+  background: #171b16;
+  object-fit: contain;
 }
 
 .brand-mark::after {
@@ -745,10 +746,13 @@ select:focus-visible,
 .avatar {
   width: 34px;
   height: 34px;
+  flex: 0 0 34px;
   display: grid;
   place-items: center;
+  padding: 3px;
   border-radius: 11px;
   background: #21261f;
+  object-fit: contain;
   color: var(--yellow);
   font-size: 13px;
   font-weight: 650;

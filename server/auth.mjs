@@ -120,8 +120,8 @@ export function loginPage({ error = "", nextPath = "/" } = {}) {
     background:#f5f4ef; color:#181b18; font:400 15px/1.6 "Kanit","Leelawadee UI",system-ui,sans-serif; }
   form { width:100%; max-width:360px; padding:26px 24px; border:1px solid #e2e3dc; border-radius:20px;
     background:#fff; box-shadow:0 18px 44px rgba(20,25,19,.10); }
-  .mark { width:42px; height:42px; display:grid; place-items:center; margin-bottom:14px;
-    border-radius:13px; background:#ffd23f; font-weight:800; font-size:19px; }
+  .mark { width:46px; height:46px; margin-bottom:14px; padding:4px;
+    border-radius:13px; background:#171b16; object-fit:contain; display:block; }
   h1 { margin:0 0 4px; font-size:19px; font-weight:700; }
   p.sub { margin:0 0 18px; font-size:13px; color:#8b9289; }
   label { display:block; margin-bottom:12px; font-size:13px; font-weight:600; }
@@ -137,7 +137,7 @@ export function loginPage({ error = "", nextPath = "/" } = {}) {
 </style></head>
 <body>
   <form method="post" action="/api/auth/login">
-    <div class="mark">C</div>
+    <img class="mark" src="/clippang-logo-192.png" alt="ClipPang" />
     <h1>ClipPang</h1>
     <p class="sub">เข้าสู่ระบบเพื่อใช้งานจากเครื่องนี้</p>
     ${error ? `<p class="error">${error}</p>` : ""}

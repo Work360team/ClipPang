@@ -33,6 +33,17 @@ export async function generateMetadata(): Promise<Metadata> {
     authors: [{ name: "ClipPang" }],
     creator: "ClipPang",
     robots: { index: true, follow: true },
+    // โลโก้จริงของโปรเจกต์ ใช้ทั้งแท็บเบราว์เซอร์ หน้าจอโฮมของมือถือ และ PWA
+    icons: {
+      icon: [
+        { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+        { url: "/clippang-logo-32.png", type: "image/png", sizes: "32x32" },
+        { url: "/clippang-logo-192.png", type: "image/png", sizes: "192x192" },
+        { url: "/clippang-logo-512.png", type: "image/png", sizes: "512x512" },
+      ],
+      apple: [{ url: "/clippang-logo-180.png", sizes: "180x180", type: "image/png" }],
+      shortcut: ["/favicon.ico"],
+    },
     openGraph: {
       type: "website",
       locale: "th_TH",

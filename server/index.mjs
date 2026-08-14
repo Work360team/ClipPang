@@ -438,7 +438,11 @@ export async function startLocalServer({ port: requestedPort } = {}) {
         }), request.method);
       }
 
-      if (!localRequestAllowed(request)) {
+      // โลโก้กับ favicon ต้องโหลดได้ก่อนล็อกอิน ไม่งั้นหน้าล็อกอินจะไม่มีรูปให้ดู
+      // เป็นไฟล์ภาพสาธารณะ ไม่มีข้อมูลของผู้ใช้อยู่ในนั้น
+      const publicAsset = /^\/(favicon\.ico|clippang-logo(-\d+)?\.png)$/.test(requestUrl.pathname);
+
+      if (!publicAsset && !localRequestAllowed(request)) {
         // โฮสต์ที่อนุญาตไว้แล้วแต่ยังไม่ล็อกอิน → ให้หน้าล็อกอิน ไม่ใช่กำแพงเปล่า
         if (REMOTE_READY && REMOTE_HOSTS.has(requestUrl.hostname.toLowerCase())) {
           if (requestUrl.pathname.startsWith("/api/")) {

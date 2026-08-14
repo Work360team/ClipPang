@@ -162,9 +162,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-head">
           <Link href="/" className="brand" aria-label="ClipPang หน้าแรก">
-            <span className="brand-mark" aria-hidden="true">
-              <span>C</span>
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="brand-mark" src="/clippang-logo-192.png" alt="" width={35} height={35} aria-hidden="true" />
             <span className="brand-word">ClipPang</span>
           </Link>
           <button
@@ -374,7 +373,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
             <NotificationBell engineState={engineState} />
             <div className="profile-chip">
-              <span className="avatar">C</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="avatar" src="/clippang-logo-192.png" alt="" width={34} height={34} aria-hidden="true" />
               <span className="profile-copy">
                 <b>ClipPang Local</b>
                 <small>ไม่ต้องมีบัญชี</small>
