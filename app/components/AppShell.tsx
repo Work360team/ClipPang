@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import {
-  Bell,
   Captions,
   ChevronRight,
   CircleHelp,
@@ -23,6 +22,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
 import { refreshProjects, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 import { HardLink as Link } from "./HardLink";
+import { NotificationBell } from "./NotificationBell";
 
 const navItems = [
   { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
@@ -372,10 +372,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Radio size={14} />
               {engineState === "connected" ? "LOCAL เชื่อมต่อแล้ว" : engineState === "checking" ? "กำลังเชื่อมต่อ" : "WEB DEMO"}
             </Link>
-            <button className="icon-button notification-button" type="button" aria-label="การแจ้งเตือน">
-              <Bell size={19} />
-              <span aria-hidden="true" />
-            </button>
+            <NotificationBell engineState={engineState} />
             <div className="profile-chip">
               <span className="avatar">C</span>
               <span className="profile-copy">

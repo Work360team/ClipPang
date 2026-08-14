@@ -151,6 +151,8 @@ export const localApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  notifications: () => apiFetch<{ ok: true; items: LocalNotification[]; unread: number; seenAt: number }>("/api/notifications"),
+  markNotificationsSeen: () => apiFetch<{ ok: true; seenAt: number }>("/api/notifications", { method: "POST", body: "{}" }),
   settings: () => apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings"),
   updateSettings: (patch: Record<string, unknown>) =>
     apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings", {
@@ -185,6 +187,15 @@ export interface LocalTimelineClip {
 export interface LocalScript { id: string; name?: string; tag?: string; score?: number; chunks: string[] }
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
+export interface LocalNotification {
+  id: string;
+  tone: "success" | "error" | "warning" | "progress";
+  title: string;
+  detail: string;
+  at: number;
+  href: string | null;
+  sticky?: boolean;
+}
 export interface LocalCaptionIdea { angle: string; label: string; hint: string; text: string; hashtags: string[] }
 export interface LocalCaptionSet { provider: string; fallbackFrom: string | null; captions: LocalCaptionIdea[] }
 export interface LocalOutput { filename: string; url: string; size?: number; durationMs?: number }

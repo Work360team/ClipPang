@@ -25,6 +25,8 @@ import {
   testGeminiApiKey,
 } from "./setup.mjs";
 import { generateCaptions } from "../pipeline/caption.mjs";
+import { buildNotifications, countUnread } from "./notifications.mjs";
+import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import {
   generateScripts,
   listStyles,
@@ -823,6 +825,21 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         await saveGeminiApiKey(model, { keyName: provider.modelEnv });
         process.env[provider.modelEnv] = model;
         return json({ ok: true, provider: provider.id, model });
+      }
+
+      // การแจ้งเตือน — คำนวณจาก renders + สถานะโควตา ไม่มีตารางของตัวเอง
+      if (pathname === "/api/notifications") {
+        const settings = readStoreSettings(store);
+        const seenAt = Number(settings.notificationsSeenAt ?? 0);
+        if (method === "POST") {
+          const now = Date.now();
+          store.setSetting?.("notificationsSeenAt", String(now));
+          return json({ ok: true, seenAt: now });
+        }
+        let quota = null;
+        try { quota = quotaStatus(); } catch { quota = null; }
+        const items = buildNotifications({ store, quota });
+        return json({ ok: true, items, unread: countUnread(items, seenAt), seenAt });
       }
 
       if (method === "POST" && pathname === "/api/settings/cache/clear") {
