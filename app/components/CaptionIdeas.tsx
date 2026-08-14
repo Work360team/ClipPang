@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, RefreshCw, Sparkles } from "lucide-react";
 import { localApi, type LocalCaptionSet } from "../lib/local-api";
 
@@ -20,6 +20,12 @@ export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
+  // ยังไม่รู้ว่ามีแคปชั่นเก็บไว้หรือยัง — กันไม่ให้ปุ่ม "สร้างให้หน่อย" แวบขึ้นมา
+  // ก่อนที่การสร้างอัตโนมัติจะเริ่ม
+  const [checking, setChecking] = useState(true);
+  // จำว่าเคยสั่งสร้างอัตโนมัติให้โปรเจกต์ไหนไปแล้ว กันยิงซ้ำทุกครั้งที่กลับมาหน้านี้
+  // และกันวนซ้ำไม่รู้จบถ้าผู้ให้บริการล่ม
+  const autoTriedFor = useRef<string | null>(null);
 
   const generate = useCallback(async () => {
     if (!projectId) return;
@@ -36,14 +42,23 @@ export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
   }, [projectId]);
 
   // ชุดที่เคยสร้างไว้ถูกเก็บกับโปรเจกต์ กลับมาหน้าเดิมจึงเห็นของเดิมไม่ต้องสร้างซ้ำ
+  // ถ้ายังไม่เคยมี ให้ร่างให้เลยครั้งเดียว — คลิปเสร็จแล้วงานถัดไปคือโพสต์ ไม่ต้องรอกด
   useEffect(() => {
     if (!projectId) return undefined;
     let active = true;
     localApi.captions(projectId)
-      .then((result) => { if (active) setData(result.captions ?? null); })
-      .catch(() => undefined);
+      .then((result) => {
+        if (!active) return;
+        setData(result.captions ?? null);
+        if (!result.captions && autoTriedFor.current !== projectId) {
+          autoTriedFor.current = projectId;
+          void generate();
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
-  }, [projectId]);
+  }, [projectId, generate]);
 
   const copy = async (idea: { angle: string; text: string; hashtags: string[] }) => {
     const payload = `${idea.text}\n\n${idea.hashtags.map((tag) => `#${tag}`).join(" ")}`;
@@ -62,7 +77,7 @@ export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
       <div className="preview-panel-head">
         <div>
           <span className="live-dot idea-dot"><Sparkles size={13} /> แคปชั่นสำหรับโพสต์</span>
-          <p>{data ? "กดคัดลอกแล้ววางตอนอัปโหลดได้เลย" : "ให้ ClipPang ร่างแคปชั่นหลายแนวให้เลือก"}</p>
+          <p>{data ? "กดคัดลอกแล้ววางตอนอัปโหลดได้เลย" : loading || checking ? "กำลังร่างให้อัตโนมัติ" : "ให้ ClipPang ร่างแคปชั่นหลายแนวให้เลือก"}</p>
         </div>
         {data && (
           <button type="button" className="text-button" onClick={() => void generate()} disabled={loading}>
@@ -71,16 +86,16 @@ export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
         )}
       </div>
 
-      {!data && !loading && (
+      {!data && !loading && !checking && (
         <div className="idea-empty">
           <p>แคปชั่น 5 แนว พร้อมแฮชแท็ก — ตะขอ เล่าเรื่อง สรุปสั้น ชวนคุย และเร่งตัดสินใจ</p>
           <button type="button" className="button button-primary button-small" onClick={() => void generate()}>
-            <Sparkles size={15} /> สร้างแคปชั่นให้หน่อย
+            <Sparkles size={15} /> {error ? "ลองสร้างอีกครั้ง" : "สร้างแคปชั่นให้หน่อย"}
           </button>
         </div>
       )}
 
-      {loading && <p className="idea-note">กำลังคิดแคปชั่นให้…</p>}
+      {(loading || checking) && !data && <p className="idea-note">กำลังคิดแคปชั่นให้…</p>}
       {error && <p className="idea-note idea-error" role="alert">{error}</p>}
 
       {data && (
