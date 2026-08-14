@@ -33,9 +33,14 @@ function titleOf(project, fallback) {
   return name || fallback;
 }
 
-export function buildNotifications({ store, quota = null, now = Date.now() } = {}) {
+export function buildNotifications({ store, quota = null, now = Date.now(), ownerId } = {}) {
   const items = [];
-  const renders = store.listRenders?.({ limit: 40 }) ?? [];
+  // เห็นเฉพาะงานของตัวเอง — ประวัติเรนเดอร์ไม่ได้ผูกเจ้าของไว้ตรง ๆ จึงกรองผ่านโปรเจกต์
+  const visible = ownerId === undefined
+    ? null
+    : new Set((store.listProjects?.({ ownerId }) ?? []).map((project) => project.id));
+  const renders = (store.listRenders?.({ limit: 60 }) ?? [])
+    .filter((render) => !visible || visible.has(render.projectId ?? render.project_id));
   const projects = new Map();
   const projectFor = (id) => {
     if (!projects.has(id)) projects.set(id, store.getProject?.(id) ?? null);

@@ -17,7 +17,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const RENDER_KINDS = Object.freeze(["draft", "final"]);
 export const RENDER_LANES = Object.freeze(["ass", "hyperframes"]);
@@ -55,14 +55,25 @@ const INVALID_PROJECT_ID_GLOBAL = /[<>:"/\\|?*]/gu;
 const VOICE_CACHE_KEY = /^[a-f0-9]{64}$/iu;
 
 const SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS users (
+    id             TEXT PRIMARY KEY,
+    username       TEXT NOT NULL UNIQUE,
+    password_hash  TEXT NOT NULL,
+    role           TEXT NOT NULL DEFAULT 'member',
+    disabled       INTEGER NOT NULL DEFAULT 0,
+    created_at     INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS projects (
     id            TEXT PRIMARY KEY,
+    owner_id      TEXT,
     title         TEXT NOT NULL,
     product_json  TEXT NOT NULL,
     wizard_step   INTEGER NOT NULL DEFAULT 1,
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL
   );
+
 
   CREATE TABLE IF NOT EXISTS renders (
     id             TEXT PRIMARY KEY,
@@ -109,6 +120,15 @@ const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS settings (
     key    TEXT PRIMARY KEY,
     value  TEXT
+  );
+
+  -- การตั้งค่าที่เป็นของแต่ละคน (โปรเจกต์ที่ปักหมุด เวลาที่อ่านแจ้งเตือนล่าสุด)
+  -- แยกจาก settings เดิมที่เป็นค่าระดับเครื่อง เช่นผู้ให้บริการ AI ที่เลือกไว้
+  CREATE TABLE IF NOT EXISTS user_settings (
+    user_id  TEXT NOT NULL,
+    key      TEXT NOT NULL,
+    value    TEXT,
+    PRIMARY KEY (user_id, key)
   );
 `;
 
@@ -162,6 +182,13 @@ export function initializeSchema(database) {
   try {
     database.exec(SCHEMA_SQL);
     ensureRenderColumns(database);
+    // ต้องมาก่อนสร้างดัชนีที่อ้าง owner_id — ฐานข้อมูลเดิมยังไม่มีคอลัมน์นี้ และ
+    // CREATE TABLE IF NOT EXISTS ไม่เพิ่มคอลัมน์ให้ตารางที่มีอยู่แล้ว
+    ensureProjectColumns(database);
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS projects_by_owner
+        ON projects(owner_id, updated_at DESC)
+    `);
     database.exec(`
       CREATE INDEX IF NOT EXISTS renders_pending_priority
         ON renders(state, kind, queue_position, created_at)
@@ -175,6 +202,20 @@ export function initializeSchema(database) {
       // Preserve the original schema error.
     }
     throw error;
+  }
+}
+
+/**
+ * เพิ่มคอลัมน์ owner_id ให้ฐานข้อมูลที่สร้างไว้ก่อนรองรับหลายผู้ใช้
+ * โปรเจกต์เก่าจะยังไม่มีเจ้าของ (NULL) จนกว่าจะมีบัญชีแรก แล้ว claimOrphanProjects
+ * จะยกให้เจ้าของคนแรก — ทำตอนนั้นแทนที่จะเดาเจ้าของตั้งแต่ตอน migrate
+ */
+function ensureProjectColumns(database) {
+  const columns = new Set(
+    database.prepare("PRAGMA table_info(projects)").all().map((column) => column.name),
+  );
+  if (!columns.has("owner_id")) {
+    database.exec("ALTER TABLE projects ADD COLUMN owner_id TEXT");
   }
 }
 
@@ -289,9 +330,10 @@ export class SqliteStore {
     let removed = 0;
     this.#transaction(() => {
       const upsert = database.prepare(`
-        INSERT INTO projects (id, title, product_json, wizard_step, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, owner_id, title, product_json, wizard_step, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
+          owner_id = excluded.owner_id,
           title = excluded.title,
           product_json = excluded.product_json,
           wizard_step = excluded.wizard_step,
@@ -319,17 +361,24 @@ export class SqliteStore {
     return result;
   }
 
-  listProjects({ limit = 100, offset = 0, refresh = false } = {}) {
+  /**
+   * @param {{limit?: number, offset?: number, refresh?: boolean, ownerId?: string|null}} options
+   *   ownerId ที่เป็น undefined = ไม่กรอง (เครื่องมือดูแลระบบ) ส่วนสตริง = เห็นเฉพาะของคนนั้น
+   *   ระวัง: อย่าปล่อยให้ค่า undefined หลุดมาจาก request ของผู้ใช้ ไม่งั้นจะเห็นงานคนอื่น
+   */
+  listProjects({ limit = 100, offset = 0, refresh = false, ownerId } = {}) {
     assertPage(limit, offset);
     if (refresh) this.reconcileProjects();
+    const scoped = ownerId !== undefined;
     return this.#db()
       .prepare(`
-        SELECT id, title, product_json, wizard_step, created_at, updated_at
+        SELECT id, owner_id, title, product_json, wizard_step, created_at, updated_at
         FROM projects
+        ${scoped ? "WHERE owner_id IS ?" : ""}
         ORDER BY updated_at DESC, id ASC
         LIMIT ? OFFSET ?
       `)
-      .all(limit, offset)
+      .all(...(scoped ? [ownerId ?? null, limit, offset] : [limit, offset]))
       .map(mapProjectRow);
   }
 
@@ -370,6 +419,9 @@ export class SqliteStore {
     const document = {
       ...source,
       id,
+      // เก็บเจ้าของไว้ในไฟล์ด้วย ไม่ใช่แค่ใน index — reconcileProjects สร้าง index
+      // ใหม่จากไฟล์ ถ้าเจ้าของอยู่แค่ในฐานข้อมูล ข้อมูลนี้จะหายทุกครั้งที่ซ่อมดัชนี
+      ownerId: source.ownerId ?? source.owner_id ?? null,
       title,
       product,
       wizardStep,
@@ -781,6 +833,118 @@ export class SqliteStore {
     return row ? row.value : fallback;
   }
 
+
+  /* ---------- ผู้ใช้ ---------- */
+
+  /**
+   * ผู้ใช้ทั้งหมด เรียงตามเวลาที่สร้าง — คนแรกคือเจ้าของเครื่องเสมอ
+   * คืน password_hash มาด้วยเพราะชั้นตรวจรหัสต้องใช้ ห้ามส่งต่อออก API
+   */
+  listUsers() {
+    return this.#db()
+      .prepare("SELECT * FROM users ORDER BY created_at ASC, id ASC")
+      .all()
+      .map(mapUserRow);
+  }
+
+  getUserByUsername(username) {
+    const row = this.#db().prepare("SELECT * FROM users WHERE username = ?").get(String(username ?? "").trim());
+    return row ? mapUserRow(row) : null;
+  }
+
+  getUser(id) {
+    const row = this.#db().prepare("SELECT * FROM users WHERE id = ?").get(String(id ?? ""));
+    return row ? mapUserRow(row) : null;
+  }
+
+  createUser({ username, passwordHash, role = "member" } = {}) {
+    const name = String(username ?? "").trim();
+    if (name.length < 2) throw new StoreValidationError("ชื่อผู้ใช้ต้องยาวอย่างน้อย 2 ตัวอักษร");
+    if (!/^[\w.@-]+$/u.test(name)) throw new StoreValidationError("ชื่อผู้ใช้ใช้ได้เฉพาะตัวอักษร ตัวเลข . _ - @");
+    if (!String(passwordHash ?? "").startsWith("scrypt$")) {
+      throw new StoreValidationError("ต้องส่งรหัสผ่านที่ผ่านการ hash แล้วเท่านั้น");
+    }
+    if (this.getUserByUsername(name)) throw new StoreConflictError(`มีผู้ใช้ชื่อ “${name}” อยู่แล้ว`);
+    const id = `u-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+    this.#db().prepare(`
+      INSERT INTO users (id, username, password_hash, role, disabled, created_at)
+      VALUES (?, ?, ?, ?, 0, ?)
+    `).run(id, name, passwordHash, role === "owner" ? "owner" : "member", this.#timestamp());
+    return this.getUser(id);
+  }
+
+  updateUser(id, patch = {}) {
+    const user = this.getUser(id);
+    if (!user) throw new StoreNotFoundError(`ไม่พบผู้ใช้ “${id}”`);
+    const passwordHash = patch.passwordHash ?? user.passwordHash;
+    const disabled = patch.disabled == null ? user.disabled : Boolean(patch.disabled);
+    const role = patch.role ?? user.role;
+    this.#db().prepare("UPDATE users SET password_hash = ?, disabled = ?, role = ? WHERE id = ?")
+      .run(passwordHash, disabled ? 1 : 0, role, id);
+    return this.getUser(id);
+  }
+
+  deleteUser(id) {
+    // โปรเจกต์ไม่ถูกลบตาม — ยกให้ไม่มีเจ้าของไว้ก่อน ปลอดภัยกว่าลบงานของคนอื่นทิ้ง
+    this.#db().prepare("UPDATE projects SET owner_id = NULL WHERE owner_id = ?").run(id);
+    this.#db().prepare("DELETE FROM user_settings WHERE user_id = ?").run(id);
+    return Number(this.#db().prepare("DELETE FROM users WHERE id = ?").run(id).changes) > 0;
+  }
+
+  /**
+   * ยกโปรเจกต์ที่ยังไม่มีเจ้าของให้ผู้ใช้คนหนึ่ง — ใช้ตอนอัปเกรดจากรุ่นผู้ใช้เดียว
+   * ต้องเขียนลง project.json ด้วย เพราะ reconcileProjects สร้าง index ใหม่จากไฟล์
+   * ถ้าแก้แค่ในฐานข้อมูล เจ้าของจะหลุดกลับเป็นว่างทันทีที่มีการซ่อมดัชนีครั้งถัดไป
+   */
+  claimOrphanProjects(ownerId) {
+    if (!this.getUser(ownerId)) throw new StoreNotFoundError(`ไม่พบผู้ใช้ “${ownerId}”`);
+    const orphans = this.#db().prepare("SELECT id FROM projects WHERE owner_id IS NULL").all();
+    let claimed = 0;
+    for (const row of orphans) {
+      if (this.setProjectOwner(row.id, ownerId)) claimed += 1;
+    }
+    return claimed;
+  }
+
+  /** เจ้าของโปรเจกต์ตาม index — ใช้ตรวจสิทธิ์ก่อนอ่านไฟล์จริง */
+  projectOwner(projectId) {
+    const row = this.#db().prepare("SELECT owner_id FROM projects WHERE id = ?").get(String(projectId ?? ""));
+    return row ? row.owner_id ?? null : null;
+  }
+
+  /** เปลี่ยนเจ้าของทั้งในไฟล์และในดัชนี ให้ทั้งสองที่ตรงกันเสมอ */
+  setProjectOwner(projectId, ownerId) {
+    const document = this.getProject(projectId);
+    if (!document) return false;
+    const next = { ...document, ownerId: ownerId ?? null };
+    writeJsonAtomic(this.projectFile(document.id), next);
+    this.#upsertProjectIndex(next);
+    return true;
+  }
+
+  /* ---------- การตั้งค่าเฉพาะคน ---------- */
+
+  getUserSettings(userId) {
+    return Object.fromEntries(
+      this.#db().prepare("SELECT key, value FROM user_settings WHERE user_id = ? ORDER BY key ASC")
+        .all(String(userId ?? "")).map((row) => [row.key, row.value]),
+    );
+  }
+
+  setUserSetting(userId, key, value) {
+    const owner = String(userId ?? "");
+    if (!owner) throw new StoreValidationError("ต้องระบุผู้ใช้");
+    key = normalizeSettingKey(key);
+    if (value != null && typeof value !== "string") {
+      throw new StoreValidationError("ค่าการตั้งค่าต้องเป็นข้อความหรือ null");
+    }
+    this.#db().prepare(`
+      INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)
+      ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
+    `).run(owner, key, value);
+    return value;
+  }
+
   getSettings() {
     return Object.fromEntries(
       this.#db().prepare("SELECT key, value FROM settings ORDER BY key ASC").all()
@@ -981,9 +1145,10 @@ export class SqliteStore {
 
   #upsertProjectIndex(document) {
     this.#db().prepare(`
-      INSERT INTO projects (id, title, product_json, wizard_step, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, owner_id, title, product_json, wizard_step, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        owner_id = excluded.owner_id,
         title = excluded.title,
         product_json = excluded.product_json,
         wizard_step = excluded.wizard_step,
@@ -1047,6 +1212,7 @@ function normalizeProjectDocument(source, id, stats, now) {
 function projectDocumentToRow(document) {
   return [
     document.id,
+    document.ownerId ?? null,
     document.title,
     JSON.stringify(document.product ?? {}),
     document.wizardStep,
@@ -1055,9 +1221,21 @@ function projectDocumentToRow(document) {
   ];
 }
 
+function mapUserRow(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    passwordHash: row.password_hash,
+    role: row.role,
+    disabled: Boolean(row.disabled),
+    createdAt: Number(row.created_at),
+  };
+}
+
 function mapProjectRow(row) {
   return {
     id: row.id,
+    ownerId: row.owner_id ?? null,
     title: row.title,
     product: decodeJson(row.product_json, {}),
     wizardStep: Number(row.wizard_step),

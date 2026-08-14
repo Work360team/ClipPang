@@ -218,6 +218,12 @@ function readStoreSettings(store) {
   return store.getSettings?.() ?? store.listSettings?.() ?? {};
 }
 
+/**
+ * ค่าที่ผูกกับตัวคน ไม่ใช่กับเครื่อง — ปักหมุดโปรเจกต์ และเวลาที่อ่านแจ้งเตือนล่าสุด
+ * ที่เหลือ (ผู้ให้บริการ AI, โฟลเดอร์) ยังเป็นค่าระดับเครื่องเพราะผูกกับคีย์ใน .env
+ */
+const PER_USER_SETTINGS = new Set(["pinnedProjects", "notificationsSeenAt"]);
+
 async function streamUpload(request, destination) {
   if (!request.body) throw Object.assign(new Error("ไม่พบข้อมูลไฟล์วิดีโอ"), { status: 400, code: "EMPTY_UPLOAD" });
   const declared = Number(request.headers.get("content-length") || 0);
@@ -322,7 +328,19 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   // โหมด mock ใช้เสียงปลอมอยู่แล้ว การไปเช็ค Gemini จึงไม่มีประโยชน์และทำให้เทสต์ต้องต่อเน็ต
   const mockTtsEnabled = services.mockTts ?? process.env.CLIPPANG_MOCK_TTS === "1";
 
-  return async function handleApi(request) {
+  return async function handleApi(request, context = {}) {
+    // ผู้ใช้ที่เป็นเจ้าของคำขอนี้ — เซิร์ฟเวอร์เป็นคนตัดสินและส่งเข้ามา
+    // ห้ามอ่านจากพารามิเตอร์ใน request เด็ดขาด ไม่งั้นใครก็ปลอมเป็นคนอื่นได้
+    const viewer = context.viewer ?? null;
+    const viewerId = viewer?.id ?? null;
+
+    /** โปรเจกต์นี้เป็นของผู้ขอไหม — ใช้ก่อนแตะข้อมูลของโปรเจกต์ทุกครั้ง */
+    const ownsProject = (id) => {
+      const owner = store.projectOwner?.(id) ?? null;
+      // ยังไม่มีเจ้าของ = ข้อมูลเก่าก่อนมีระบบผู้ใช้ ปล่อยผ่านให้ใช้งานต่อได้
+      return owner == null || owner === viewerId;
+    };
+
     const url = new URL(request.url);
     const method = request.method.toUpperCase();
     let pathname;
@@ -336,6 +354,22 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
     }
 
     try {
+      // ---- ด่านเดียวสำหรับสิทธิ์การเข้าถึง ----
+      // ใส่ไว้ก่อนทุก route ที่อ้างถึงโปรเจกต์หรือเรนเดอร์ แทนที่จะไล่เช็คทีละ route
+      // ซึ่งพลาดง่ายเวลาเพิ่ม route ใหม่ ตอบ 404 ไม่ใช่ 403 เพื่อไม่ให้รู้ว่ามีของคนอื่นอยู่
+      const scopedProject = /^\/api\/projects\/([^/]+)/.exec(pathname);
+      if (scopedProject && !ownsProject(scopedProject[1])) {
+        return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
+      }
+      const scopedRender = /^\/api\/renders\/([^/]+)/.exec(pathname);
+      if (scopedRender) {
+        const render = store.getRender?.(scopedRender[1]);
+        const owningProject = render?.projectId ?? render?.project_id ?? null;
+        if (owningProject && !ownsProject(owningProject)) {
+          return apiError(404, "RENDER_NOT_FOUND", "ไม่พบงานเรนเดอร์นี้");
+        }
+      }
+
       if (method === "GET" && pathname === "/api/health") {
         return json({ ok: true, local: true, product: "ClipPang Local", version, host: HOST });
       }
@@ -434,7 +468,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
       }
 
       if (method === "GET" && pathname === "/api/projects") {
-        const projects = (store.listProjects?.() ?? []).map((item) => normalizeProject(item, store));
+        const projects = (store.listProjects?.({ ownerId: viewerId }) ?? []).map((item) => normalizeProject(item, store));
         return json({ ok: true, projects });
       }
       if (method === "POST" && pathname === "/api/projects") {
@@ -443,6 +477,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         const product = normalizeProductMedia(body.product ?? body.product_json ?? {});
         const project = store.createProject({
           id,
+          ownerId: viewerId,
           title: String(body.title || body.product?.name || "โปรเจกต์ใหม่").slice(0, 140),
           product,
           product_json: product,
@@ -724,7 +759,9 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       if (method === "POST" && pathname === "/api/open") {
         const body = await readJson(request);
-        const project = store.getProject(String(body.projectId || ""));
+        const requested = String(body.projectId || "");
+        if (!ownsProject(requested)) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
+        const project = store.getProject(requested);
         if (!project) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
         const target = body.target === "project" ? safeProjectPath(project.id) : safeProjectPath(project.id, "out");
         openLocalPath(target);
@@ -733,13 +770,23 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       if (method === "GET" && pathname === "/api/settings") {
         const setup = await getSetupStatusImpl();
-        return json({ ok: true, settings: { ...readStoreSettings(store), inputFolder: PATHS.input, projectFolder: PATHS.projects, key: setup.key ?? setup.gemini, version } });
+        const mine = viewerId ? store.getUserSettings?.(viewerId) ?? {} : {};
+        return json({ ok: true, settings: {
+          ...readStoreSettings(store),
+          ...mine,
+          inputFolder: PATHS.input,
+          projectFolder: PATHS.projects,
+          key: setup.key ?? setup.gemini,
+          version,
+          viewer: viewer ? JSON.stringify({ id: viewer.id, username: viewer.username, role: viewer.role }) : null,
+        } });
       }
       if (method === "PATCH" && pathname === "/api/settings") {
         const body = await readJson(request);
         for (const [key, value] of Object.entries(body)) {
           if (["geminiKey", "apiKey", "key"].includes(key)) continue;
-          store.setSetting?.(key, settingValue(value));
+          if (PER_USER_SETTINGS.has(key) && viewerId) store.setUserSetting?.(viewerId, key, settingValue(value));
+          else store.setSetting?.(key, settingValue(value));
         }
         return json({ ok: true, settings: readStoreSettings(store) });
       }
@@ -829,16 +876,17 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       // การแจ้งเตือน — คำนวณจาก renders + สถานะโควตา ไม่มีตารางของตัวเอง
       if (pathname === "/api/notifications") {
-        const settings = readStoreSettings(store);
-        const seenAt = Number(settings.notificationsSeenAt ?? 0);
+        const mine = viewerId ? store.getUserSettings?.(viewerId) ?? {} : readStoreSettings(store);
+        const seenAt = Number(mine.notificationsSeenAt ?? 0);
         if (method === "POST") {
           const now = Date.now();
-          store.setSetting?.("notificationsSeenAt", String(now));
+          if (viewerId) store.setUserSetting?.(viewerId, "notificationsSeenAt", String(now));
+          else store.setSetting?.("notificationsSeenAt", String(now));
           return json({ ok: true, seenAt: now });
         }
         let quota = null;
         try { quota = quotaStatus(); } catch { quota = null; }
-        const items = buildNotifications({ store, quota });
+        const items = buildNotifications({ store, quota, ownerId: viewerId });
         return json({ ok: true, items, unread: countUnread(items, seenAt), seenAt });
       }
 

@@ -50,9 +50,11 @@ export function verifyPassword(password, stored) {
 
 const sign = (value, secret) => crypto.createHmac("sha256", secret).update(value).digest("base64url");
 
-export function createSession(username, secret) {
+export function createSession(user, secret) {
   const payload = Buffer.from(JSON.stringify({
-    u: username,
+    // เก็บทั้ง id และชื่อ: id ใช้ผูกข้อมูล ส่วนชื่อไว้แสดงผลโดยไม่ต้องยิงฐานข้อมูลซ้ำ
+    id: typeof user === "string" ? null : user?.id ?? null,
+    u: typeof user === "string" ? user : user?.username ?? "",
     exp: Date.now() + SESSION_DAYS * 86_400_000,
   })).toString("base64url");
   return `${payload}.${sign(payload, secret)}`;

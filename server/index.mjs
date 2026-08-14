@@ -1,7 +1,6 @@
 import http from "node:http";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
-import crypto from "node:crypto";
 import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -82,8 +81,13 @@ function parseJson(value, fallback = {}) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
-/** ตรวจชื่อผู้ใช้และรหัสผ่าน แล้วออกคุกกี้เซสชันให้ */
-async function handleLogin(request, ip) {
+/**
+ * ตรวจชื่อผู้ใช้และรหัสผ่านจากตาราง users แล้วออกคุกกี้เซสชันให้
+ *
+ * บัญชีใน .env (CLIPPANG_USER) ยังใช้ได้ในฐานะบัญชีตั้งต้น — ตอนเริ่มระบบจะถูก
+ * ย้ายเข้าตาราง users ให้อัตโนมัติ (ดู ensureBootstrapUser) จากนั้นทุกอย่างอ่านจากตาราง
+ */
+async function handleLogin(request, ip, store) {
   const wait = throttle(ip);
   if (wait > 0) {
     return new Response(loginPage({ error: `ลองผิดหลายครั้งเกินไป รออีก ${Math.ceil(wait / 1000)} วินาที` }), {
@@ -94,9 +98,10 @@ async function handleLogin(request, ip) {
   const username = String(form.get("username") || "");
   const password = String(form.get("password") || "");
   const nextPath = String(form.get("next") || "/");
-  const userOk = username.length === AUTH_USER.length
-    && crypto.timingSafeEqual(Buffer.from(username), Buffer.from(AUTH_USER));
-  if (!REMOTE_READY || !userOk || !verifyPassword(password, AUTH_HASH)) {
+
+  const user = store.getUserByUsername?.(username) ?? null;
+  const ok = Boolean(user) && !user.disabled && verifyPassword(password, user.passwordHash);
+  if (!REMOTE_READY || !ok) {
     noteFailure(ip);
     // ไม่บอกว่าผิดที่ชื่อหรือรหัส เพื่อไม่ให้ไล่เดาชื่อผู้ใช้ได้
     return new Response(loginPage({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", nextPath }), {
@@ -108,9 +113,29 @@ async function handleLogin(request, ip) {
     status: 303,
     headers: {
       location: /^\/[^\s"']*$/.test(nextPath) ? nextPath : "/",
-      "set-cookie": sessionCookie(createSession(AUTH_USER, SECRET)),
+      "set-cookie": sessionCookie(createSession(user, SECRET)),
     },
   });
+}
+
+/**
+ * ทำให้มีบัญชีอย่างน้อยหนึ่งใบเสมอ และเป็นเจ้าของงานเก่าทั้งหมด
+ *
+ * เครื่องที่ใช้มาก่อนหน้านี้มีโปรเจกต์ที่ยังไม่มีเจ้าของ ถ้าไม่ยกให้ใครสักคน
+ * พอเปิดโหมดหลายผู้ใช้ งานเดิมจะหายไปจากสายตาทุกคน
+ */
+function ensureBootstrapUser(store) {
+  const users = store.listUsers?.() ?? [];
+  let owner = users[0] ?? null;
+  if (!owner && AUTH_USER && AUTH_HASH.startsWith("scrypt$")) {
+    owner = store.createUser({ username: AUTH_USER, passwordHash: AUTH_HASH, role: "owner" });
+  }
+  if (owner) {
+    const claimed = store.claimOrphanProjects?.(owner.id) ?? 0;
+    if (claimed) process.stdout.write(`ยกโปรเจกต์เดิม ${claimed} รายการให้ ${owner.username}
+`);
+  }
+  return owner;
 }
 
 function remoteHelpText(request) {
@@ -420,6 +445,8 @@ function openBrowser(url) {
 
 export async function startLocalServer({ port: requestedPort } = {}) {
   const [runtime, getWebWorker] = await Promise.all([createLocalRuntime(), createWebWorkerLoader()]);
+  // ต้องมีเจ้าของอย่างน้อยหนึ่งคนก่อนรับคำขอ ไม่งั้นงานเก่าจะไม่มีใครเห็น
+  const bootstrapOwner = ensureBootstrapUser(runtime.store);
   const port = requestedPort ?? await availablePort(DEFAULT_PORT);
   const server = http.createServer({ requestTimeout: 0, headersTimeout: 30_000 }, async (req, res) => {
     try {
@@ -429,7 +456,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
 
       // เส้นทางล็อกอิน/ออกจากระบบต้องเข้าถึงได้ก่อนผ่านด่าน ไม่งั้นจะล็อกอินไม่ได้เลย
       if (requestUrl.pathname === "/api/auth/login" && request.method === "POST") {
-        return sendWebResponse(res, await handleLogin(request, ip), request.method);
+        return sendWebResponse(res, await handleLogin(request, ip, runtime.store), request.method);
       }
       if (requestUrl.pathname === "/api/auth/logout") {
         return sendWebResponse(res, new Response(null, {
@@ -460,8 +487,16 @@ export async function startLocalServer({ port: requestedPort } = {}) {
         }), request.method);
       }
       const url = requestUrl;
+      // ใครเป็นคนขอ: เครื่องตัวเองถือเป็นเจ้าของเครื่อง ส่วนเครื่องอื่นมาจากคุกกี้เซสชัน
+      // ที่ผ่านการตรวจแล้วข้างบน จึงเชื่อค่าใน session ได้
+      const session = LOCAL_HOSTS.has(url.hostname)
+        ? null
+        : readSession(readCookie(request.headers.get("cookie"), SESSION_COOKIE), SECRET);
+      const viewer = session?.id
+        ? runtime.store.getUser?.(session.id) ?? null
+        : bootstrapOwner;
       let response;
-      if (url.pathname.startsWith("/api/")) response = await runtime.api(request);
+      if (url.pathname.startsWith("/api/")) response = await runtime.api(request, { viewer });
       else {
         const directAsset = await assetFetch(request);
         if (directAsset.status !== 404) response = directAsset;
