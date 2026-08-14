@@ -225,6 +225,11 @@ const initialScripts = [
  * จึงได้ null ทั้งที่ข้อความมีตัวเลขอยู่ — อ่านจากข้อความเป็นทางสำรองให้ตัวนับไม่หาย
  * ตอนกลับเข้าหน้าเดิม
  */
+/** ข้อความนี้มีตัวนับ N/M อยู่ในตัวแล้วหรือยัง — ใช้กันไม่ให้เติมเลขซ้ำสองที่ */
+function hasCounter(text: string | null | undefined) {
+  return /\d+\s*\/\s*\d+/.test(String(text ?? ""));
+}
+
 function readCounter(event: { current?: number | null; total?: number | null; message?: string | null }) {
   if (typeof event.current === "number" && typeof event.total === "number" && event.total > 1) {
     return { current: event.current, total: event.total };
@@ -2317,10 +2322,10 @@ export function ProjectWizard() {
                     <div className="render-orbit"><span>{renderProgress}%</span></div>
                     <div className="render-copy">
                       <span className="live-pill dark"><i /> กำลังสร้าง{renderKind === "draft" ? "ร่าง" : "คลิปตัวจริง"}</span>
-                      <h3>{renderStage}{renderCounter ? ` · ${renderCounter.current}/${renderCounter.total}` : ""}</h3>
+                      <h3>{renderCounter && !hasCounter(renderStage) ? `${renderStage} ${renderCounter.current}/${renderCounter.total}` : renderStage}</h3>
                       <p>คุณปิดหน้านี้ได้ งานจะทำต่อและกลับมาดูความคืบหน้าได้เสมอ</p>
                       <div className="render-bar"><span style={{ width: `${renderProgress}%` }} /></div>
-                      <div className="render-time"><span>{renderProgress}% แล้ว</span><span>{operationMessage || "กำลังประมวลผลบนเครื่อง"}</span></div>
+                      <div className="render-time"><span>{renderProgress}% แล้ว</span><span>กำลังประมวลผลบนเครื่อง</span></div>
                       <ol className="render-stage-list">
                         {RENDER_STAGES.map((stage) => {
                           const activeIndex = RENDER_STAGES.findIndex((item) => item.id === renderStageId);
@@ -2331,7 +2336,7 @@ export function ProjectWizard() {
                               <span className="render-stage-mark">{state === "done" ? <Check size={12} /> : state === "now" ? <i /> : null}</span>
                               <div>
                                 <b>{stage.label}{state === "now" && renderCounter ? ` ${renderCounter.current}/${renderCounter.total}` : ""}</b>
-                                <small>{state === "now" ? operationMessage || stage.detail : stage.detail}</small>
+                                <small>{stage.detail}</small>
                               </div>
                             </li>
                           );
