@@ -203,6 +203,9 @@ export interface LocalRender {
   id: string; project_id: string; kind: "draft" | "final"; state: string; progress: number;
   stage?: string | null; message?: string | null; queue_position?: number | null;
   outputs?: Record<string, LocalOutput> | null; error?: { message?: string } | null;
+  // เซิร์ฟเวอร์คืน config ของงานมาด้วยเสมอ (server/api.mjs normalizeRender)
+  // ต้องประกาศไว้ ไม่งั้นโค้ดที่อ่านเสียง/สคริปต์ของร่างจะหลุด type check
+  config?: Record<string, unknown> | null;
   stale?: boolean;
 }
 export interface LocalProject {

@@ -257,7 +257,7 @@ const RENDER_STAGES: { id: string; label: string; detail: string }[] = [
   { id: "deliver", label: "ส่งมอบ", detail: "เขียนไฟล์ผลลัพธ์" },
 ];
 
-type WizardStyle = { id: string; name: string; note: string; label: string; className: string; speed: string };
+type WizardStyle = { id: string; name: string; note: string; label: string; className: string; speed: string; params?: StylePreviewParams };
 
 /**
  * ใช้เป็นค่าตั้งต้นตอนยังไม่ต่อ Local เท่านั้น — พอต่อได้จะแทนที่ด้วยคลังจริงจาก
@@ -753,11 +753,6 @@ export function ProjectWizard() {
       setScriptVariants(savedScripts);
       setSelectedScript(savedScripts[0].id);
       setScriptTexts(Object.fromEntries(savedScripts.map((script) => [script.id, [...script.chunks]])));
-      // สคริปต์ที่เก็บไว้คู่กับ brief ชุดนี้ ถือว่าตรงกันแล้ว กดถัดไปครั้งแรกจะได้ไม่สร้างทับ
-      setScriptSignature(JSON.stringify({
-        ...savedBrief,
-        features: String(savedBrief.features ?? "").split(/[,\n]/).map((item) => item.trim()).filter(Boolean),
-      }));
     }
     const config = (product.config ?? {}) as Record<string, unknown>;
     if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
