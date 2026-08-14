@@ -343,6 +343,8 @@ export function ProjectWizard() {
   const [operationMessage, setOperationMessage] = useState("");
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [furthestStep, setFurthestStep] = useState(1);
+  // ลายเซ็นของสิ่งที่ทำให้ "เสียงพากย์" เปลี่ยน — ใช้ตัดสินว่าร่างเดิมยังใช้ต่อได้ไหม
+  const [draftSignature, setDraftSignature] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
   const [videoUrl, setVideoUrl] = useState("/clippang-sample.mp4");
   const [fileName, setFileName] = useState("คลิปตัวอย่าง.mp4");
@@ -751,6 +753,11 @@ export function ProjectWizard() {
       setScriptVariants(savedScripts);
       setSelectedScript(savedScripts[0].id);
       setScriptTexts(Object.fromEntries(savedScripts.map((script) => [script.id, [...script.chunks]])));
+      // สคริปต์ที่เก็บไว้คู่กับ brief ชุดนี้ ถือว่าตรงกันแล้ว กดถัดไปครั้งแรกจะได้ไม่สร้างทับ
+      setScriptSignature(JSON.stringify({
+        ...savedBrief,
+        features: String(savedBrief.features ?? "").split(/[,\n]/).map((item) => item.trim()).filter(Boolean),
+      }));
     }
     const config = (product.config ?? {}) as Record<string, unknown>;
     if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
@@ -789,6 +796,14 @@ export function ProjectWizard() {
       setRenderProgress(100);
       if (kind === "draft") {
         setDraftReady(true);
+        // จำไว้ว่าร่างนี้ใช้เสียงและสคริปต์ชุดไหน เพื่อรู้ทีหลังว่ายังใช้ต่อได้ไหม
+        const config = (record.config ?? {}) as { voiceId?: string; speed?: number; tone?: string; script?: string[] };
+        setDraftSignature(JSON.stringify({
+          voice: config.voiceId ?? selectedVoice,
+          speed: config.speed ?? speed,
+          tone: config.tone ?? tone,
+          script: config.script ?? currentChunks,
+        }));
         setToast("ร่างพร้อมแล้ว กดสร้างคลิปตัวจริงได้โดยไม่ยิงเสียงซ้ำ");
       } else {
         setRenderDone(true);
@@ -844,7 +859,11 @@ export function ProjectWizard() {
     setRenderId(render.id);
     setRenderKind(render.kind);
     setRenderProgress(Number(render.progress ?? 0));
-    setOperationMessage(render.message || "");
+    // ข้อความความคืบหน้าใช้ได้เฉพาะกับงานที่ยังวิ่งอยู่ ถ้าเอาข้อความของงานที่จบแล้ว
+    // มาตั้งไว้ ปุ่มหลักท้ายหน้าจะถูกล็อกค้าง (มันปิดตัวเองเมื่อ operationMessage ไม่ว่าง)
+    // ผลคือเปิดโปรเจกต์เก่าขึ้นมาแล้วกดอะไรไม่ได้เลยทั้งที่ไม่มีงานทำอยู่
+    const stillWorking = ["queued", "running", "processing"].includes(String(render.state));
+    setOperationMessage(stillWorking ? (render.message || "") : "");
     // กลับเข้าหน้าเดิมกลางคัน ต้องเห็นขั้นตอนและตัวนับทันที ไม่ต้องรอ event ถัดไป
     // ซึ่งบางขั้น เช่น TTS อาจนานหลายสิบวินาทีกว่าจะมี event ใหม่
     if (render.stage) setRenderStageId(String(render.stage));
@@ -1638,13 +1657,12 @@ export function ProjectWizard() {
           setUploadError("กรุณากรอกชื่อสินค้าและจุดขายหลักก่อนสร้างสคริปต์");
           return;
         }
-        setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
         await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 2 });
-        const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: selectedTotalSec });
-        if (result.scripts.length) {
-          setScriptVariants(result.scripts);
-          setSelectedScript(result.scripts[0].id);
-          setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
+        // มีสคริปต์อยู่แล้วก็แค่บันทึกแล้วไปต่อ การกดถัดไปไม่ควรล้างสคริปต์ที่แก้มาทั้งชุด
+        // อยากได้ชุดใหม่จริง ๆ มีปุ่ม "เขียนสคริปต์ใหม่ทั้งชุด" ให้กดเองที่ขั้นที่ 4
+        if (!scriptVariants.length) {
+          setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
+          await regenerateAllScripts(id);
         }
       } else {
         await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
@@ -1652,7 +1670,11 @@ export function ProjectWizard() {
       if (activeStep < 4) setActiveStep((activeStep + 1) as WizardStep);
       else if (activeStep === 4) {
         setActiveStep(5);
-        await beginRender("draft", id);
+        // ย้อนมาเปลี่ยนสไตล์ซับแล้วกดต่อ ไม่ควรเสียโควตาสร้างร่างใหม่ทั้งชุด
+        // เพราะสไตล์ถูกใส่ตอนโปรโมตเป็นตัวจริงอยู่แล้ว เสียงเดิมยังใช้ได้
+        if (!(draftReady && draftSignature === voiceSignatureNow())) {
+          await beginRender("draft", id);
+        }
       }
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "บันทึกขั้นตอนนี้ไม่สำเร็จ");
@@ -1749,6 +1771,26 @@ export function ProjectWizard() {
     setToast(`สลับเป็นข้อความตัวอย่างแล้ว — เปิดผ่าน เริ่มโปรแกรม.bat เพื่อให้ AI เขียนใหม่จริง`);
   };
 
+  /** เปลี่ยนอย่างใดอย่างหนึ่งในนี้ = เสียงพากย์ต้องทำใหม่ ใช้ร่างเดิมต่อไม่ได้ */
+  const voiceSignatureNow = () => JSON.stringify({
+    voice: selectedVoice,
+    speed,
+    tone,
+    script: currentChunks,
+  });
+
+  /** เขียนสคริปต์ใหม่ทั้งชุด — ทับของเดิม จึงต้องมาจากการกดปุ่มโดยตั้งใจเท่านั้น */
+  const regenerateAllScripts = async (knownProjectId?: string) => {
+    const id = knownProjectId ?? projectId ?? await ensureProject();
+    const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: selectedTotalSec });
+    if (result.scripts.length) {
+      setScriptVariants(result.scripts);
+      setSelectedScript(result.scripts[0].id);
+      setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
+    }
+    return result.scripts.length;
+  };
+
   const beginRender = async (kind: "draft" | "final", knownProjectId?: string) => {
     const id = knownProjectId ?? projectId ?? await ensureProject();
     const renderEditRevision = editRevisionRef.current;
@@ -1769,7 +1811,11 @@ export function ProjectWizard() {
         product: projectProduct(),
       });
       const position = captionPosition === "บน" ? "top" : captionPosition === "กลาง" ? "middle" : "bottom";
-      const result = kind === "final" && draftReady && renderId
+      // โปรโมตร่างคือใช้เสียงเดิมซ้ำเพื่อประหยัดโควตา ใช้ได้เฉพาะตอนที่เสียง สคริปต์
+      // ความเร็ว และโทน ยังเหมือนตอนสร้างร่าง ถ้าผู้ใช้ย้อนไปเปลี่ยนเสียงแล้วยังโปรโมต
+      // คลิปตัวจริงจะออกมาเป็นเสียงเก่าโดยที่เขาไม่รู้ตัว
+      const canReuseDraft = draftReady && renderId && draftSignature === voiceSignatureNow();
+      const result = kind === "final" && canReuseDraft
         ? await localApi.promoteRender(renderId, { styleId: selectedStyle, position })
         : await localApi.startRender(id, {
           kind,
@@ -2191,7 +2237,26 @@ export function ProjectWizard() {
                   ))}
                 </div>
                 <div className="script-editor">
-                  <div className="editor-head"><div><span className="script-rank"><Sparkles size={14} /> AI แนะนำ</span><h3>{selectedScriptData.name}</h3></div><span>เป้าหมาย {formatDuration(selectedTotalSec)}</span></div>
+                  <div className="editor-head">
+                    <div><span className="script-rank"><Sparkles size={14} /> AI แนะนำ</span><h3>{selectedScriptData.name}</h3></div>
+                    <span>เป้าหมาย {formatDuration(selectedTotalSec)}</span>
+                    {/* ทับสคริปต์ทั้งชุด จึงต้องกดเองเท่านั้น ไม่ผูกกับปุ่มถัดไป */}
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={Boolean(operationMessage)}
+                      title="เขียนใหม่ทั้ง 5 แบบจากข้อมูลสินค้าปัจจุบัน — สคริปต์ที่แก้ไว้จะถูกแทนที่"
+                      onClick={() => {
+                        setOperationMessage("กำลังเขียนสคริปต์ใหม่ทั้งชุด…");
+                        regenerateAllScripts()
+                          .then((count) => setToast(count ? `เขียนสคริปต์ใหม่ ${count} แบบแล้ว` : "ยังเขียนใหม่ไม่สำเร็จ"))
+                          .catch((error) => setUploadError(error instanceof Error ? error.message : "เขียนสคริปต์ใหม่ไม่สำเร็จ"))
+                          .finally(() => setOperationMessage(""));
+                      }}
+                    >
+                      <RotateCcw size={14} /> เขียนใหม่ทั้งชุด
+                    </button>
+                  </div>
                   <div className="chunk-list">
                     {currentChunks.map((chunk, index) => (
                       <div className="chunk" key={`${selectedScript}-${index}`}>
