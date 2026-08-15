@@ -27,7 +27,7 @@ import {
 import { generateCaptions } from "../pipeline/caption.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
-import { hashPassword } from "./auth.mjs";
+import { hashPassword, verifyPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import {
   generateScripts,
@@ -896,6 +896,45 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           remaining: Number.isFinite(gate.remaining) ? gate.remaining : null,
           history: viewerId ? store.usageHistory?.(viewerId, 7) ?? [] : [],
         });
+      }
+
+      // ---- บัญชีของตัวเอง (ใครก็ได้ที่ล็อกอินอยู่) ----
+
+      if (method === "GET" && pathname === "/api/account") {
+        if (!viewer) return apiError(401, "NO_SESSION", "ยังไม่ได้เข้าสู่ระบบ");
+        return json({
+          ok: true,
+          id: viewer.id,
+          username: viewer.username,
+          role: viewer.role,
+          createdAt: viewer.createdAt,
+          passwordChangedAt: viewer.passwordChangedAt || null,
+          // เครื่องที่รันโปรแกรมเองไม่มีรหัสผ่านให้เปลี่ยน มันเข้าได้เพราะเป็น localhost
+          canChangePassword: !isLocal,
+        });
+      }
+
+      if (method === "POST" && pathname === "/api/account/password") {
+        if (!viewer) return apiError(401, "NO_SESSION", "ยังไม่ได้เข้าสู่ระบบ");
+        // บนเครื่องตัวเองไม่ได้ผ่านหน้าล็อกอิน จึงพิสูจน์ตัวตนด้วยรหัสเดิมไม่ได้
+        // ถ้าเปิดให้เปลี่ยนตรงนี้ ใครเปิดเบราว์เซอร์บนเครื่องได้ก็ยึดบัญชีรีโมตไปเลย
+        if (isLocal) {
+          return apiError(400, "LOCAL_SESSION",
+            "เปลี่ยนรหัสผ่านได้จากการเข้าผ่านหน้าล็อกอินเท่านั้น — บนเครื่องนี้ใช้ node scripts/users.mjs password แทน");
+        }
+        const body = await readJson(request);
+        const current = String(body?.currentPassword ?? "");
+        const next = String(body?.newPassword ?? "");
+        if (!verifyPassword(current, viewer.passwordHash)) {
+          return apiError(400, "WRONG_PASSWORD", "รหัสผ่านเดิมไม่ถูกต้อง");
+        }
+        if (next.length < 8) return apiError(400, "WEAK_PASSWORD", "รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร");
+        if (next === current) return apiError(400, "SAME_PASSWORD", "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม");
+        store.updateUser(viewer.id, { passwordHash: hashPassword(next) });
+        // เซสชันอื่นที่ออกก่อนหน้านี้จะใช้ไม่ได้แล้ว เครื่องที่กำลังเปลี่ยนต้องได้คุกกี้ใหม่
+        // เซิร์ฟเวอร์เป็นคนแนบ set-cookie ให้ เพราะกุญแจเซ็นเซสชันไม่ได้อยู่ในชั้นนี้
+        context.reissueSession = viewer.id;
+        return json({ ok: true, signedOutOthers: true });
       }
 
       // ---- จัดการบัญชีผู้ใช้ (เฉพาะเจ้าของระบบ) ----

@@ -476,7 +476,19 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       // เป็นไฟล์ภาพสาธารณะ ไม่มีข้อมูลของผู้ใช้อยู่ในนั้น
       const publicAsset = /^\/(favicon\.ico|clippang-logo(-\d+)?\.png)$/.test(requestUrl.pathname);
 
-      if (!publicAsset && !localRequestAllowed(request)) {
+      // ใครเป็นคนขอ: เครื่องตัวเองถือเป็นเจ้าของเครื่อง ส่วนเครื่องอื่นมาจากคุกกี้เซสชัน
+      const session = LOCAL_HOSTS.has(requestUrl.hostname)
+        ? null
+        : readSession(readCookie(request.headers.get("cookie"), SESSION_COOKIE), SECRET);
+      let viewer = session?.id ? runtime.store.getUser?.(session.id) ?? null : bootstrapOwner;
+      // เซสชันที่ออกก่อนการเปลี่ยนรหัสครั้งล่าสุดถือว่าใช้ไม่ได้แล้ว
+      // และบัญชีที่ถูกปิดใช้งานต้องหลุดทันที ไม่ใช่รอคุกกี้หมดอายุ
+      if (session && viewer && (viewer.disabled || (viewer.passwordChangedAt ?? 0) > (session.iat ?? 0))) {
+        viewer = null;
+      }
+      // มีคุกกี้แต่ใช้ไม่ได้แล้ว = ต้องกลับไปหน้าล็อกอิน ไม่ใช่ปล่อยผ่านเป็นผู้ใช้ที่ไม่มีตัวตน
+      const staleSession = Boolean(session) && !viewer;
+      if (!publicAsset && (staleSession || !localRequestAllowed(request))) {
         // โฮสต์ที่อนุญาตไว้แล้วแต่ยังไม่ล็อกอิน → ให้หน้าล็อกอิน ไม่ใช่กำแพงเปล่า
         if (REMOTE_READY && REMOTE_HOSTS.has(requestUrl.hostname.toLowerCase())) {
           if (requestUrl.pathname.startsWith("/api/")) {
@@ -494,19 +506,18 @@ export async function startLocalServer({ port: requestedPort } = {}) {
         }), request.method);
       }
       const url = requestUrl;
-      // ใครเป็นคนขอ: เครื่องตัวเองถือเป็นเจ้าของเครื่อง ส่วนเครื่องอื่นมาจากคุกกี้เซสชัน
-      // ที่ผ่านการตรวจแล้วข้างบน จึงเชื่อค่าใน session ได้
-      const session = LOCAL_HOSTS.has(url.hostname)
-        ? null
-        : readSession(readCookie(request.headers.get("cookie"), SESSION_COOKIE), SECRET);
-      const viewer = session?.id
-        ? runtime.store.getUser?.(session.id) ?? null
-        : bootstrapOwner;
       let response;
       if (url.pathname.startsWith("/api/")) {
         // local = คำขอมาจากเครื่องที่รัน ClipPang เอง ไม่ใช่ผู้ใช้ที่ล็อกอินจากที่อื่น
         // ใช้แยกสิทธิ์ระดับเครื่อง (เช่นคีย์ใน .env) ออกจากสิทธิ์ระดับบัญชี
-        response = await runtime.api(request, { viewer, local: LOCAL_HOSTS.has(url.hostname) });
+        const apiContext = { viewer, local: LOCAL_HOSTS.has(url.hostname) };
+        response = await runtime.api(request, apiContext);
+        // เปลี่ยนรหัสผ่านแล้วเซสชันเดิมของตัวเองจะใช้ไม่ได้ทันทีเหมือนเครื่องอื่น
+        // ออกคุกกี้ใหม่ให้เครื่องที่กดเปลี่ยน เพื่อไม่ให้เด้งกลับหน้าล็อกอินเอง
+        if (apiContext.reissueSession && viewer) {
+          response = new Response(response.body, response);
+          response.headers.append("set-cookie", sessionCookie(createSession(viewer, SECRET)));
+        }
       }
       else {
         const directAsset = await assetFetch(request);

@@ -161,6 +161,12 @@ export const localApi = {
   deleteUser: (id: string) =>
     apiFetch<{ ok: true; removed: string; orphanedProjects: number }>(`/api/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
   quota: () => apiFetch<LocalQuota>("/api/tts/quota"),
+  account: () => apiFetch<LocalAccount>("/api/account"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiFetch<{ ok: true; signedOutOthers: boolean }>("/api/account/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   settings: () => apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings"),
   updateSettings: (patch: Record<string, unknown>) =>
     apiFetch<{ ok: true; settings: Record<string, unknown> }>("/api/settings", {
@@ -204,6 +210,15 @@ export interface LocalUser {
   projects: number;
   keys: number;
   usedToday: number;
+}
+export interface LocalAccount {
+  ok: true;
+  id: string;
+  username: string;
+  role: "owner" | "member";
+  createdAt: number;
+  passwordChangedAt: number | null;
+  canChangePassword: boolean;
 }
 export interface LocalQuota {
   ok: true;

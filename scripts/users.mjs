@@ -90,7 +90,7 @@ switch (command) {
     }
     const user = requireUser(username);
     store.updateUser(user.id, { passwordHash: hashPassword(password) });
-    console.log(`เปลี่ยนรหัสผ่านของ “${username}” แล้ว — เซสชันเดิมยังใช้ได้จนกว่าจะหมดอายุ`);
+    console.log(`เปลี่ยนรหัสผ่านของ “${username}” แล้ว — เครื่องที่ค้างล็อกอินอยู่ต้องเข้าใหม่ทั้งหมด`);
     break;
   }
 

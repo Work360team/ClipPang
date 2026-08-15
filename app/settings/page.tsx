@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AccountCard } from "./AccountCard";
 import { AiProviderCard } from "./AiProviderCard";
+import { QuotaCard } from "./QuotaCard";
 import { UsersCard } from "./UsersCard";
 import { TtsKeysCard } from "./TtsKeysCard";
 import { ReadinessCard } from "./ReadinessCard";
@@ -155,6 +157,8 @@ export default function SettingsPage() {
 
         <div className="settings-layout">
           <div className="settings-main-column">
+            <AccountCard engineState={engineState} />
+            <QuotaCard engineState={engineState} />
             <ReadinessCard engineState={engineState} />
             <TtsKeysCard engineState={engineState} />
             <AiProviderCard engineState={engineState} />

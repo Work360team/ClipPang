@@ -55,6 +55,8 @@ export function createSession(user, secret) {
     // เก็บทั้ง id และชื่อ: id ใช้ผูกข้อมูล ส่วนชื่อไว้แสดงผลโดยไม่ต้องยิงฐานข้อมูลซ้ำ
     id: typeof user === "string" ? null : user?.id ?? null,
     u: typeof user === "string" ? user : user?.username ?? "",
+    // เวลาที่ออกเซสชัน ใช้เทียบกับเวลาที่เปลี่ยนรหัสล่าสุด เพื่อเตะเครื่องอื่นออก
+    iat: Date.now(),
     exp: Date.now() + SESSION_DAYS * 86_400_000,
   })).toString("base64url");
   return `${payload}.${sign(payload, secret)}`;

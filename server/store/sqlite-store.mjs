@@ -17,7 +17,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const RENDER_KINDS = Object.freeze(["draft", "final"]);
 export const RENDER_LANES = Object.freeze(["ass", "hyperframes"]);
@@ -61,7 +61,8 @@ const SCHEMA_SQL = `
     password_hash  TEXT NOT NULL,
     role           TEXT NOT NULL DEFAULT 'member',
     disabled       INTEGER NOT NULL DEFAULT 0,
-    created_at     INTEGER NOT NULL
+    created_at     INTEGER NOT NULL,
+    password_changed_at INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS projects (
@@ -203,6 +204,7 @@ export function initializeSchema(database) {
     // ต้องมาก่อนสร้างดัชนีที่อ้าง owner_id — ฐานข้อมูลเดิมยังไม่มีคอลัมน์นี้ และ
     // CREATE TABLE IF NOT EXISTS ไม่เพิ่มคอลัมน์ให้ตารางที่มีอยู่แล้ว
     ensureProjectColumns(database);
+    ensureUserColumns(database);
     database.exec(`
       CREATE INDEX IF NOT EXISTS projects_by_owner
         ON projects(owner_id, updated_at DESC)
@@ -228,6 +230,16 @@ export function initializeSchema(database) {
  * โปรเจกต์เก่าจะยังไม่มีเจ้าของ (NULL) จนกว่าจะมีบัญชีแรก แล้ว claimOrphanProjects
  * จะยกให้เจ้าของคนแรก — ทำตอนนั้นแทนที่จะเดาเจ้าของตั้งแต่ตอน migrate
  */
+/** เพิ่มคอลัมน์เวลาที่เปลี่ยนรหัสล่าสุด ให้ฐานข้อมูลที่สร้างก่อนมีฟีเจอร์นี้ */
+function ensureUserColumns(database) {
+  const columns = new Set(
+    database.prepare("PRAGMA table_info(users)").all().map((column) => column.name),
+  );
+  if (!columns.has("password_changed_at")) {
+    database.exec("ALTER TABLE users ADD COLUMN password_changed_at INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
 function ensureProjectColumns(database) {
   const columns = new Set(
     database.prepare("PRAGMA table_info(projects)").all().map((column) => column.name),
@@ -960,8 +972,11 @@ export class SqliteStore {
     const passwordHash = patch.passwordHash ?? user.passwordHash;
     const disabled = patch.disabled == null ? user.disabled : Boolean(patch.disabled);
     const role = patch.role ?? user.role;
-    this.#db().prepare("UPDATE users SET password_hash = ?, disabled = ?, role = ? WHERE id = ?")
-      .run(passwordHash, disabled ? 1 : 0, role, id);
+    // เปลี่ยนรหัส = เซสชันที่ออกก่อนหน้านี้ต้องใช้ไม่ได้ ไม่งั้นคนที่ขโมยเครื่องไป
+    // ยังใช้ต่อได้ทั้งที่เจ้าของเพิ่งเปลี่ยนรหัสหนีอยู่
+    const changedAt = passwordHash !== user.passwordHash ? this.#timestamp() : user.passwordChangedAt;
+    this.#db().prepare("UPDATE users SET password_hash = ?, disabled = ?, role = ?, password_changed_at = ? WHERE id = ?")
+      .run(passwordHash, disabled ? 1 : 0, role, changedAt, id);
     return this.getUser(id);
   }
 
@@ -1310,6 +1325,7 @@ function mapUserRow(row) {
     role: row.role,
     disabled: Boolean(row.disabled),
     createdAt: Number(row.created_at),
+    passwordChangedAt: Number(row.password_changed_at ?? 0),
   };
 }
 
