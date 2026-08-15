@@ -18,6 +18,8 @@ ClipPang เปลี่ยนคลิปสินค้าดิบหลา�
 
 ต้องมี [Node.js](https://nodejs.org/) 22.13 ขึ้นไปอย่างเดียวก่อนเริ่ม ส่วน FFmpeg ติดตั้งจากหน้า Setup ของ ClipPang ได้
 
+โหลดตัวโปรแกรมจาก [Work360team/ClipPang](https://github.com/Work360team/ClipPang) — กด **Code → Download ZIP** แล้วแตกไฟล์ หรือ `git clone https://github.com/Work360team/ClipPang.git` ถ้าอยากอัปเดตด้วย `git pull` ทีหลัง
+
 ### Windows
 
 ดับเบิลคลิก `เริ่มโปรแกรม.bat`

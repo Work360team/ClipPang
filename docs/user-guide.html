@@ -34,7 +34,7 @@ h2{font-size:clamp(24px,3.5vw,34px);font-weight:700;line-height:1.3}
 h3{font-size:20px;font-weight:600}
 p{margin:0 0 16px}
 a{color:var(--navy)}
-code{font-family:var(--mono);font-size:.88em;background:var(--navy-l);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--ink2)}
+code{font-family:var(--mono);font-size:.88em;background:var(--navy-l);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--ink2);overflow-wrap:anywhere;word-break:break-word}
 .wrap{max-width:900px;margin:0 auto;padding:0 24px}
 .sec{padding:64px 0}
 .sec-label{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--muted);margin-bottom:10px}
@@ -270,8 +270,21 @@ td code{white-space:nowrap}
       <div class="step">
         <div class="sl"><div class="sn">2</div><div class="sl-line"></div></div>
         <div class="sb">
-          <div class="stit">วางโฟลเดอร์ ClipPang ไว้ที่ที่จำได้</div>
-          <div class="sdesc">แตกไฟล์โปรแกรมไว้ที่ไหนก็ได้ที่คุณมีสิทธิ์เขียนไฟล์ เช่น <code>D:\ClipPang</code> หรือใน Documents</div>
+          <div class="stit">โหลดไฟล์โปรแกรมจาก GitHub</div>
+          <div class="sdesc">ตัวโปรแกรมอยู่ที่ <a href="https://github.com/Work360team/ClipPang" target="_blank" rel="noopener">github.com/Work360team/ClipPang</a> โหลดได้สองวิธี เลือกอย่างใดอย่างหนึ่ง</div>
+          <ul class="sli">
+            <li><b>วิธีง่ายที่สุด — โหลดเป็นไฟล์ ZIP</b> กดปุ่มเขียว <b>Code</b> บนหน้า GitHub แล้วเลือก <b>Download ZIP</b> หรือกด <a href="https://github.com/Work360team/ClipPang/archive/refs/heads/main.zip">ลิงก์นี้</a> ได้เลย จากนั้นแตกไฟล์ออกมา</li>
+            <li><b>ถ้าใช้ git เป็น</b> สั่ง <code>git clone https://github.com/Work360team/ClipPang.git</code> วิธีนี้อัปเดตเวอร์ชันใหม่ทีหลังได้ด้วยคำสั่งเดียว</li>
+          </ul>
+          <div class="tip"><span>📦</span><span>โฟลเดอร์ที่แตกจาก ZIP จะชื่อ <code>ClipPang-main</code> เปลี่ยนชื่อเป็น <code>ClipPang</code> เฉย ๆ ก็ได้ ไม่มีผลอะไร</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">3</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">วางโฟลเดอร์ไว้ที่ที่จำได้</div>
+          <div class="sdesc">ย้ายโฟลเดอร์ที่แตกออกมาไปไว้ที่ไหนก็ได้ที่คุณมีสิทธิ์เขียนไฟล์ เช่น <code>D:\ClipPang</code> หรือใน Documents</div>
           <ul class="sli">
             <li>อย่าวางไว้ใน Program Files หรือโฟลเดอร์ระบบ เพราะโปรแกรมต้องเขียนไฟล์ผลลัพธ์ลงในโฟลเดอร์ตัวเอง</li>
             <li>ถ้าวางไว้บน OneDrive/Google Drive ที่ซิงก์ตลอด อาจช้าและชนกันได้ แนะนำให้วางในไดรฟ์ปกติ</li>
@@ -280,7 +293,7 @@ td code{white-space:nowrap}
       </div>
 
       <div class="step">
-        <div class="sl"><div class="sn">3</div><div class="sl-line"></div></div>
+        <div class="sl"><div class="sn">4</div><div class="sl-line"></div></div>
         <div class="sb">
           <div class="stit">เปิดโปรแกรม</div>
           <div class="sdesc">เลือกตามระบบปฏิบัติการที่ใช้</div>
@@ -313,7 +326,7 @@ td code{white-space:nowrap}
       </div>
 
       <div class="step">
-        <div class="sl"><div class="sn">4</div></div>
+        <div class="sl"><div class="sn">5</div></div>
         <div class="sb">
           <div class="stit">อย่าปิดหน้าต่างดำ</div>
           <div class="sdesc">หน้าต่างสีดำที่เด้งขึ้นมาคือตัวโปรแกรมเอง ถ้าปิดหน้าต่างนั้น เว็บจะใช้ไม่ได้ทันที ให้ย่อเก็บไว้แทน</div>
@@ -321,6 +334,10 @@ td code{white-space:nowrap}
         </div>
       </div>
     </div>
+      <div class="callout callout-navy" style="margin-top:28px"><b>อัปเดตเป็นเวอร์ชันใหม่ทีหลัง</b>
+        ถ้าโหลดมาเป็น ZIP ให้โหลดใหม่แล้วเอาไฟล์ทับของเดิม — โฟลเดอร์ <code>data/</code>, <code>input/</code>,
+        <code>projects/</code> และไฟล์ <code>.env</code> เป็นของคุณ ไม่มีอยู่ในไฟล์ที่โหลดมา จึงไม่ถูกทับ
+        · ถ้าใช้ git ให้สั่ง <code>git pull</code> ในโฟลเดอร์นั้น แล้วเปิดโปรแกรมตามปกติ ตัวเปิดโปรแกรมจะ build ใหม่ให้เอง</div>
   </div>
 </section>
 

@@ -547,6 +547,21 @@ pre .v { color: #90C8E8; }
 .key-hint { text-align: center; margin-top: 12px; font-size: 11px; color: var(--ink-faint); }
 .key { display: inline-block; border: 1px solid var(--line); border-radius: 4px; background: var(--paper-2); padding: 1px 5px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; margin: 0 2px; }
 
+/* inline code — เทมเพลตมี pre กับ .key แต่ไม่มีของสำหรับคำสั่งสั้น ๆ กลางประโยค
+   overflow-wrap จำเป็น เพราะคำสั่งอย่าง git clone พร้อม URL เต็มยาวกว่าจอมือถือ
+   ถ้าไม่ให้ตัดบรรทัดมันจะดันทั้งหน้าให้กว้างกว่าจอ */
+code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .88em;
+  background: var(--paper-3);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    MOBILE — this block MUST stay the LAST rules in <style>, after
    every desktop rule above. Its selectors (.content, .card, .stat...)
@@ -831,9 +846,10 @@ pre .v { color: #90C8E8; }
       <h3>ขั้นตอนติดตั้ง</h3>
       <div class="steps">
         <div class="step"><div class="step-badge">1</div><div class="step-body"><h4>ลง Node.js ก่อน</h4><p>เข้า nodejs.org โหลดตัว LTS แล้วติดตั้งตามปกติ เช็กว่าสำเร็จได้ด้วยการเปิด Terminal หรือ Command Prompt แล้วพิมพ์ <code>node -v</code> ถ้าขึ้นเลข 22 ขึ้นไปคือใช้ได้</p></div></div>
-        <div class="step"><div class="step-badge">2</div><div class="step-body"><h4>วางโฟลเดอร์ ClipPang ไว้ที่ที่จำได้</h4><p>เช่น <code>D:\ClipPang</code> หรือใน Documents — อย่าวางใน Program Files หรือโฟลเดอร์ระบบ เพราะโปรแกรมต้องเขียนไฟล์ผลลัพธ์ลงในโฟลเดอร์ตัวเอง และอย่าวางบนโฟลเดอร์ที่ซิงก์คลาวด์ตลอดเวลา</p></div></div>
-        <div class="step"><div class="step-badge">3</div><div class="step-body"><h4>เปิดโปรแกรมตามระบบที่ใช้</h4><p>Windows ดับเบิลคลิก <code>เริ่มโปรแกรม.bat</code> · macOS ครั้งแรกรัน <code>chmod +x start.command start.sh</code> แล้ว <code>./start.command</code> จากนั้นดับเบิลคลิกได้เลย · Linux รัน <code>chmod +x start.sh</code> แล้ว <code>./start.sh</code></p></div></div>
-        <div class="step"><div class="step-badge">4</div><div class="step-body"><h4>อย่าปิดหน้าต่างดำ</h4><p>หน้าต่างสีดำที่เด้งขึ้นมาคือตัวโปรแกรมเอง ปิดเมื่อไหร่เว็บใช้ไม่ได้ทันที ให้ย่อเก็บไว้ — เลิกใช้งานค่อยปิดเพื่อปิดโปรแกรม</p></div></div>
+        <div class="step"><div class="step-badge">2</div><div class="step-body"><h4>โหลดไฟล์โปรแกรมจาก GitHub</h4><p>ตัวโปรแกรมอยู่ที่ <a href="https://github.com/Work360team/ClipPang" target="_blank" rel="noopener">github.com/Work360team/ClipPang</a> — กดปุ่มเขียว <strong>Code → Download ZIP</strong> แล้วแตกไฟล์ หรือถ้าใช้ git เป็นก็สั่ง <code>git clone https://github.com/Work360team/ClipPang.git</code> ซึ่งอัปเดตทีหลังง่ายกว่าด้วย <code>git pull</code></p></div></div>
+        <div class="step"><div class="step-badge">3</div><div class="step-body"><h4>วางโฟลเดอร์ไว้ที่ที่จำได้</h4><p>โฟลเดอร์จาก ZIP จะชื่อ <code>ClipPang-main</code> เปลี่ยนชื่อได้ตามใจ แล้วย้ายไปไว้เช่น <code>D:\ClipPang</code> หรือใน Documents — อย่าวางใน Program Files หรือโฟลเดอร์ระบบ เพราะโปรแกรมต้องเขียนไฟล์ผลลัพธ์ลงในโฟลเดอร์ตัวเอง และอย่าวางบนโฟลเดอร์ที่ซิงก์คลาวด์ตลอดเวลา</p></div></div>
+        <div class="step"><div class="step-badge">4</div><div class="step-body"><h4>เปิดโปรแกรมตามระบบที่ใช้</h4><p>Windows ดับเบิลคลิก <code>เริ่มโปรแกรม.bat</code> · macOS ครั้งแรกรัน <code>chmod +x start.command start.sh</code> แล้ว <code>./start.command</code> จากนั้นดับเบิลคลิกได้เลย · Linux รัน <code>chmod +x start.sh</code> แล้ว <code>./start.sh</code></p></div></div>
+        <div class="step"><div class="step-badge">5</div><div class="step-body"><h4>อย่าปิดหน้าต่างดำ</h4><p>หน้าต่างสีดำที่เด้งขึ้นมาคือตัวโปรแกรมเอง ปิดเมื่อไหร่เว็บใช้ไม่ได้ทันที ให้ย่อเก็บไว้ — เลิกใช้งานค่อยปิดเพื่อปิดโปรแกรม</p></div></div>
       </div>
 
       <pre><span class="c"># ครั้งแรกจะช้าหน่อย เพราะต้องโหลดส่วนประกอบ (ราว 3-10 นาทีแล้วแต่เน็ต)</span>
