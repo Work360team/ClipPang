@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ทำคลิปปักตะกร้าด้วย ClipPang — คอร์สออนไลน์ | Skill360</title>
+<script>
+(function () {
+  function isDarkHour() {
+    var h = new Date().getHours();
+    return h >= 18 || h < 6;
+  }
+  var override = localStorage.getItem('theme-override');
+  var theme = (override === 'light' || override === 'dark') ? override : (isDarkHour() ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+</script>
+<link rel="icon" type="image/png" href="https://skill360.co/Dark-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sarabun:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — do not restructure. Only :root color values may be
+   tuned per-course (e.g. a different --accent hue); everything else
+   (variable names, cascade order, media query position) must stay
+   exactly as-is. See SKILL.md "Rules you must not break".
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Variables ── */
+:root {
+  --paper: #FAFAF8;
+  --paper-2: #F3EFE8;
+  --paper-3: #EAE5DC;
+  --ink: #1E1C19;
+  --ink-soft: #55524A;
+  --ink-faint: #908C84;
+  --line: #E2DDD5;
+  --accent: #1A6856;
+  --accent-hover: #1F7D65;
+  --accent-soft: #EAF2EE;
+  --accent-dim: #0E4234;
+  --gold: #B88A30;
+  --gold-soft: #FBF4E3;
+  --rust: #B8562E;
+  --rust-soft: #FBEEE8;
+  --surface: #fff;
+  --topbar-bg: rgba(250,250,248,.97);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
+  --r: 12px;
+}
+
+html[data-theme="dark"] {
+  --paper: #15191B;
+  --paper-2: #1C2123;
+  --paper-3: #262B2D;
+  --ink: #EDEEEA;
+  --ink-soft: #AEB3AE;
+  --ink-faint: #767C7A;
+  --line: #2C3234;
+  --accent: #35C99B;
+  --accent-hover: #45D6A8;
+  --accent-soft: rgba(53,201,155,.14);
+  --accent-dim: #7FE0BC;
+  --gold: #E0B24F;
+  --gold-soft: rgba(224,178,79,.14);
+  --rust: #E38A66;
+  --rust-soft: rgba(227,138,102,.14);
+  --surface: #242A2D;
+  --topbar-bg: rgba(21,25,27,.92);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.35), 0 4px 12px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 20px rgba(0,0,0,.45), 0 1px 4px rgba(0,0,0,.3);
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body,
+.sidebar, .content, .card, .stat, .compare, .cmp-head > div, .callout,
+.pitfall, .step, .sum-item, pre, .completion, .next-cta, .ex-row,
+.loop-diagram, .ld-node, .topbar, .burger, .theme-toggle {
+  transition: background-color .4s ease, border-color .4s ease, color .4s ease, box-shadow .4s ease;
+}
+body {
+  font-family: 'IBM Plex Sans Thai', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ── */
+.wrap { display: flex; max-width: 1280px; margin: 0 auto; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 272px;
+  flex-shrink: 0;
+  background: var(--paper-2);
+  border-right: 1px solid var(--line);
+  padding: 28px 16px 48px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+
+.sb-brand { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.sb-brand img { height: 28px; width: auto; display: block; }
+/* Logo swaps with theme: dark wordmark on light background, light wordmark on dark background */
+.sb-brand .logo-light { display: block; }
+.sb-brand .logo-dark { display: none; }
+html[data-theme="dark"] .sb-brand .logo-light { display: none; }
+html[data-theme="dark"] .sb-brand .logo-dark { display: block; }
+.sb-sub {
+  font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--ink-faint); margin-top: 8px; font-weight: 500;
+}
+
+.nav-section { margin-bottom: 4px; }
+.nav-group-label {
+  font-size: 9.5px; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 600;
+  padding: 12px 10px 5px;
+}
+.nav a {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: 8px;
+  color: var(--ink-soft); text-decoration: none;
+  font-size: 13.5px; font-weight: 400;
+  transition: background .15s, color .15s;
+  margin-bottom: 1px;
+}
+.nav a:hover { background: var(--paper-3); color: var(--ink); }
+.nav a.active {
+  background: var(--accent-soft);
+  color: var(--accent-dim);
+  font-weight: 600;
+}
+.nav a .n {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px; color: var(--ink-faint); flex-shrink: 0; width: 20px;
+}
+.nav a.active .n { color: var(--accent); }
+.nav a .ck {
+  margin-left: auto; width: 15px; height: 15px; border-radius: 50%;
+  border: 1.5px solid var(--line); flex-shrink: 0;
+  display: grid; place-items: center; font-size: 8px; color: #fff;
+  transition: .2s;
+}
+.nav a.done .ck { background: var(--accent); border-color: var(--accent); }
+.nav a.done .ck::after { content: '✓'; }
+
+/* Progress */
+.sb-progress { margin-top: auto; padding-top: 20px; }
+.sb-prow {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--ink-faint); margin-bottom: 7px;
+}
+.sb-pct { font-weight: 700; color: var(--accent); font-size: 12px; }
+.sb-track { height: 5px; background: var(--paper-3); border-radius: 99px; overflow: hidden; }
+.sb-fill {
+  height: 100%; width: 10%;
+  background: linear-gradient(90deg, var(--accent), #3BA98A);
+  border-radius: 99px;
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── Theme toggle — floating action button, bottom-right, all breakpoints ── */
+.theme-toggle {
+  position: fixed; bottom: 20px; right: 20px; z-index: 50;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+  background: var(--paper); border: 1px solid var(--line);
+  color: var(--ink-soft); cursor: pointer;
+  box-shadow: var(--shadow-md); transition: .15s;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent-dim); background: var(--accent-soft); transform: translateY(-1px); }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+html[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+html[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+/* ── Mobile topbar ── */
+.topbar { display: none; }
+
+/* ── Content ── */
+.content { flex: 1; min-width: 0; padding: 52px 58px 120px; max-width: 840px; }
+
+/* ── Sections ── */
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── Typography ── */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 4px 12px; border-radius: 99px;
+  margin-bottom: 4px; font-weight: 600;
+  border: 1px solid rgba(26,104,86,.15);
+}
+.read-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--ink-faint);
+  background: var(--paper-2); border: 1px solid var(--line);
+  padding: 3px 10px; border-radius: 99px;
+  margin-left: 6px; margin-bottom: 4px;
+}
+.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0; margin-bottom: 16px; }
+h1 {
+  font-family: 'Sarabun', sans-serif; font-weight: 800;
+  font-size: 40px; line-height: 1.15; letter-spacing: -.4px;
+  width: 100%; margin-top: 10px;
+}
+h2 {
+  font-family: 'Sarabun', sans-serif; font-weight: 700;
+  font-size: 24px; line-height: 1.3;
+  margin: 48px 0 14px; color: var(--ink);
+  display: flex; align-items: center; gap: 10px;
+}
+h2::before {
+  content: ''; display: block; width: 4px; height: 22px;
+  background: var(--accent); border-radius: 3px; flex-shrink: 0;
+}
+h3 {
+  font-family: 'Sarabun', sans-serif; font-weight: 700;
+  font-size: 17px; margin: 28px 0 9px; color: var(--ink);
+}
+p { margin-bottom: 14px; color: var(--ink-soft); line-height: 1.82; }
+.lead { font-size: 17.5px; color: var(--ink); line-height: 1.72; margin-bottom: 22px; }
+strong { color: var(--ink); font-weight: 600; }
+ul, ol { margin: 0 0 16px; padding-left: 22px; color: var(--ink-soft); }
+li { margin-bottom: 8px; }
+li::marker { color: var(--accent); }
+
+/* ── Hero stats ── */
+.stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 22px 0 30px; }
+.stat {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--r); box-shadow: var(--shadow-xs);
+}
+.stat-num {
+  font-family: 'Sarabun', sans-serif; font-weight: 800;
+  font-size: 24px; color: var(--accent); line-height: 1;
+}
+.stat-lbl { font-size: 11.5px; color: var(--ink-faint); line-height: 1.4; }
+
+/* ── Cards ── */
+.grid { display: grid; gap: 12px; margin: 20px 0; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.card {
+  border: 1px solid var(--line); border-radius: var(--r);
+  padding: 18px 20px; background: var(--surface); box-shadow: var(--shadow-xs);
+  transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(26,104,86,.2);
+}
+.card h4 {
+  font-weight: 700; font-size: 15px; margin-bottom: 6px;
+  display: flex; align-items: flex-start; gap: 9px; color: var(--ink);
+}
+.card p { font-size: 13.5px; margin: 0; color: var(--ink-soft); }
+.card .note { font-size: 12.5px; color: var(--ink-faint); margin-top: 8px; margin-bottom: 0; border-top: 1px dashed var(--line); padding-top: 8px; }
+
+/* Chip */
+.chip {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+  width: 26px; height: 26px; border-radius: 7px;
+  background: var(--accent); color: #fff;
+  display: grid; place-items: center; flex-shrink: 0; font-weight: 700;
+}
+.chip.lg { width: 34px; height: 34px; font-size: 18px; font-weight: 800; border-radius: 9px; }
+.chip.gold { background: var(--gold); }
+.chip.rust { background: var(--rust); }
+
+/* Callout */
+.callout {
+  padding: 15px 18px; border-radius: 0 var(--r) var(--r) 0;
+  margin: 22px 0; border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+.callout.gold { border-left-color: var(--gold); background: var(--gold-soft); }
+.callout.rust { border-left-color: var(--rust); background: var(--rust-soft); }
+.callout .ct { font-weight: 700; font-size: 13.5px; color: var(--ink); margin-bottom: 5px; }
+.callout p { margin: 0; font-size: 14px; }
+
+/* ── Compare table ── */
+.compare { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin: 20px 0; box-shadow: var(--shadow-xs); }
+.cmp-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; }
+.cmp-head > div { padding: 12px 16px; font-weight: 700; font-size: 12.5px; background: var(--paper-2); }
+.cmp-head > div:nth-child(2) { background: var(--rust-soft); color: var(--rust); }
+.cmp-head > div:nth-child(3) { background: var(--accent-soft); color: var(--accent-dim); }
+.cmp-row { border-top: 1px solid var(--line); }
+.cmp-row > div { padding: 11px 16px; font-size: 13.5px; color: var(--ink-soft); }
+.cmp-row > div:first-child { font-weight: 600; color: var(--ink); background: var(--paper); }
+
+/* ── Loop diagram (2×2, optional component) ── */
+.loop-diagram {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr auto 1fr;
+  gap: 0;
+  place-items: center;
+  margin: 28px 0;
+  padding: 28px 20px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.ld-node {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: var(--surface);
+  text-align: center;
+  box-shadow: var(--shadow-xs);
+  min-width: 120px;
+  transition: border-color .3s, box-shadow .3s, transform .3s;
+  cursor: default;
+}
+.ld-node.lit {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+  transform: scale(1.04);
+}
+.ld-node .ico { font-size: 22px; margin-bottom: 4px; }
+.ld-node .en { font-weight: 700; font-size: 14px; color: var(--ink); }
+.ld-node .th { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+
+.ld-arr {
+  font-size: 20px; color: var(--accent); font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 6px 10px; line-height: 1; user-select: none;
+}
+.ld-center {
+  grid-column: 2; grid-row: 2;
+  width: 68px; height: 68px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Sarabun', sans-serif; font-weight: 800; font-size: 14px;
+  box-shadow: 0 0 0 6px var(--accent-soft), var(--shadow-md);
+  letter-spacing: .5px;
+}
+.ld-n-top { grid-column: 1; grid-row: 1; }
+.ld-arr-r1 { grid-column: 2; grid-row: 1; }
+.ld-n-right { grid-column: 3; grid-row: 1; }
+.ld-arr-l { grid-column: 1; grid-row: 2; display: flex; justify-content: flex-end; padding-right: 10px; }
+.ld-arr-r { grid-column: 3; grid-row: 2; display: flex; justify-content: flex-start; padding-left: 10px; }
+.ld-n-left { grid-column: 1; grid-row: 3; }
+.ld-arr-r3 { grid-column: 2; grid-row: 3; }
+.ld-n-bottom { grid-column: 3; grid-row: 3; }
+
+/* ── Ladder ── */
+.ladder { margin: 24px 0; }
+.ladder-item {
+  display: flex; gap: 18px;
+  padding: 18px 0; border-bottom: 1px dashed var(--line);
+}
+.ladder-item:last-child { border-bottom: none; }
+.l-stage { flex-shrink: 0; width: 100px; }
+.l-tag {
+  font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 12px;
+  color: #fff; padding: 5px 11px; border-radius: 7px; display: inline-block;
+}
+.l-num { font-size: 10px; color: var(--ink-faint); margin-top: 7px; font-family: 'IBM Plex Mono', monospace; }
+.l-body h4 { font-weight: 700; font-size: 15.5px; margin-bottom: 4px; color: var(--ink); }
+.l-body p { font-size: 13.5px; margin: 0 0 6px; color: var(--ink-soft); }
+.l-ex {
+  font-size: 11.5px; font-family: 'IBM Plex Mono', monospace;
+  background: var(--paper-2); border: 1px solid var(--line);
+  color: var(--ink-faint); padding: 3px 9px; border-radius: 5px;
+  display: inline-block;
+}
+.lc-1 { background: #7A7668; }
+.lc-2 { background: var(--gold); }
+.lc-3 { background: var(--rust); }
+.lc-4 { background: var(--accent); }
+.lc-5 { background: var(--accent-dim); }
+
+/* ── Framework / acronym cards ── */
+.loop-card { position: relative; overflow: hidden; }
+.loop-bg-letter {
+  position: absolute; top: 8px; right: 12px;
+  font-family: 'Sarabun', sans-serif; font-weight: 800;
+  font-size: 56px; color: var(--accent); opacity: .07; line-height: 1;
+  pointer-events: none; user-select: none;
+}
+
+/* ── Step blocks ── */
+.steps { display: flex; flex-direction: column; gap: 12px; margin: 20px 0; }
+.step {
+  display: flex; gap: 16px; align-items: flex-start;
+  padding: 16px 18px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow-xs);
+}
+.step-badge {
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: grid; place-items: center;
+  font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 14px;
+}
+.step-body h4 { font-weight: 700; font-size: 14.5px; margin-bottom: 3px; color: var(--ink); }
+.step-body p { font-size: 13.5px; margin: 0; color: var(--ink-soft); }
+
+/* ── Code block ── */
+pre {
+  background: #1A2820; color: #D0EAE0;
+  border-radius: 10px; padding: 18px 20px;
+  overflow-x: auto; margin: 16px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px; line-height: 1.78;
+  border: 1px solid rgba(255,255,255,.05);
+  position: relative;
+}
+.pre-tag {
+  position: absolute; top: 8px; right: 12px;
+  font-size: 9.5px; color: rgba(255,255,255,.22);
+  letter-spacing: 1px; text-transform: uppercase;
+}
+pre .c { color: #4A7060; }
+pre .k { color: #6EC9A0; }
+pre .s { color: #D9B060; }
+pre .v { color: #90C8E8; }
+
+/* ── Examples table ── */
+.ex-table { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin: 20px 0; box-shadow: var(--shadow-xs); }
+.ex-head { display: grid; grid-template-columns: 32px 1fr 1.7fr; background: var(--paper-2); border-bottom: 1px solid var(--line); }
+.ex-head > div { padding: 10px 13px; font-weight: 700; font-size: 12px; color: var(--ink-faint); }
+.ex-row { display: grid; grid-template-columns: 32px 1fr 1.7fr; border-top: 1px solid var(--line); transition: background .12s; }
+.ex-row:hover { background: var(--accent-soft); }
+.ex-row > div { padding: 11px 13px; font-size: 13px; }
+.ex-i { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 11px; color: var(--accent); background: var(--paper-2); display: flex; align-items: center; justify-content: center; }
+.ex-task { font-weight: 600; color: var(--ink); }
+.ex-cat { display: inline-block; font-size: 10px; font-family: 'IBM Plex Mono', monospace; background: var(--paper-3); color: var(--ink-faint); padding: 2px 7px; border-radius: 4px; margin-bottom: 3px; }
+.ex-loop { color: var(--ink-soft); font-size: 12.5px; line-height: 1.6; }
+
+/* ── Pitfall cards ── */
+.pitfall {
+  position: relative; padding: 16px 18px 16px 22px;
+  border: 1px solid rgba(184,86,46,.18); border-radius: var(--r);
+  background: var(--surface); margin-bottom: 10px; overflow: hidden;
+}
+.pitfall::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--rust);
+}
+.pitfall h4 { font-weight: 700; font-size: 14.5px; color: var(--rust); margin-bottom: 5px; }
+.pitfall p { font-size: 13.5px; margin: 0 0 8px; color: var(--ink-soft); }
+.fix-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent-dim);
+  padding: 4px 10px; border-radius: 6px;
+}
+
+/* ── Summary items ── */
+.sum-list { display: flex; flex-direction: column; gap: 9px; margin: 20px 0; }
+.sum-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 16px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow-xs);
+}
+.sum-ico {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--accent-soft); display: grid; place-items: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.sum-item p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+
+/* ── Completion card ── */
+.completion {
+  margin: 24px 0; padding: 30px; border-radius: var(--r);
+  background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+  text-align: center; box-shadow: var(--shadow-md); position: relative; overflow: hidden;
+}
+.completion::after {
+  content: ''; position: absolute;
+  width: 260px; height: 260px; border-radius: 50%;
+  background: rgba(255,255,255,.05);
+  top: -80px; right: -60px; pointer-events: none;
+}
+.completion .em { font-size: 36px; margin-bottom: 10px; }
+.completion h3 { font-family: 'Sarabun', sans-serif; font-weight: 800; font-size: 22px; color: #fff; margin-bottom: 8px; }
+.completion p { color: rgba(255,255,255,.72); font-size: 14px; margin: 0 auto; max-width: 480px; }
+
+/* ── Next course ── */
+.next-cta {
+  margin-top: 20px; padding: 26px 28px;
+  border-radius: var(--r); background: var(--ink); color: var(--paper);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 22px; box-shadow: var(--shadow-md); flex-wrap: wrap;
+  position: relative; overflow: hidden;
+}
+.next-cta::before {
+  content: ''; position: absolute; width: 320px; height: 320px; border-radius: 50%;
+  background: rgba(26,104,86,.15); top: -120px; right: -80px; pointer-events: none;
+}
+.nc-eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 7px; }
+.next-cta h4 { font-family: 'Sarabun', sans-serif; font-weight: 800; font-size: 20px; color: #fff; margin-bottom: 6px; }
+.next-cta p { color: rgba(220,216,208,.75); font-size: 13.5px; margin: 0; max-width: 480px; }
+.nc-btn {
+  flex-shrink: 0; background: var(--accent); color: #fff;
+  text-decoration: none; font-weight: 700; font-size: 14px;
+  padding: 13px 24px; border-radius: 9px;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: .18s; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(26,104,86,.4);
+}
+.nc-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.nc-arr { transition: transform .18s; }
+.nc-btn:hover .nc-arr { transform: translateX(4px); }
+
+/* ── Pager ── */
+.pager {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line);
+}
+.pager button {
+  font-family: inherit; border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink); padding: 12px 18px; border-radius: 10px; cursor: pointer;
+  font-size: 13.5px; transition: .15s; box-shadow: var(--shadow-xs);
+  max-width: 48%; text-align: left;
+}
+.pager button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-dim); background: var(--accent-soft); }
+.pager button:disabled { opacity: .32; cursor: default; }
+.pager button small { display: block; font-size: 10px; color: var(--ink-faint); margin-bottom: 2px; text-transform: uppercase; letter-spacing: .8px; font-weight: 500; }
+.pager .pg-next { text-align: right; }
+.key-hint { text-align: center; margin-top: 12px; font-size: 11px; color: var(--ink-faint); }
+.key { display: inline-block; border: 1px solid var(--line); border-radius: 4px; background: var(--paper-2); padding: 1px 5px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; margin: 0 2px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   MOBILE — this block MUST stay the LAST rules in <style>, after
+   every desktop rule above. Its selectors (.content, .card, .stat...)
+   have the same specificity as the desktop versions, so whichever
+   block is written later in the file wins the cascade. If you ever
+   add new desktop CSS, add it ABOVE this comment, never below.
+   ══════════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed; left: 0; top: 0; z-index: 40;
+    transform: translateX(-110%);
+    transition: transform .26s cubic-bezier(.4,0,.2,1);
+    box-shadow: var(--shadow-md);
+    width: 272px; height: 100vh;
+  }
+  .sidebar.open { transform: none; }
+
+  .content { padding: 86px 22px 100px; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 10px;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+    height: 58px; padding: 0 16px;
+    background: var(--topbar-bg); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .burger {
+    width: 36px; height: 36px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--paper-2);
+    display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+  }
+  .burger-lines { display: flex; flex-direction: column; gap: 4px; }
+  .burger-lines span { display: block; width: 14px; height: 1.5px; background: var(--ink-soft); border-radius: 2px; }
+  .topbar .tb-title { font-weight: 700; font-size: 14px; color: var(--ink); }
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(30,28,25,.45); z-index: 35; backdrop-filter: blur(2px);
+  }
+  .overlay.show { display: block; }
+
+  h1 { font-size: 27px !important; line-height: 1.2 !important; margin-top: 8px !important; }
+  h2 { font-size: 20px !important; margin-top: 36px !important; }
+  h3 { font-size: 16px !important; }
+  .lead { font-size: 15.5px !important; }
+  .title-row { margin-bottom: 10px; }
+
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { padding: 12px 14px; }
+  .stat-num { font-size: 22px; }
+
+  .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
+  .card { padding: 16px 18px; }
+  .card h4 { font-size: 14.5px; }
+
+  .cmp-grid { display: block !important; }
+  .cmp-head { display: none !important; }
+  .cmp-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    border-top: 1px solid var(--line);
+  }
+  .cmp-row > div:first-child {
+    font-size: 11px; color: var(--ink-faint); font-weight: 500;
+    background: var(--paper-2); grid-column: 1 / -1;
+    padding: 6px 14px; border-bottom: 1px dashed var(--line);
+    text-transform: uppercase; letter-spacing: .8px;
+  }
+  .cmp-row > div:nth-child(2) { border-right: 1px solid var(--line); font-size: 12.5px; padding: 10px 12px; }
+  .cmp-row > div:nth-child(3) { font-size: 12.5px; padding: 10px 12px; }
+
+  .loop-diagram {
+    padding: 18px 6px; gap: 0;
+    overflow: hidden;
+  }
+  .ld-node {
+    min-width: 0; width: 100%;
+    padding: 9px 8px;
+    border-radius: 10px;
+  }
+  .ld-node .ico { font-size: 18px; margin-bottom: 2px; }
+  .ld-node .en { font-size: 12px; }
+  .ld-node .th { font-size: 10px; margin-top: 1px; }
+  .ld-center {
+    width: 52px; height: 52px; font-size: 11px;
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+  .ld-arr { font-size: 15px; padding: 3px 4px; }
+  .ld-arr-l { padding-right: 6px; }
+  .ld-arr-r { padding-left: 6px; }
+
+  .ex-head { grid-template-columns: 28px 1fr !important; }
+  .ex-head > div:last-child { display: none; }
+  .ex-row { grid-template-columns: 28px 1fr !important; }
+  .ex-row > div:last-child {
+    grid-column: 1 / -1;
+    background: var(--paper-2); font-size: 12px; padding: 8px 13px;
+    border-top: 1px dashed var(--line); color: var(--ink-soft);
+  }
+
+  .ladder-item { flex-direction: column; gap: 8px; }
+  .l-stage { width: auto; display: flex; align-items: center; gap: 10px; }
+  .l-num { margin: 0; }
+
+  .pitfall { padding: 14px 16px 14px 20px; }
+  .fix-tag { font-size: 11.5px; }
+
+  .step { padding: 14px 16px; gap: 12px; }
+  .step-badge { width: 32px; height: 32px; font-size: 13px; }
+
+  .sum-item { padding: 12px 14px; }
+
+  .pager { flex-direction: column; gap: 10px; }
+  .pager button { max-width: 100%; width: 100%; }
+  .pager .pg-next { text-align: left; }
+
+  .next-cta { flex-direction: column; padding: 22px; }
+  .nc-btn { width: 100%; justify-content: center; }
+
+  .completion { padding: 24px 20px; }
+  .completion h3 { font-size: 19px; }
+
+  pre { font-size: 11.5px; padding: 15px 16px; }
+}
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="สลับโหมดสว่าง/มืด" title="สลับโหมดสว่าง/มืด">
+  <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+  <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+</button>
+
+<div class="topbar">
+  <button class="burger" onclick="toggleNav()">
+    <div class="burger-lines"><span></span><span></span><span></span></div>
+  </button>
+  <div class="tb-title">ทำคลิปปักตะกร้าด้วย ClipPang</div>
+</div>
+<div class="overlay" id="overlay" onclick="toggleNav()"></div>
+
+<div class="wrap">
+  <!-- ═══ SIDEBAR ═══
+       One <div class="nav-section"> per phase/group label. Inside each,
+       one <a data-s="N"> per lesson, N = 0-based index matching the
+       .section order below AND the `titles` array in the script.
+       data-s values must be contiguous 0..last with no gaps or repeats. -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <img class="logo-light" src="https://skill360.co/Dark-text.png" alt="Skill360" style="height:32px;">
+      <img class="logo-dark" src="https://skill360.co/Light-text.png" alt="Skill360" style="height:32px;">
+      <div class="sb-sub">คอร์สออนไลน์</div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-section">
+        <div class="nav-group-label">เริ่มต้น</div>
+        <a data-s="0" class="active"><span class="n">00</span>ภาพรวมคอร์ส<span class="ck"></span></a>
+        <a data-s="1"><span class="n">01</span>ClipPang คืออะไร<span class="ck"></span></a>
+        <a data-s="2"><span class="n">02</span>เตรียมเครื่องและติดตั้ง<span class="ck"></span></a>
+        <a data-s="3"><span class="n">03</span>ตั้งค่าครั้งแรก<span class="ck"></span></a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-group-label">ลงมือทำ</div>
+        <a data-s="4"><span class="n">04</span>ขั้นที่ 1 · คลิปและ Timeline<span class="ck"></span></a>
+        <a data-s="5"><span class="n">05</span>ขั้นที่ 2–3 · สินค้าและเสียง<span class="ck"></span></a>
+        <a data-s="6"><span class="n">06</span>ขั้นที่ 4–5 · ซับและสร้างคลิป<span class="ck"></span></a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-group-label">ใช้จริงให้คุ้ม</div>
+        <a data-s="7"><span class="n">07</span>โควตาและค่าใช้จ่าย<span class="ck"></span></a>
+        <a data-s="8"><span class="n">08</span>ใช้จากมือถือและทำเป็นทีม<span class="ck"></span></a>
+        <a data-s="9"><span class="n">09</span>ปัญหาที่เจอบ่อย<span class="ck"></span></a>
+        <a data-s="10"><span class="n">10</span>สรุปและก้าวต่อไป<span class="ck"></span></a>
+      </div>
+    </nav>
+    <div class="sb-progress">
+      <div class="sb-prow">
+        <span>ความคืบหน้า</span>
+        <span class="sb-pct" id="pct">0%</span>
+      </div>
+      <div class="sb-track"><div class="sb-fill" id="fill"></div></div>
+    </div>
+  </aside>
+
+  <!-- ═══ CONTENT ═══
+       One <section class="section" id="sN"> per lesson, in the same
+       order as the sidebar nav. Only the FIRST section gets class
+       "active" in the markup — go()/init toggles the rest via JS. -->
+  <main class="content" id="content">
+
+    <section class="section active" id="s0">
+      <div class="title-row">
+        <span class="eyebrow">✦ Skill360 · Online Course</span>
+        <span class="read-badge">⏱ 4 นาที</span>
+      </div>
+      <h1>ทำคลิปปักตะกร้าด้วย ClipPang</h1>
+      <p class="lead">คลิปสินค้าที่ถ่ายค้างไว้ในมือถือ กับวิดีโอที่พร้อมปักตะกร้า ห่างกันแค่โปรแกรมตัวเดียวที่รันอยู่บนเครื่องคุณเอง — คอร์สนี้พาไปตั้งแต่ยังไม่มีอะไรเลย จนได้ไฟล์ MP4 ที่โพสต์ได้จริง</p>
+
+      <div class="stats-row">
+        <div class="stat"><div class="stat-num">11</div><div class="stat-lbl">บทเรียน<br>จบครบวงจร</div></div>
+        <div class="stat"><div class="stat-num">5</div><div class="stat-lbl">ขั้นตอน<br>ต่อหนึ่งคลิป</div></div>
+        <div class="stat"><div class="stat-num">30</div><div class="stat-lbl">เสียงพากย์<br>ภาษาไทย</div></div>
+        <div class="stat"><div class="stat-num">฿0</div><div class="stat-lbl">ค่าโปรแกรม<br>รันบนเครื่องตัวเอง</div></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h4><span class="chip">1</span>คอร์สนี้เหมาะกับใคร</h4>
+          <p>คนขายของออนไลน์ที่ถ่ายคลิปสินค้าเองแล้วต้องทำวิดีโอโพสต์บ่อย ๆ โดยเฉพาะ TikTok Shop <strong>ไม่ต้องมีพื้นฐานตัดต่อ</strong> ขอแค่พอกดใช้คอมพิวเตอร์ได้</p>
+          <p class="note">ถามตัวเอง: เดือนที่แล้วมีคลิปกี่ตัวที่ถ่ายไว้แล้วไม่ได้โพสต์ เพราะยังไม่ได้ตัดต่อ?</p>
+        </div>
+        <div class="card">
+          <h4><span class="chip gold">2</span>จบคอร์สแล้วทำอะไรได้</h4>
+          <p>ติดตั้งโปรแกรมเองได้ ต่อ API key เองได้ และทำคลิปแนวตั้งพร้อมเสียงพากย์ไทยกับซับตามคำพูดได้เองตั้งแต่ต้นจนจบ พร้อมรู้ว่าถ้าพังตรงไหนต้องแก้ยังไง</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="ct">💡 หลักคิดของคอร์สนี้</div>
+        <p>ClipPang ไม่ใช่เว็บที่คุณสมัครสมาชิกแล้วอัปโหลดคลิปขึ้นไป มันคือ<strong>โปรแกรมที่รันอยู่บนเครื่องคุณ</strong> แล้วเปิดใช้ผ่านเบราว์เซอร์ ทุกอย่างที่เรียนในคอร์สนี้จึงเริ่มจากคำถามเดียว — เครื่องของคุณพร้อมหรือยัง</p>
+      </div>
+
+      <div class="steps">
+        <div class="step"><div class="step-badge">A</div><div class="step-body"><h4>เริ่มต้น (บท 01–03)</h4><p>รู้จักเครื่องมือ เตรียมเครื่อง ติดตั้ง และตั้งค่าให้พร้อมใช้งานจริง</p></div></div>
+        <div class="step"><div class="step-badge">B</div><div class="step-body"><h4>ลงมือทำ (บท 04–06)</h4><p>เดินผ่าน 5 ขั้นตอนของการสร้างคลิปหนึ่งตัว ตั้งแต่เลือกคลิปจนกดสร้าง</p></div></div>
+        <div class="step"><div class="step-badge">C</div><div class="step-body"><h4>ใช้จริงให้คุ้ม (บท 07–10)</h4><p>คุมค่าใช้จ่าย ใช้จากมือถือ แบ่งให้ทีม และแก้ปัญหาที่เจอบ่อยที่สุด</p></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="s1">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 01 · ทำความรู้จัก</span>
+        <span class="read-badge">⏱ 5 นาที</span>
+      </div>
+      <h1>ClipPang คืออะไร ทำอะไรได้บ้าง</h1>
+      <p class="lead">งานที่ปกติต้องเปิดโปรแกรมตัดต่อ หาคนพากย์ และพิมพ์ซับเองทีละคำ ถูกยุบเหลือ 5 ขั้นตอนบนหน้าเว็บเดียวที่รันอยู่บนเครื่องคุณ</p>
+
+      <p>ClipPang รับ<strong>คลิปสินค้าดิบ</strong>ที่คุณถ่ายไว้ (ถ่ายด้วยมือถือก็ได้) แล้วเปลี่ยนเป็นวิดีโอแนวตั้ง 9:16 ที่มีเสียงพากย์ภาษาไทยและซับไตเติลขึ้นตามคำพูด พร้อมเอาไปโพสต์ปักตะกร้าได้เลย</p>
+
+      <div class="grid grid-2">
+        <div class="card"><h4><span class="chip">🔒</span>ไฟล์อยู่กับคุณ</h4><p>เซิร์ฟเวอร์ฟังเฉพาะเครื่องตัวเอง คลิปและไฟล์ผลลัพธ์ไม่ถูกอัปโหลดออกไปไหน มีแต่ข้อความสินค้าและสคริปต์เท่านั้นที่ส่งไปให้ AI ตอนสร้างเสียง</p></div>
+        <div class="card"><h4><span class="chip gold">💸</span>ไม่มีค่ารายเดือน</h4><p>ตัวโปรแกรมไม่คิดเงิน ค่าใช้จ่ายเดียวคือ Gemini API ซึ่งมีโควตาฟรีให้ใช้ทุกวัน</p></div>
+        <div class="card"><h4><span class="chip">🎙️</span>เสียงไทย 30 เสียง</h4><p>ชาย 16 หญิง 14 ฟังตัวอย่างก่อนเลือกได้โดยไม่เปลืองโควตา</p></div>
+        <div class="card"><h4><span class="chip rust">✍️</span>ซับตรงคำพูด</h4><p>ซับขึ้นตามจังหวะเสียงจริง ไม่ใช่กะเอา เลือกได้ 15 สไตล์ และวางบน กลาง หรือล่างของจอ</p></div>
+      </div>
+
+      <h3>เทียบกับการทำเองแบบเดิม</h3>
+      <div class="compare">
+        <div class="cmp-grid cmp-head"><div>เรื่อง</div><div>✋ ทำเองแบบเดิม</div><div>⚡ ใช้ ClipPang</div></div>
+        <div class="cmp-grid cmp-row"><div>รวมคลิปหลายไฟล์</div><div>เปิดโปรแกรมตัดต่อ ลากไทม์ไลน์เอง</div><div>อัปโหลดพร้อมกัน 12 ไฟล์ แล้วลากเรียงในหน้าเดียว</div></div>
+        <div class="cmp-grid cmp-row"><div>สคริปต์ขาย</div><div>นั่งคิดเอง หรือลอกคลิปคนอื่น</div><div>AI ร่างให้จากจุดขายที่กรอก แก้เองได้ทุกประโยค</div></div>
+        <div class="cmp-grid cmp-row"><div>เสียงพากย์</div><div>จ้างคนพากย์ต่อคลิป หรือพากย์เอง</div><div>เลือกจาก 30 เสียง สร้างใหม่ได้ไม่จำกัดครั้ง</div></div>
+        <div class="cmp-grid cmp-row"><div>ซับไตเติล</div><div>พิมพ์เองทีละคำ ไล่จับเวลาเอง</div><div>ขึ้นตามเสียงจริงอัตโนมัติ เลือกสไตล์ได้ 15 แบบ</div></div>
+        <div class="cmp-grid cmp-row"><div>เวลาต่อคลิป</div><div>ครึ่งชั่วโมงถึงหลายชั่วโมง</div><div>กรอกข้อมูลไม่กี่นาที + เรนเดอร์ 1–3 นาที</div></div>
+        <div class="cmp-grid cmp-row"><div>ข้อมูลของคุณ</div><div>อยู่ในเครื่อง หรืออัปขึ้นบริการที่ใช้</div><div>อยู่ในเครื่องทั้งหมด ไม่มีเซิร์ฟเวอร์กลาง</div></div>
+      </div>
+
+      <div class="callout gold">
+        <div class="ct">✨ จุดที่คนมองข้าม</div>
+        <p>สิ่งที่ ClipPang ประหยัดให้จริง ๆ ไม่ใช่ "เวลาตัดต่อ" แต่คือ<strong>แรงเสียดทานที่ทำให้คุณไม่ได้โพสต์เลย</strong> — คลิปที่ถ่ายแล้วกองอยู่ในเครื่องเพราะขี้เกียจตัด คือต้นทุนที่แพงที่สุดของคนขายของออนไลน์</p>
+      </div>
+    </section>
+
+    <section class="section" id="s2">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 02 · เตรียมตัว</span>
+        <span class="read-badge">⏱ 6 นาที</span>
+      </div>
+      <h1>เตรียมเครื่องและติดตั้ง</h1>
+      <p class="lead">มีของอยู่สามอย่างที่ต้องมี แต่ต้องลงเองแค่อย่างเดียว — ที่เหลือ ClipPang จัดการให้ในหน้าเว็บของตัวเอง</p>
+
+      <div class="grid grid-3">
+        <div class="card"><h4><span class="chip rust">1</span>Node.js 22.13+</h4><p><strong>ต้องลงเอง</strong> โหลดตัว LTS จาก nodejs.org กด Next รัว ๆ จนจบ นี่คือเครื่องยนต์ที่ทำให้ ClipPang รันได้</p></div>
+        <div class="card"><h4><span class="chip">2</span>FFmpeg</h4><p><strong>ไม่ต้องลงเอง</strong> ClipPang มีปุ่มติดตั้งให้ในหน้าตั้งค่า กดปุ่มเดียวจบ นี่คือตัวที่ทำงานตัดต่อจริงเบื้องหลัง</p></div>
+        <div class="card"><h4><span class="chip gold">3</span>Gemini API key</h4><p><strong>ขอฟรี</strong> ด้วยบัญชี Google ที่ Google AI Studio ไม่ต้องผูกบัตร นี่คือกุญแจสำหรับสร้างเสียงพากย์</p></div>
+      </div>
+
+      <div class="callout">
+        <div class="ct">💡 ยังไม่ต้องรีบขอ key</div>
+        <p>ติดตั้งให้เปิดโปรแกรมขึ้นมาได้ก่อน แล้วค่อยขอ key ทีหลังก็ได้ หน้าตั้งค่าจะบอกเองว่ายังขาดอะไรอยู่</p>
+      </div>
+
+      <h3>ขั้นตอนติดตั้ง</h3>
+      <div class="steps">
+        <div class="step"><div class="step-badge">1</div><div class="step-body"><h4>ลง Node.js ก่อน</h4><p>เข้า nodejs.org โหลดตัว LTS แล้วติดตั้งตามปกติ เช็กว่าสำเร็จได้ด้วยการเปิด Terminal หรือ Command Prompt แล้วพิมพ์ <code>node -v</code> ถ้าขึ้นเลข 22 ขึ้นไปคือใช้ได้</p></div></div>
+        <div class="step"><div class="step-badge">2</div><div class="step-body"><h4>วางโฟลเดอร์ ClipPang ไว้ที่ที่จำได้</h4><p>เช่น <code>D:\ClipPang</code> หรือใน Documents — อย่าวางใน Program Files หรือโฟลเดอร์ระบบ เพราะโปรแกรมต้องเขียนไฟล์ผลลัพธ์ลงในโฟลเดอร์ตัวเอง และอย่าวางบนโฟลเดอร์ที่ซิงก์คลาวด์ตลอดเวลา</p></div></div>
+        <div class="step"><div class="step-badge">3</div><div class="step-body"><h4>เปิดโปรแกรมตามระบบที่ใช้</h4><p>Windows ดับเบิลคลิก <code>เริ่มโปรแกรม.bat</code> · macOS ครั้งแรกรัน <code>chmod +x start.command start.sh</code> แล้ว <code>./start.command</code> จากนั้นดับเบิลคลิกได้เลย · Linux รัน <code>chmod +x start.sh</code> แล้ว <code>./start.sh</code></p></div></div>
+        <div class="step"><div class="step-badge">4</div><div class="step-body"><h4>อย่าปิดหน้าต่างดำ</h4><p>หน้าต่างสีดำที่เด้งขึ้นมาคือตัวโปรแกรมเอง ปิดเมื่อไหร่เว็บใช้ไม่ได้ทันที ให้ย่อเก็บไว้ — เลิกใช้งานค่อยปิดเพื่อปิดโปรแกรม</p></div></div>
+      </div>
+
+      <pre><span class="c"># ครั้งแรกจะช้าหน่อย เพราะต้องโหลดส่วนประกอบ (ราว 3-10 นาทีแล้วแต่เน็ต)</span>
+
+<span class="k">เปิดเสร็จแล้วจะไปที่</span>: <span class="v">http://127.0.0.1:4321</span>
+
+<span class="s">•</span> ถ้าพอร์ต 4321 มีคนใช้อยู่ ระบบเลื่อนไปพอร์ตถัดไปให้เอง
+<span class="s">•</span> URL จริงจะขึ้นอยู่ในหน้าต่างดำเสมอ<div class="pre-tag">FIRST RUN</div></pre>
+
+      <div class="pitfall">
+        <h4>🛡️ Windows เตือนว่าเป็นไฟล์อันตราย</h4>
+        <p>ขึ้นหน้าจอฟ้า "Windows protected your PC" ตอนดับเบิลคลิกไฟล์เริ่มโปรแกรม — เกิดเพราะไฟล์ไม่ได้เซ็นใบรับรองดิจิทัล ไม่ใช่เพราะตรวจเจอไวรัส</p>
+        <span class="fix-tag">✓ แก้: กด More info → Run anyway</span>
+      </div>
+      <div class="pitfall">
+        <h4>📁 วางโฟลเดอร์ผิดที่</h4>
+        <p>วางไว้ใน Program Files แล้วโปรแกรมเขียนไฟล์ผลลัพธ์ไม่ได้ หรือวางบน OneDrive ที่ซิงก์ตลอดแล้วไฟล์วิดีโอใหญ่ ๆ ชนกันจนช้าผิดปกติ</p>
+        <span class="fix-tag">✓ แก้: ย้ายไปไดรฟ์ปกติที่คุณมีสิทธิ์เขียน แล้วเปิดใหม่</span>
+      </div>
+    </section>
+
+    <section class="section" id="s3">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 03 · ตั้งค่า</span>
+        <span class="read-badge">⏱ 5 นาที</span>
+      </div>
+      <h1>ตั้งค่าครั้งแรก ทำครั้งเดียวจบ</h1>
+      <p class="lead">เปิดเว็บได้แล้วยังใช้งานไม่ได้ทันที ต้องเติมสองอย่างก่อน แล้วจะไม่ต้องกลับมายุ่งกับมันอีกเลย</p>
+
+      <div class="steps">
+        <div class="step"><div class="step-badge">1</div><div class="step-body"><h4>ติดตั้ง FFmpeg จากในเว็บ</h4><p>ไปที่เมนู <strong>ตั้งค่า</strong> หรือ <strong>ศูนย์ช่วยเหลือการติดตั้ง</strong> มุมล่างซ้าย ระบบตรวจให้เองว่ามีหรือยัง ถ้ายังไม่มีจะมีปุ่มติดตั้งให้กด ใช้เวลาราว 1–3 นาที ตัวติดตั้งถูกเก็บไว้ในโฟลเดอร์ ClipPang เอง ไม่ไปยุ่งกับที่อื่นในเครื่อง</p></div></div>
+        <div class="step"><div class="step-badge">2</div><div class="step-body"><h4>ขอ Gemini API key แล้ววาง</h4><p>เข้า Google AI Studio ล็อกอินด้วยบัญชี Google กด <strong>Create API key</strong> แล้วคัดลอกมาวางในหน้าตั้งค่า key จะถูกบันทึกลงไฟล์ <code>.env</code> ในโฟลเดอร์โปรแกรม ไม่ได้ส่งไปเก็บที่ไหน</p></div></div>
+        <div class="step"><div class="step-badge">3</div><div class="step-body"><h4>เช็กว่าพร้อมแล้ว</h4><p>ในหน้าตั้งค่ามีการ์ดสรุปสถานะ ถ้าขึ้นว่า <strong>"เครื่องนี้พร้อมทำคลิปแล้ว"</strong> ครบทั้งสามข้อ (ตัดต่อวิดีโอ / เสียงพากย์ / ผู้ช่วยเขียนสคริปต์) แปลว่าเริ่มได้</p></div></div>
+      </div>
+
+      <div class="callout gold">
+        <div class="ct">🔑 เรื่อง key ที่ต้องรู้ตั้งแต่วันแรก</div>
+        <p>ใส่ key ได้หลายใบ ถ้าใบหนึ่งใช้ครบโควตาวันนั้น ระบบจะสลับไปใบถัดไปให้เอง <strong>แต่ key ที่จะเพิ่มโควตาได้จริงต้องมาจากคนละโปรเจกต์ Google Cloud</strong> — สร้างหลาย key ในโปรเจกต์เดียวกันใช้โควตาก้อนเดียวกัน ไม่ได้เพิ่มอะไรเลย</p>
+      </div>
+
+      <div class="callout">
+        <div class="ct">💡 ทดสอบก่อนใช้จริง</div>
+        <p>กดปุ่ม <strong>ฟังเสียงทดสอบ</strong> ในหน้าตั้งค่าเพื่อดูว่า key ใช้ได้จริง (ใช้โควตา 1 คำขอ) ดีกว่าไปรู้ตอนสร้างคลิปจริงแล้วพัง</p>
+      </div>
+    </section>
+
+    <section class="section" id="s4">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 04 · ลงมือทำ</span>
+        <span class="read-badge">⏱ 6 นาที</span>
+      </div>
+      <h1>ขั้นที่ 1 · คลิปและ Timeline</h1>
+      <p class="lead">ขั้นตอนนี้ตัดสินว่าคลิปจะน่าดูหรือไม่มากกว่าทุกขั้นที่เหลือรวมกัน เพราะภาพคือสิ่งแรกที่คนเห็นก่อนจะได้ยินเสียงพากย์ด้วยซ้ำ</p>
+
+      <div class="grid grid-3">
+        <div class="card"><h4><span class="chip">📥</span>รับได้</h4><p>สูงสุด 12 ไฟล์พร้อมกัน (MP4, MOV, WebM ไฟล์ละไม่เกิน 500 MB) หรือก๊อปไปวางในโฟลเดอร์ <code>input/</code> ก็เห็นเหมือนกัน</p></div>
+        <div class="card"><h4><span class="chip gold">✂️</span>Timeline</h4><p>สูงสุด 24 ช่วง ความยาวรวมไม่เกิน 60 วินาที ลากสลับลำดับ ตัดหัวท้าย แยกคลิป และลบช่วงที่ไม่เอาได้</p></div>
+        <div class="card"><h4><span class="chip">♻️</span>Media Bin</h4><p>คลิปต้นฉบับยังอยู่เสมอ ลบช่วงออกจาก Timeline แล้วกดเพิ่มกลับได้ ไม่ต้องอัปโหลดใหม่</p></div>
+      </div>
+
+      <div class="callout">
+        <div class="ct">💡 ทำไมจำกัด 60 วินาที</div>
+        <p>เพราะคลิปปักตะกร้าที่คนดูจนจบมักสั้น และเสียงพากย์ที่ยาวกว่านี้จะฟังเหมือน<strong>อ่านสเปกสินค้ามากกว่าชวนซื้อ</strong> ข้อจำกัดนี้บังคับให้ตัดเหลือเฉพาะช็อตที่ขายจริง ซึ่งเป็นสิ่งที่คนทำคลิปเองมักไม่กล้าทำ</p>
+      </div>
+
+      <h3>ทำงานบนมือถือ</h3>
+      <p>บนจอมือถือ ตัวตัดต่อจะเปิดเต็มจอและ<strong>สลับกล่องทีละอัน</strong> — จอพรีวิวกับความยาวรวมอยู่กับที่ด้านบนเสมอ ส่วนด้านล่างสลับได้สามแท็บ</p>
+      <div class="ex-table">
+        <div class="ex-head"><div>#</div><div>แท็บ</div><div>ใช้ทำอะไร</div></div>
+        <div class="ex-row"><div class="ex-i">1</div><div class="ex-task"><span class="ex-cat">เรียงลำดับ</span><br>ไทม์ไลน์</div><div class="ex-loop">รายการช่วงคลิปเรียงลงมา กดลูกศรขึ้น–ลงเพื่อสลับลำดับ แตะที่ช่วงไหนก็เด้งไปแท็บตัดต่อของช่วงนั้นให้เลย</div></div>
+        <div class="ex-row"><div class="ex-i">2</div><div class="ex-task"><span class="ex-cat">ปรับเวลา</span><br>ตัดต่อ</div><div class="ex-loop">ตั้งจุดเริ่ม–จุดจบเป็นวินาที ลากแถบสองหัว ตัดแบ่งที่หัวอ่าน หรือลบช่วงนั้นทิ้ง</div></div>
+        <div class="ex-row"><div class="ex-i">3</div><div class="ex-task"><span class="ex-cat">เพิ่มคลิป</span><br>คลังคลิป</div><div class="ex-loop">คลิปต้นฉบับทั้งหมดในโปรเจกต์ กดเพิ่มเข้าไทม์ไลน์ซ้ำได้ หรืออัปโหลดไฟล์ใหม่</div></div>
+      </div>
+
+      <div class="pitfall">
+        <h4>⏱️ ความยาวรวมเกิน 60 วินาที</h4>
+        <p>ตัวเลขความยาวรวมด้านบนจะเปลี่ยนเป็นสีเตือน และกดเสร็จสิ้นการตัดต่อไม่ได้</p>
+        <span class="fix-tag">✓ แก้: ตัดหัวท้ายช่วงที่ยาวเกิน หรือลบช่วงที่ไม่จำเป็นออก</span>
+      </div>
+    </section>
+
+    <section class="section" id="s5">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 05 · ลงมือทำ</span>
+        <span class="read-badge">⏱ 6 นาที</span>
+      </div>
+      <h1>ขั้นที่ 2–3 · สินค้าและเสียงพากย์</h1>
+      <p class="lead">สองขั้นนี้คือวัตถุดิบของสคริปต์ทั้งคลิป กรอกดีแค่ไหน สคริปต์ที่ AI ร่างให้ก็ตรงแค่นั้น</p>
+
+      <h3>ขั้นที่ 2 · บอกจุดขาย</h3>
+      <div class="grid grid-2">
+        <div class="card"><h4><span class="chip">✓</span>ต้องกรอก</h4><p>ชื่อสินค้า และจุดเด่น — เขียนเป็นข้อ ๆ สั้น ๆ ดีกว่าเขียนยาวเป็นย่อหน้า</p></div>
+        <div class="card"><h4><span class="chip gold">+</span>ควรกรอก</h4><p>กลุ่มลูกค้า โทนที่อยากได้ และคำที่อยากให้พูดปิดท้าย เช่น "กดตะกร้าส้มด้านล่างเลย"</p></div>
+      </div>
+
+      <div class="callout gold">
+        <div class="ct">✨ กฎข้อเดียวที่ทำให้สคริปต์ต่างกันคนละเรื่อง</div>
+        <p>บอกให้ชัดว่า<strong>ลูกค้าได้อะไร</strong> ไม่ใช่แค่สินค้ามีอะไร — "ชาร์จเต็มใน 30 นาที" ขายได้ ส่วน "รองรับ Fast Charge" คือสเปกที่ลูกค้าต้องแปลเอง และส่วนใหญ่เขาไม่แปลให้</p>
+      </div>
+
+      <h3>ขั้นที่ 3 · เลือกนักพากย์</h3>
+      <div class="steps">
+        <div class="step"><div class="step-badge">1</div><div class="step-body"><h4>กรองเพศเสียงก่อน</h4><p>เสียงมี 30 แบบ (ชาย 16 หญิง 14) กรองก่อนแล้วค่อยไล่ฟังเฉพาะกลุ่มที่สนใจ จะเร็วกว่าไล่ฟังทั้งหมดมาก</p></div></div>
+        <div class="step"><div class="step-badge">2</div><div class="step-body"><h4>ฟังตัวอย่างให้ครบ</h4><p>ตัวอย่างทุกเสียงถูกสร้างไว้ล่วงหน้าแล้ว กดฟังได้ทันทีและ<strong>ไม่กินโควตา</strong> — ฟังกี่รอบก็ได้</p></div></div>
+        <div class="step"><div class="step-badge">3</div><div class="step-body"><h4>จับคู่เสียงกับสินค้า</h4><p>สินค้าความงามและสุขภาพมักเข้ากับเสียงนุ่ม ส่วนของใช้ในบ้านหรือแกดเจ็ตมักเข้ากับเสียงกระฉับกระเฉง ปรับความเร็วและโทนเพิ่มได้อีก</p></div></div>
+      </div>
+
+      <div class="callout rust">
+        <div class="ct">⚠️ เปลี่ยนเสียงทีหลังไม่ฟรี</div>
+        <p>ย้อนกลับมาเปลี่ยนเสียงได้ตลอด แต่ระบบต้อง<strong>สร้างเสียงใหม่ทั้งชุด</strong> ซึ่งกินโควตาเพิ่ม — เลือกให้จบตั้งแต่รอบแรกคุ้มกว่า</p>
+      </div>
+    </section>
+
+    <section class="section" id="s6">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 06 · ลงมือทำ</span>
+        <span class="read-badge">⏱ 6 นาที</span>
+      </div>
+      <h1>ขั้นที่ 4–5 · ซับและสร้างคลิป</h1>
+      <p class="lead">สองขั้นสุดท้าย แก้คำพูดให้เป็นภาษาคน เลือกหน้าตาซับ แล้วกดสร้างครั้งเดียวจบ</p>
+
+      <h3>ขั้นที่ 4 · สคริปต์และสไตล์ซับ</h3>
+      <p>AI ร่างสคริปต์ให้แล้ว คุณแก้ได้ทุกท่อน — ตรงนี้คือจุดที่ควรใช้เวลา เพราะทุกคำที่แก้จะกลายเป็นทั้งเสียงพากย์และซับพร้อมกัน</p>
+
+      <div class="compare">
+        <div class="cmp-grid cmp-head"><div>เรื่อง</div><div>⚡ สไตล์พื้นฐาน (3 แบบ)</div><div>✨ พรีเมียม HyperFrames (12 แบบ)</div></div>
+        <div class="cmp-grid cmp-row"><div>หน้าตา</div><div>ซับนิ่ง อ่านง่าย</div><div>อนิเมชันคำต่อคำ เด้ง ไล่สี เรืองแสง</div></div>
+        <div class="cmp-grid cmp-row"><div>เวลาเรนเดอร์</div><div>เร็วมาก</div><div>นานกว่าหลายเท่า</div></div>
+        <div class="cmp-grid cmp-row"><div>เหมาะกับ</div><div>งานที่ต้องรีบโพสต์</div><div>คลิปที่อยากให้ดูแพงกว่าคู่แข่ง</div></div>
+        <div class="cmp-grid cmp-row"><div>ตำแหน่งซับ</div><div>บน / กลาง / ล่าง</div><div>บน / กลาง / ล่าง เหมือนกัน</div></div>
+      </div>
+
+      <div class="callout rust">
+        <div class="ct">⚠️ ระวังเรื่องความยาว</div>
+        <p>ถ้าสคริปต์ยาวจนเสียงพากย์เกินความยาว Timeline ระบบจะ<strong>หยุดและบอกให้ย่อสคริปต์</strong> แทนที่จะไปยืดคลิปเองจนภาพค้าง — เจอแล้วให้ตัดคำ เพิ่มความเร็วเสียง หรือย้อนไปเพิ่มช่วงคลิป</p>
+      </div>
+
+      <h3>ขั้นที่ 5 · ตรวจแล้วกดสร้าง</h3>
+      <p>หน้าสุดท้ายสรุปให้ครบว่ากำลังจะสร้างอะไร — ใช้คลิปกี่ช่วงยาวเท่าไหร่ เสียงไหน สไตล์ซับอะไรและวางตรงไหน ตรวจให้ตรงแล้วกดปุ่มเดียว ได้ไฟล์คุณภาพเต็มเลย</p>
+
+      <div class="grid grid-3">
+        <div class="card"><h4><span class="chip">🎬</span>ระหว่างรอ</h4><p>เปลี่ยนไปหน้าอื่นหรือทำงานอื่นได้ ความคืบหน้ายังเดินอยู่ และมีแจ้งเตือนที่กระดิ่งเมื่อเสร็จ</p></div>
+        <div class="card"><h4><span class="chip gold">📦</span>ได้ไฟล์อะไร</h4><p>MP4 พร้อมโพสต์ บวก SRT/ASS ภาพปก และไฟล์เสียง เผื่อเอาไปแก้ต่อในโปรแกรมอื่น</p></div>
+        <div class="card"><h4><span class="chip">📝</span>แถมแคปชั่น</h4><p>ระบบร่างแคปชั่นพร้อมแฮชแท็กให้อัตโนมัติตั้งแต่คลิปเสร็จ ก๊อปไปวางได้เลย</p></div>
+      </div>
+
+      <div class="callout">
+        <div class="ct">💡 ตรวจก่อนกด ดีกว่าเรนเดอร์ซ้ำ</div>
+        <p>การเรนเดอร์กินทั้งเวลาและโควตาเสียง หน้าสรุปมีไว้ให้จับผิดตัวเองก่อนกด — <strong>เสียเวลาอ่าน 10 วินาที ดีกว่ารอเรนเดอร์ใหม่ 3 นาที</strong></p>
+      </div>
+    </section>
+
+    <section class="section" id="s7">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 07 · ใช้จริงให้คุ้ม</span>
+        <span class="read-badge">⏱ 4 นาที</span>
+      </div>
+      <h1>โควตาและค่าใช้จ่าย</h1>
+      <p class="lead">ตัวโปรแกรมฟรี ค่าใช้จ่ายอย่างเดียวคือการสร้างเสียงพากย์ผ่าน Gemini ซึ่งมีโควตาฟรีให้อยู่แล้ว</p>
+
+      <div class="grid grid-2">
+        <div class="card"><h4><span class="chip">🆓</span>แบบฟรี</h4><p>Gemini มีโควตาฟรีต่อ key ต่อวัน รีเซ็ตทุกวัน ทำคลิปวันละไม่กี่ตัวมักไม่ต้องจ่ายเลย โควตาหมดให้รอวันถัดไป หรือเพิ่ม key จากคนละโปรเจกต์</p></div>
+        <div class="card"><h4><span class="chip gold">💳</span>แบบจ่ายเงิน</h4><p>เปิด billing กับ Google แล้วโควตากว้างขึ้นมาก คลิป 30 วินาทีตกราว <strong>฿0.15</strong> ต่อคลิป ถ้าทำวันละหลายตัว วิธีนี้คุ้มและไม่ต้องคอยสลับหลายบัญชี</p></div>
+      </div>
+
+      <h3>วิธีประหยัดโควตาที่ได้ผลจริง</h3>
+      <div class="sum-list">
+        <div class="sum-item"><div class="sum-ico">🎧</div><p><strong>ฟังตัวอย่างเสียงไม่เสียโควตา</strong> — ตัวอย่างทั้ง 30 เสียงถูกสร้างไว้ล่วงหน้าแล้ว ฟังกี่รอบก็ได้ก่อนตัดสินใจ</p></div>
+        <div class="sum-item"><div class="sum-ico">♻️</div><p><strong>ประโยคเดิมไม่ถูกสร้างซ้ำ</strong> — ระบบแคชเสียงไว้ ถ้าแก้สคริปต์แค่บางท่อน ท่อนที่ไม่ได้แตะจะไม่ยิงใหม่</p></div>
+        <div class="sum-item"><div class="sum-ico">📋</div><p><strong>ตรวจสคริปต์ให้จบก่อนกดสร้าง</strong> — การแก้คำหลังสร้างเสียงแล้วคือการจ่ายโควตารอบสอง</p></div>
+        <div class="sum-item"><div class="sum-ico">🔑</div><p><strong>key ใหม่ต้องมาจากคนละโปรเจกต์ Google Cloud</strong> — ไม่งั้นโควตาก้อนเดิม เพิ่มไปก็เท่าเดิม</p></div>
+      </div>
+
+      <div class="callout">
+        <div class="ct">📊 ดูโควตาตัวเองได้ตลอด</div>
+        <p>หน้าตั้งค่ามีการ์ด <strong>โควตาของฉัน</strong> บอกว่าวันนี้ใช้ไปกี่คำขอ เหลือเท่าไหร่ กำลังใช้ key ชุดไหน และสถิติย้อนหลัง 7 วัน — โควตาฝั่ง Google รีเซ็ตตามเวลาแปซิฟิก ราวบ่ายสองของไทย</p>
+      </div>
+    </section>
+
+    <section class="section" id="s8">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 08 · ใช้จริงให้คุ้ม</span>
+        <span class="read-badge">⏱ 5 นาที</span>
+      </div>
+      <h1>ใช้จากมือถือ และทำงานเป็นทีม</h1>
+      <p class="lead">ปกติ ClipPang เปิดได้เฉพาะบนเครื่องที่รันโปรแกรม ซึ่งปลอดภัยที่สุด — แต่ถ้าอยากเปิดจากมือถือหรือให้ทีมใช้ด้วย ก็ทำได้ โดยต้องยอมรับสิ่งที่แลกไป</p>
+
+      <div class="steps">
+        <div class="step"><div class="step-badge">A</div><div class="step-body"><h4>เปิดให้เข้าจากเครื่องอื่น</h4><p>ต้องครบสามอย่างระบบถึงจะยอม — ชื่อผู้ใช้ รหัสผ่าน และโดเมนที่อนุญาต ขาดอย่างใดอย่างหนึ่งจะยังล็อกไว้ที่เครื่องตัวเองเหมือนเดิม</p></div></div>
+        <div class="step"><div class="step-badge">B</div><div class="step-body"><h4>เพิ่มบัญชีให้คนในทีม</h4><p>เจ้าของระบบเพิ่มบัญชีได้จากการ์ด <strong>บัญชีผู้ใช้</strong> ในหน้าตั้งค่า แต่ละคนเห็นเฉพาะโปรเจกต์ของตัวเอง และใส่ Gemini key ของตัวเองได้ โควตาจึงแยกกันจริง ไม่แย่งกันใช้</p></div></div>
+        <div class="step"><div class="step-badge">C</div><div class="step-body"><h4>ให้แต่ละคนดูแลรหัสตัวเอง</h4><p>ผู้ใช้เปลี่ยนรหัสผ่านเองได้จากการ์ด <strong>บัญชีของฉัน</strong> ไม่ต้องรอเจ้าของ และเมื่อเปลี่ยนรหัส เครื่องอื่นที่ค้างล็อกอินอยู่จะหลุดทั้งหมดทันที</p></div></div>
+      </div>
+
+      <pre><span class="c"># ตั้งชื่อผู้ใช้และรหัสผ่าน (เก็บเป็น hash ไม่ใช่รหัสตรง ๆ)</span>
+node scripts/set-password.mjs <span class="v">ชื่อผู้ใช้</span> <span class="v">รหัสผ่าน</span>
+
+<span class="c"># แล้วเพิ่มบรรทัดนี้ใน .env — ใส่โดเมนที่ชี้มาที่เครื่องนี้</span>
+<span class="k">CLIPPANG_ALLOWED_HOSTS</span>=<span class="v">clippang.example.com</span>
+
+<span class="c"># จัดการบัญชีจากบรรทัดคำสั่งก็ได้</span>
+<span class="s">•</span> node scripts/users.mjs list
+<span class="s">•</span> node scripts/users.mjs add <span class="v">ชื่อ</span> <span class="v">รหัส</span><div class="pre-tag">REMOTE ACCESS</div></pre>
+
+      <div class="callout rust">
+        <div class="ct">⚠️ สิ่งที่แลกไปเมื่อเปิดให้เข้าจากข้างนอก</div>
+        <p>การเปิดให้เข้าจากเครื่องอื่นคือการ<strong>เปิดเครื่องคุณสู่เครือข่ายภายนอก</strong> ใช้รหัสผ่านที่เดายาก และอย่าแชร์ไฟล์ <code>.env</code> ให้ใครเด็ดขาด เพราะในนั้นมี API key อยู่ด้วย</p>
+      </div>
+
+      <div class="callout gold">
+        <div class="ct">✨ อยากลองก่อนขอ key</div>
+        <p>สั่ง <code>npm run local:mock</code> จะได้สคริปต์แบบเทมเพลตและเสียงตู๊ดแทนเสียงพูดจริง — ไม่เปลืองโควตาเลย แต่เห็นภาพว่าทุกอย่างทำงานยังไงตั้งแต่ต้นจนจบ</p>
+      </div>
+    </section>
+
+    <section class="section" id="s9">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 09 · ใช้จริงให้คุ้ม</span>
+        <span class="read-badge">⏱ 5 นาที</span>
+      </div>
+      <h1>ปัญหาที่เจอบ่อยและวิธีแก้</h1>
+      <p class="lead">เกือบทุกปัญหาที่คนใหม่เจอ อยู่ในเจ็ดข้อนี้ — รู้ไว้ก่อนจะได้ไม่เสียเวลาเดา</p>
+
+      <div class="pitfall">
+        <h4>🌐 เปิดเว็บแล้วเข้าไม่ได้ หรือหน้าเปล่า</h4>
+        <p>มักเกิดจากเผลอปิดหน้าต่างสีดำไป ซึ่งคือตัวโปรแกรมเอง หรือพอร์ต 4321 ถูกใช้อยู่ระบบเลยเลื่อนไปพอร์ตอื่น</p>
+        <span class="fix-tag">✓ แก้: เปิดตัวเริ่มโปรแกรมใหม่ แล้วดู URL จริงในหน้าต่างดำ</span>
+      </div>
+      <div class="pitfall">
+        <h4>🔑 ขึ้นว่าโควตา Gemini เต็มทุกใบ</h4>
+        <p>โควตาฟรีผูกกับ key และรีเซ็ตวันละครั้งตามเวลาแปซิฟิก ราวบ่ายสองของไทย</p>
+        <span class="fix-tag">✓ แก้: รอรอบถัดไป หรือเพิ่ม key จากคนละโปรเจกต์ Google Cloud</span>
+      </div>
+      <div class="pitfall">
+        <h4>⏱️ เรนเดอร์ไม่ผ่าน บอกว่าเสียงยาวเกิน Timeline</h4>
+        <p>สคริปต์ที่พูดยาวกว่าคลิปที่มี ระบบเลือกจะหยุดถามมากกว่ายืดภาพให้ค้างเอง</p>
+        <span class="fix-tag">✓ แก้: ตัดคำในขั้นที่ 4 เพิ่มความเร็วเสียง หรือเพิ่มช่วงคลิปในขั้นที่ 1</span>
+      </div>
+      <div class="pitfall">
+        <h4>🗑️ ลบโปรเจกต์ไม่ได้ บอกว่ามีไฟล์ถูกเปิดอยู่</h4>
+        <p>มักเกิดจากยังมีวิดีโอของโปรเจกต์นั้นเปิดค้างในเบราว์เซอร์</p>
+        <span class="fix-tag">✓ แก้: กด refresh หน้าเว็บหนึ่งครั้งแล้วลบใหม่</span>
+      </div>
+      <div class="pitfall">
+        <h4>🐌 เรนเดอร์ช้ามาก</h4>
+        <p>สไตล์ซับพรีเมียมใช้เวลามากกว่าแบบพื้นฐานหลายเท่า และการเรนเดอร์กิน CPU หนัก</p>
+        <span class="fix-tag">✓ แก้: เลือกสไตล์พื้นฐานถ้าต้องรีบ และปิดโปรแกรมหนัก ๆ ตัวอื่นระหว่างเรนเดอร์</span>
+      </div>
+      <div class="pitfall">
+        <h4>🗣️ เสียงพากย์ออกเสียงคำบางคำผิด</h4>
+        <p>มักเป็นคำทับศัพท์ภาษาอังกฤษหรือชื่อแบรนด์ที่ระบบอ่านตามตัวสะกด</p>
+        <span class="fix-tag">✓ แก้: เขียนคำนั้นในสคริปต์ตามเสียงอ่านภาษาไทย แล้วสร้างเสียงใหม่</span>
+      </div>
+      <div class="pitfall">
+        <h4>💾 กลัวคลิปที่ทำไปแล้วหาย</h4>
+        <p>ไม่หาย ทุกอย่างถูกบันทึกลงเครื่องทันที เปิดโปรแกรมใหม่แล้วโปรเจกต์เดิมยังอยู่ครบ</p>
+        <span class="fix-tag">✓ สำรอง: ก๊อปทั้งโฟลเดอร์ ClipPang ไปเครื่องใหม่ที่มี Node.js แล้วเปิดได้เลย</span>
+      </div>
+
+      <div class="callout">
+        <div class="ct">💡 ที่พึ่งแรกเสมอ</div>
+        <p>ในโปรแกรมมีเมนู <strong>ศูนย์ช่วยเหลือการติดตั้ง</strong> อยู่มุมล่างซ้าย ซึ่งตรวจสถานะเครื่องคุณแบบสด ๆ และบอกว่าขาดอะไรอยู่ — ดูที่นั่นก่อนเป็นอันดับแรก</p>
+      </div>
+    </section>
+
+    <section class="section" id="s10">
+      <div class="title-row">
+        <span class="eyebrow">บทที่ 10 · สรุป</span>
+        <span class="read-badge">⏱ 3 นาที</span>
+      </div>
+      <h1>สรุปและก้าวต่อไป</h1>
+      <p class="lead">ถ้าจำอะไรจากคอร์สนี้ได้แค่หกข้อ ให้จำหกข้อนี้</p>
+
+      <div class="sum-list">
+        <div class="sum-item"><div class="sum-ico">💻</div><p><strong>ต้องลงเองแค่ Node.js อย่างเดียว</strong> — FFmpeg ติดตั้งได้จากในเว็บ ส่วน Gemini key ขอฟรีด้วยบัญชี Google</p></div>
+        <div class="sum-item"><div class="sum-ico">🔒</div><p><strong>คลิปไม่เคยออกจากเครื่องคุณ</strong> — มีแต่ข้อความสินค้าและสคริปต์ที่ส่งไปให้ AI ตอนสร้างเสียงกับเขียนสคริปต์</p></div>
+        <div class="sum-item"><div class="sum-ico">⏱️</div><p><strong>60 วินาทีคือเพดาน และเป็นเพดานที่ดี</strong> — บังคับให้เหลือเฉพาะช็อตที่ขายจริง ซึ่งเป็นสิ่งที่คนตัดเองมักไม่กล้าทำ</p></div>
+        <div class="sum-item"><div class="sum-ico">🎙️</div><p><strong>ฟังเสียงให้จบก่อนเลือก</strong> — ฟังฟรีไม่กินโควตา แต่เปลี่ยนเสียงหลังสร้างแล้วต้องจ่ายโควตารอบใหม่</p></div>
+        <div class="sum-item"><div class="sum-ico">📋</div><p><strong>ตรวจหน้าสรุปก่อนกดสร้าง</strong> — อ่าน 10 วินาที ประหยัดการเรนเดอร์ใหม่ 3 นาที</p></div>
+        <div class="sum-item"><div class="sum-ico">🔑</div><p><strong>key ใหม่ต้องคนละโปรเจกต์ Google Cloud</strong> — ไม่งั้นโควตาก้อนเดิม เพิ่มไปกี่ใบก็เท่าเดิม</p></div>
+      </div>
+
+      <div class="callout gold">
+        <div class="ct">✨ ทำอะไรต่อในสัปดาห์นี้</div>
+        <p>อย่าเพิ่งทำคลิปสวย — <strong>ทำคลิปแรกให้จบก่อน</strong> เอาคลิปสินค้าที่ถ่ายค้างไว้มาสักสามสี่ไฟล์ เลือกสไตล์พื้นฐานที่เรนเดอร์เร็ว แล้วเดินให้ครบทั้ง 5 ขั้น พอรู้ว่ามันจบได้จริงค่อยกลับมาเล่นกับสไตล์พรีเมียม</p>
+      </div>
+
+      <div class="completion">
+        <div class="em">🎓</div>
+        <h3>จบคอร์สแล้ว</h3>
+        <p>ตอนนี้คุณติดตั้ง ตั้งค่า และทำคลิปปักตะกร้าด้วยตัวเองได้ครบวงจรแล้ว — ที่เหลือคือทำให้มันเป็นนิสัย</p>
+      </div>
+
+      <div class="next-cta">
+        <div>
+          <span class="nc-eyebrow">เรียนต่อขั้นถัดไป</span>
+          <h4>Claude Mastery</h4>
+          <p>ClipPang คือตัวอย่างของงานที่ AI ช่วยย่นจากชั่วโมงเหลือนาที คอร์สถัดไปพาไปไกลกว่านั้น — ใช้ Claude เป็นเครื่องมือทำงานจริงของคุณเอง ไม่ใช่แค่แชทถามตอบ</p>
+        </div>
+        <a class="nc-btn" href="https://work360.in.th/claude-mastery/" target="_blank" rel="noopener">
+          ดูรายละเอียด <span class="nc-arr">→</span>
+        </a>
+      </div>
+    </section>
+
+
+    <!-- Pager -->
+    <div class="pager">
+      <button id="prevBtn" onclick="go(cur-1)" disabled>
+        <small>ก่อนหน้า</small>
+        <span id="prevLbl">—</span>
+      </button>
+      <button id="nextBtn" class="pg-next" onclick="go(cur+1)">
+        <small>ถัดไป</small>
+        <span id="nextLbl">—</span>
+      </button>
+    </div>
+    <p class="key-hint"><span class="key">←</span> <span class="key">→</span> นำทางด้วยแป้นพิมพ์</p>
+
+  </main>
+</div>
+
+<script>
+/* This titles array must have exactly one entry per <section>, in the
+   same order, matching the sidebar nav labels. Length mismatch breaks
+   the pager labels ("ถัดไป <title>") silently. */
+const titles = [
+  "ภาพรวมคอร์ส",
+  "ClipPang คืออะไร",
+  "เตรียมเครื่องและติดตั้ง",
+  "ตั้งค่าครั้งแรก",
+  "ขั้นที่ 1 · คลิปและ Timeline",
+  "ขั้นที่ 2–3 · สินค้าและเสียง",
+  "ขั้นที่ 4–5 · ซับและสร้างคลิป",
+  "โควตาและค่าใช้จ่าย",
+  "ใช้จากมือถือและทำเป็นทีม",
+  "ปัญหาที่เจอบ่อย",
+  "สรุปและก้าวต่อไป"
+];
+const sections = Array.from(document.querySelectorAll('.section'));
+const navLinks = Array.from(document.querySelectorAll('#nav a'));
+let cur = 0;
+let wheelTimer = null;
+
+/* ── Loop wheel animation (only runs if a .loop-diagram with ldn0-3 exists on the page) ── */
+function startWheel() {
+  stopWheel();
+  const nodes = [0,1,2,3].map(i => document.getElementById('ldn' + i)).filter(Boolean);
+  if (!nodes.length) return;
+  let i = 0;
+  function tick() {
+    nodes.forEach((n, k) => n.classList.toggle('lit', k === i));
+    i = (i + 1) % nodes.length;
+  }
+  tick();
+  wheelTimer = setInterval(tick, 1100);
+}
+function stopWheel() {
+  if (wheelTimer) { clearInterval(wheelTimer); wheelTimer = null; }
+  [0,1,2,3].forEach(i => {
+    const n = document.getElementById('ldn' + i);
+    if (n) n.classList.remove('lit');
+  });
+}
+
+/* ── Animate section in ──
+   CRITICAL: set visibility BEFORE gsap.from() runs. Sections are
+   shown/hidden via display:none/block (see go() and Init below), never
+   via opacity — GSAP's .from({opacity:0}) on a parent that is already
+   opacity:0 makes children permanently invisible regardless of their
+   own tween. Keep .section's CSS as display:none/.active, not opacity. */
+function animIn(el) {
+  el.style.visibility = 'visible';
+
+  if (typeof gsap === 'undefined') return;
+
+  const h1 = el.querySelector('h1');
+  const lead = el.querySelector('.lead');
+  const cards = Array.from(el.querySelectorAll('.card, .stat, .ladder-item, .pitfall, .step, .sum-item, .ex-row'));
+  const diag = el.querySelector('.loop-diagram');
+
+  gsap.killTweensOf([h1, lead, ...cards, diag].filter(Boolean));
+
+  const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+  if (h1) tl.from(h1, { y: 22, opacity: 0, duration: 0.5 });
+  if (lead) tl.from(lead, { y: 16, opacity: 0, duration: 0.42 }, '-=0.3');
+  if (diag) tl.from(diag, { scale: 0.94, opacity: 0, duration: 0.5 }, '-=0.2');
+  if (cards.length) tl.from(cards, { y: 18, opacity: 0, duration: 0.38, stagger: 0.055 }, '-=0.15');
+
+  if (diag) tl.call(() => startWheel());
+}
+
+/* ── Navigate ── */
+function go(i) {
+  if (i < 0 || i >= sections.length) return;
+
+  stopWheel();
+
+  const prev = sections[cur];
+  prev.classList.remove('active');
+  prev.style.display = 'none';
+
+  cur = i;
+  const next = sections[cur];
+  next.style.display = 'block';
+  next.classList.add('active');
+
+  navLinks.forEach((a, k) => {
+    a.classList.toggle('active', k === cur);
+    if (k < cur) a.classList.add('done');
+  });
+
+  const pct = Math.round((cur + 1) / sections.length * 100);
+  document.getElementById('fill').style.width = pct + '%';
+  document.getElementById('pct').textContent = pct + '%';
+
+  document.getElementById('prevBtn').disabled = cur === 0;
+  document.getElementById('nextBtn').disabled = cur === sections.length - 1;
+  document.getElementById('prevLbl').textContent = cur > 0 ? titles[cur - 1] : '—';
+  document.getElementById('nextLbl').textContent = cur < sections.length - 1 ? titles[cur + 1] : 'จบคอร์ส';
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (window.innerWidth <= 900) closeNav();
+
+  animIn(next);
+}
+
+navLinks.forEach(a => a.addEventListener('click', () => go(+a.dataset.s)));
+
+function toggleNav() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+function closeNav() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'ArrowRight') go(cur + 1);
+  if (e.key === 'ArrowLeft') go(cur - 1);
+});
+
+/* ── Init ── */
+sections.forEach((s, i) => {
+  if (i !== 0) { s.style.display = 'none'; }
+  else { s.style.display = 'block'; }
+});
+document.getElementById('nextLbl').textContent = titles[1] || 'จบคอร์ส';
+document.getElementById('fill').style.width = Math.round(1 / sections.length * 100) + '%';
+document.getElementById('pct').textContent = Math.round(1 / sections.length * 100) + '%';
+
+document.fonts.ready.then(() => animIn(sections[0]));
+
+/* ── Auto light/dark theme by time of day (dark 18:00–06:00) ── */
+function applyThemeByTime() {
+  if (localStorage.getItem('theme-override')) return;
+  const h = new Date().getHours();
+  const isDark = h >= 18 || h < 6;
+  const theme = isDark ? 'dark' : 'light';
+  if (document.documentElement.getAttribute('data-theme') !== theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+}
+applyThemeByTime();
+setInterval(applyThemeByTime, 60000);
+
+/* ── Manual theme toggle (overrides auto until toggled again) ── */
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme-override', next);
+}
+</script>
+</body>
+</html>
