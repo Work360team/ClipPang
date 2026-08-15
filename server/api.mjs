@@ -285,7 +285,16 @@ async function fileResponse(filePath, request, { downloadName } = {}) {
   return new Response(Readable.toWeb(fs.createReadStream(filePath)), { headers });
 }
 
-async function moveProjectToTrash(id) {
+const FILE_BUSY_CODES = new Set(["EPERM", "EBUSY", "EACCES", "ENOTEMPTY"]);
+
+/**
+ * ย้ายโฟลเดอร์โปรเจกต์ไปถังขยะ
+ *
+ * บน Windows ถ้ามีไฟล์ในโฟลเดอร์ถูกเปิดค้างอยู่ (เช่นเบราว์เซอร์เพิ่งเล่นวิดีโอผลลัพธ์
+ * แล้วยกเลิกคำขอไปเมื่อครู่) rename จะได้ EPERM ทันที การรอสั้น ๆ แล้วลองใหม่แก้ได้จริง
+ * เพราะ handle พวกนั้นถูกปิดในอึดใจถัดมา ไม่ใช่ค้างถาวร
+ */
+async function moveProjectToTrash(id, { attempts = 5 } = {}) {
   const source = safeProjectPath(id);
   try {
     await fsp.access(source);
@@ -295,8 +304,15 @@ async function moveProjectToTrash(id) {
   const trashRoot = resolveUnderRoot(PATHS.data, "trash");
   await fsp.mkdir(trashRoot, { recursive: true });
   const destination = resolveUnderRoot(trashRoot, `${id}-${Date.now()}`);
-  await fsp.rename(source, destination);
-  return destination;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await fsp.rename(source, destination);
+      return destination;
+    } catch (error) {
+      if (attempt >= attempts || !FILE_BUSY_CODES.has(error.code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 150));
+    }
+  }
 }
 
 /** เปิดโฟลเดอร์ในตัวจัดการไฟล์ของเครื่อง */
@@ -519,7 +535,14 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           return json({ ok: true, project: normalizeProject(project ?? store.getProject(id), store) });
         }
         if (method === "DELETE") {
-          await moveProjectToTrash(id);
+          try {
+            await moveProjectToTrash(id);
+          } catch (error) {
+            if (!FILE_BUSY_CODES.has(error.code)) throw error;
+            // บอกให้ตรงว่าเกิดอะไร แทนที่จะโยน EPERM พร้อม path ยาวเหยียดใส่หน้าผู้ใช้
+            return apiError(409, "PROJECT_IN_USE",
+              "ลบไม่ได้เพราะยังมีไฟล์ในโปรเจกต์นี้ถูกเปิดค้างอยู่ — ปิดวิดีโอที่กำลังเล่นหรือโปรแกรมที่เปิดไฟล์ในโฟลเดอร์นี้ แล้วลองอีกครั้ง");
+          }
           store.deleteProject(id);
           return json({ ok: true, recoverable: true, message: "ย้ายโปรเจกต์ไป data/trash แล้ว" });
         }

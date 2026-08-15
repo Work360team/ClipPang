@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
-import { refreshProjects, removeProjectLocally, subscribeProjects } from "../lib/project-store";
+import { refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 import { HardLink as Link } from "./HardLink";
 import { NotificationBell } from "./NotificationBell";
 
@@ -131,6 +131,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     const target = pendingDelete;
     setBusy(true);
     setDeleteNote("");
+    // ปล่อยไฟล์ที่เบราว์เซอร์ถือไว้ก่อน ไม่งั้นเซิร์ฟเวอร์ย้ายโฟลเดอร์ไม่ได้
+    releaseProjectMedia(target.id);
     try {
       await localApi.deleteProject(target.id);
     } catch (error) {

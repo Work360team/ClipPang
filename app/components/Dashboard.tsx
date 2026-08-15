@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "./AppShell";
 import { HardLink as Link } from "./HardLink";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
-import { refreshProjects, removeProjectLocally, subscribeProjects } from "../lib/project-store";
+import { refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 
 type DashboardCard = {
   id: string | null;
@@ -350,6 +350,8 @@ export function Dashboard() {
                   const target = pendingDelete;
                   setDeletingId(target.id);
                   setDeleteNote("");
+                  // ปล่อยไฟล์ที่เบราว์เซอร์ถือไว้ก่อน ไม่งั้นเซิร์ฟเวอร์ย้ายโฟลเดอร์ไม่ได้
+                  releaseProjectMedia(target.id);
                   localApi.deleteProject(target.id)
                     .then(() => {
                       removeProjectLocally(target.id);

@@ -50,6 +50,25 @@ export function removeProjectLocally(id: string) {
 }
 
 /**
+ * ปล่อยไฟล์สื่อของโปรเจกต์ที่เบราว์เซอร์ยังถือค้างไว้ ก่อนสั่งลบ
+ *
+ * <video> ที่ชี้ไปยังไฟล์ในโปรเจกต์จะคาคำขอไว้กับเซิร์ฟเวอร์แม้หยุดเล่นแล้ว เซิร์ฟเวอร์
+ * จึงยังเปิดไฟล์นั้นค้างอยู่ และบน Windows โฟลเดอร์ที่มีไฟล์ถูกเปิดอยู่จะย้ายไม่ได้
+ * (EPERM) ทำให้ลบโปรเจกต์ไม่ผ่าน — ต้องตัด src ทิ้งแล้ว load() ใหม่ถึงจะปิดคำขอจริง
+ */
+export function releaseProjectMedia(id: string) {
+  if (typeof document === "undefined") return;
+  const marker = `/api/projects/${encodeURIComponent(id)}/`;
+  document.querySelectorAll<HTMLMediaElement>("video, audio").forEach((element) => {
+    const source = element.currentSrc || element.src;
+    if (!source || !source.includes(marker)) return;
+    element.pause();
+    element.removeAttribute("src");
+    element.load();
+  });
+}
+
+/**
  * ฟังรายการโปรเจกต์ คืนฟังก์ชันสำหรับเลิกฟัง
  * ผู้ฟังคนแรกเป็นคนเริ่ม polling และคนสุดท้ายที่เลิกฟังเป็นคนหยุด
  */

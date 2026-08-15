@@ -5,6 +5,7 @@ import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
+import { pipeline as streamPipeline } from "node:stream/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createApiHandler } from "./api.mjs";
 import { HOST, DEFAULT_PORT, PATHS, ensureDirectories } from "./config.mjs";
@@ -411,22 +412,35 @@ async function sendWebResponse(res, response, method = "GET") {
   response.headers.forEach((value, name) => res.setHeader(name, value));
   res.setHeader("x-content-type-options", "nosniff");
   res.setHeader("referrer-policy", "same-origin");
-  if (method === "HEAD" || !response.body) return res.end();
+  if (method === "HEAD" || !response.body) {
+    // HEAD ไม่ส่งเนื้อไฟล์ แต่ body ถูกสร้างไว้แล้ว ถ้าไม่ยกเลิกทิ้ง fd ของไฟล์จะค้างเปิด
+    response.body?.cancel?.().catch(() => undefined);
+    return res.end();
+  }
   try {
     await streamToNode(response.body, res);
   } catch (error) {
-    if (!res.destroyed) res.destroy(error);
+    // เบราว์เซอร์ยกเลิกคำขอกลางคันเป็นเรื่องปกติมากกับ <video> (เลื่อน/หยุด/เปลี่ยนคลิป)
+    // ไม่ใช่ข้อผิดพลาดที่ต้องรายงาน
+    if (!isAbortError(error) && !res.destroyed) res.destroy(error);
   }
 }
 
+function isAbortError(error) {
+  return error?.code === "ERR_STREAM_PREMATURE_CLOSE" || error?.code === "ECONNRESET"
+    || error?.code === "ERR_STREAM_DESTROYED" || error?.name === "AbortError";
+}
+
+/**
+ * ต่อ body ของ web Response เข้ากับ response ของ Node
+ *
+ * ต้องใช้ pipeline ไม่ใช่ .pipe() — .pipe() ไม่ทำลายต้นทางเมื่อปลายทางถูกตัดกลางคัน
+ * ซึ่งเกิดตลอดเวลากับ <video> (เบราว์เซอร์ยิง range request แล้วยกเลิกตอนเลื่อน/หยุด)
+ * ผลคือ fs.createReadStream ของไฟล์วิดีโอค้างเปิดไว้จนกว่าจะปิดเซิร์ฟเวอร์ และบน Windows
+ * ไฟล์ที่ยังมีคนถือ handle อยู่จะย้ายหรือลบโฟลเดอร์ไม่ได้ (EPERM) — คือสาเหตุที่ลบโปรเจกต์ไม่ได้
+ */
 function streamToNode(body, destination) {
-  return new Promise((resolve, reject) => {
-    const source = Readable.fromWeb(body);
-    source.on("error", reject);
-    destination.on("error", reject);
-    destination.on("finish", resolve);
-    source.pipe(destination);
-  });
+  return streamPipeline(Readable.fromWeb(body), destination);
 }
 
 function canListen(port) {
