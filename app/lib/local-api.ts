@@ -141,7 +141,6 @@ export const localApi = {
   },
   startRender: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; renderId: string; render: LocalRender }>(`/api/projects/${encodeURIComponent(id)}/renders`, { method: "POST", body: JSON.stringify(body) }),
   getRender: (id: string) => apiFetch<{ ok: true; render: LocalRender }>(`/api/renders/${encodeURIComponent(id)}`),
-  promoteRender: (id: string, body: Record<string, unknown> = {}) => apiFetch<{ ok: true; renderId: string; render: LocalRender }>(`/api/renders/${encodeURIComponent(id)}/promote`, { method: "POST", body: JSON.stringify(body) }),
   cancelRender: (id: string) => apiFetch<{ ok: true; render: LocalRender }>(`/api/renders/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
   openProject: (projectId: string, target: "out" | "project" = "out") => apiFetch<{ ok: true }>("/api/open", { method: "POST", body: JSON.stringify({ projectId, target }) }),
   captions: (projectId: string) =>

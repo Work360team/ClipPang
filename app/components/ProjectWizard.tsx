@@ -49,7 +49,6 @@ import { StyleCaptionPreview, stylePreviewVars, type StylePreviewParams } from "
 import { HardLink as Link } from "./HardLink";
 import {
   detectLocalEngine,
-  ClipPangApiError,
   localApi,
   watchRender,
   type LocalEngineState,
@@ -351,8 +350,6 @@ export function ProjectWizard() {
   const [operationMessage, setOperationMessage] = useState("");
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [furthestStep, setFurthestStep] = useState(1);
-  // ลายเซ็นของสิ่งที่ทำให้ "เสียงพากย์" เปลี่ยน — ใช้ตัดสินว่าร่างเดิมยังใช้ต่อได้ไหม
-  const [draftSignature, setDraftSignature] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
   const [videoUrl, setVideoUrl] = useState("/clippang-sample.mp4");
   const [fileName, setFileName] = useState("คลิปตัวอย่าง.mp4");
@@ -375,13 +372,10 @@ export function ProjectWizard() {
   );
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
   const [captionPosition, setCaptionPosition] = useState("ล่าง");
-  const [selectedDraft, setSelectedDraft] = useState(1);
   const [rendering, setRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderDone, setRenderDone] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
   const [renderId, setRenderId] = useState<string | null>(null);
-  const [renderKind, setRenderKind] = useState<"draft" | "final">("draft");
   const [renderError, setRenderError] = useState("");
   const [renderStageId, setRenderStageId] = useState<string | null>(null);
   const [renderCounter, setRenderCounter] = useState<{ current: number; total: number } | null>(null);
@@ -614,7 +608,7 @@ export function ProjectWizard() {
   const previewProgressRatio = previewTotalMs > 0 ? Math.min(1, previewTimeMs / previewTotalMs) : 0;
 
   // เฟรมจากคลิปของผู้ใช้เอง ใช้แทนภาพ demo ในทุกที่ที่ต้องโชว์ตัวอย่างนิ่ง
-  // (การ์ดเลือกสไตล์ การ์ดร่าง และ poster ของเพลเยอร์) แคปครั้งเดียวแล้วใช้ซ้ำ
+  // (การ์ดเลือกสไตล์ และ poster ของเพลเยอร์) แคปครั้งเดียวแล้วใช้ซ้ำ
   // เพราะการ์ดมีหลายใบ ถ้าใส่ <video> ทุกใบจะถอดรหัส 4K พร้อมกันหลายตัว
   const [projectPosterUrl, setProjectPosterUrl] = useState<string | null>(null);
   const posterSourceRef = useRef<string | null>(null);
@@ -773,7 +767,9 @@ export function ProjectWizard() {
     // ทั้งที่ยังทำอยู่เบื้องหลัง
     const renders = project.renders ?? [];
     const running = renders.find((render) => RUNNING_RENDER_STATES.has(String(render.state)));
-    const latest = running ?? renders.find((render) => !render.stale);
+    // ร่างไม่ถูกสร้างอีกแล้ว แต่โปรเจกต์เก่าอาจมีค้างอยู่ ถ้าหยิบมาแสดงจะกลายเป็นว่า
+    // เปิดโปรเจกต์เก่าขึ้นมาแล้วเห็นร่างเป็น "คลิปที่เสร็จแล้ว" ทั้งที่ยังไม่ได้สร้างตัวจริง
+    const latest = running ?? renders.find((render) => !render.stale && render.kind !== "draft");
     if (latest) restoreRender(latest);
   }
 
@@ -785,7 +781,6 @@ export function ProjectWizard() {
 
   async function completeRender(
     id: string,
-    kind: "draft" | "final",
     expectedEditRevision?: number,
   ) {
     try {
@@ -797,22 +792,9 @@ export function ProjectWizard() {
       if (outputUrl) setVideoUrl(outputUrl);
       setRendering(false);
       setRenderProgress(100);
-      if (kind === "draft") {
-        setDraftReady(true);
-        // จำไว้ว่าร่างนี้ใช้เสียงและสคริปต์ชุดไหน เพื่อรู้ทีหลังว่ายังใช้ต่อได้ไหม
-        const config = (record.config ?? {}) as { voiceId?: string; speed?: number; tone?: string; script?: string[] };
-        setDraftSignature(JSON.stringify({
-          voice: config.voiceId ?? selectedVoice,
-          speed: config.speed ?? speed,
-          tone: config.tone ?? tone,
-          script: config.script ?? currentChunks,
-        }));
-        setToast("ร่างพร้อมแล้ว กดสร้างคลิปตัวจริงได้โดยไม่ยิงเสียงซ้ำ");
-      } else {
-        setRenderDone(true);
-        void refreshProjects();
-        setToast("คลิปตัวจริงพร้อมดาวน์โหลดแล้ว");
-      }
+      setRenderDone(true);
+      void refreshProjects();
+      setToast("คลิปพร้อมดาวน์โหลดแล้ว");
     } catch (error) {
       setRenderError(error instanceof Error ? error.message : "อ่านผลลัพธ์ไม่สำเร็จ");
       setRendering(false);
@@ -821,7 +803,6 @@ export function ProjectWizard() {
 
   function observeRender(
     id: string,
-    kind: "draft" | "final",
     expectedEditRevision?: number,
   ) {
     stopWatchingRenderRef.current?.();
@@ -832,7 +813,7 @@ export function ProjectWizard() {
       // เก็บ stage และตัวนับย่อยไว้วาดรายการขั้นตอน ไม่ใช่ทิ้งแล้วโชว์แค่ %
       if (typeof event.stage === "string" && event.stage) setRenderStageId(event.stage);
       setRenderCounter(readCounter(event));
-      if (event.state === "ready") void completeRender(id, kind, expectedEditRevision);
+      if (event.state === "ready") void completeRender(id, expectedEditRevision);
       else if (event.state === "failed") {
         setRendering(false);
         setRenderError(event.error?.message || "สร้างคลิปไม่สำเร็จ กรุณาตรวจ FFmpeg และ API key แล้วลองใหม่");
@@ -846,7 +827,7 @@ export function ProjectWizard() {
         if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
         try {
           const result = await localApi.getRender(id);
-          if (result.render.state === "ready") await completeRender(id, kind, expectedEditRevision);
+          if (result.render.state === "ready") await completeRender(id, expectedEditRevision);
           else if (result.render.state === "failed") {
             setRendering(false);
             setRenderError(result.render.error?.message || "สร้างคลิปไม่สำเร็จ");
@@ -860,7 +841,6 @@ export function ProjectWizard() {
 
   function restoreRender(render: LocalRender) {
     setRenderId(render.id);
-    setRenderKind(render.kind);
     setRenderProgress(Number(render.progress ?? 0));
     // ข้อความความคืบหน้าใช้ได้เฉพาะกับงานที่ยังวิ่งอยู่ ถ้าเอาข้อความของงานที่จบแล้ว
     // มาตั้งไว้ ปุ่มหลักท้ายหน้าจะถูกล็อกค้าง (มันปิดตัวเองเมื่อ operationMessage ไม่ว่าง)
@@ -874,13 +854,13 @@ export function ProjectWizard() {
     if (render.state === "ready") {
       const revision = editRevisionRef.current;
       activeRenderEditRevisionRef.current = revision;
-      void completeRender(render.id, render.kind, revision);
+      void completeRender(render.id, revision);
     } else if (RUNNING_RENDER_STATES.has(String(render.state))) {
       setActiveStep(5);
       setRendering(true);
       const revision = editRevisionRef.current;
       activeRenderEditRevisionRef.current = revision;
-      observeRender(render.id, render.kind, revision);
+      observeRender(render.id, revision);
     } else if (render.state === "failed") setRenderError(render.error?.message || "งานครั้งล่าสุดไม่สำเร็จ");
   }
 
@@ -1095,7 +1075,6 @@ export function ProjectWizard() {
     if (rendering && renderId && engineState === "connected") {
       void localApi.cancelRender(renderId).catch(() => undefined);
     }
-    setDraftReady(false);
     setRenderDone(false);
     setRenderOutputs({});
     setRendering(false);
@@ -1673,11 +1652,7 @@ export function ProjectWizard() {
       if (activeStep < 4) setActiveStep((activeStep + 1) as WizardStep);
       else if (activeStep === 4) {
         setActiveStep(5);
-        // ย้อนมาเปลี่ยนสไตล์ซับแล้วกดต่อ ไม่ควรเสียโควตาสร้างร่างใหม่ทั้งชุด
-        // เพราะสไตล์ถูกใส่ตอนโปรโมตเป็นตัวจริงอยู่แล้ว เสียงเดิมยังใช้ได้
-        if (!(draftReady && draftSignature === voiceSignatureNow())) {
-          await beginRender("draft", id);
-        }
+        await beginRender(id);
       }
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "บันทึกขั้นตอนนี้ไม่สำเร็จ");
@@ -1774,14 +1749,6 @@ export function ProjectWizard() {
     setToast(`สลับเป็นข้อความตัวอย่างแล้ว — เปิดผ่าน เริ่มโปรแกรม.bat เพื่อให้ AI เขียนใหม่จริง`);
   };
 
-  /** เปลี่ยนอย่างใดอย่างหนึ่งในนี้ = เสียงพากย์ต้องทำใหม่ ใช้ร่างเดิมต่อไม่ได้ */
-  const voiceSignatureNow = () => JSON.stringify({
-    voice: selectedVoice,
-    speed,
-    tone,
-    script: currentChunks,
-  });
-
   /** เขียนสคริปต์ใหม่ทั้งชุด — ทับของเดิม จึงต้องมาจากการกดปุ่มโดยตั้งใจเท่านั้น */
   const regenerateAllScripts = async (knownProjectId?: string) => {
     const id = knownProjectId ?? projectId ?? await ensureProject();
@@ -1794,34 +1761,27 @@ export function ProjectWizard() {
     return result.scripts.length;
   };
 
-  const beginRender = async (kind: "draft" | "final", knownProjectId?: string) => {
+  const beginRender = async (knownProjectId?: string) => {
     const id = knownProjectId ?? projectId ?? await ensureProject();
     const renderEditRevision = editRevisionRef.current;
     activeRenderEditRevisionRef.current = renderEditRevision;
     setRenderError("");
     setActiveStep(5);
-    if (kind === "final") setRenderDone(false);
+    setRenderDone(false);
     setRenderProgress(4);
     setRendering(true);
-    setRenderKind(kind);
-    setOperationMessage(kind === "draft" ? "กำลังเข้าคิวสร้างร่าง" : "กำลังเข้าคิวสร้างคลิปตัวจริง");
+    setOperationMessage("กำลังเข้าคิวสร้างคลิป");
     try {
-      // Promotion compares the draft hash with the persisted project. Flush the
-      // latest edit first so a quick trim-then-render can never reuse a stale draft.
+      // บันทึกการแก้ล่าสุดก่อนเข้าคิว งานที่กำลังจะรันจะได้ใช้ timeline และสคริปต์
+      // ชุดเดียวกับที่เห็นบนจอ ไม่ใช่ชุดก่อนหน้าที่ยังค้างอยู่ในคิวบันทึก
       await queueProjectUpdate(id, {
         title: projectTitle(),
         wizardStep: 5,
         product: projectProduct(),
       });
       const position = captionPosition === "บน" ? "top" : captionPosition === "กลาง" ? "middle" : "bottom";
-      // โปรโมตร่างคือใช้เสียงเดิมซ้ำเพื่อประหยัดโควตา ใช้ได้เฉพาะตอนที่เสียง สคริปต์
-      // ความเร็ว และโทน ยังเหมือนตอนสร้างร่าง ถ้าผู้ใช้ย้อนไปเปลี่ยนเสียงแล้วยังโปรโมต
-      // คลิปตัวจริงจะออกมาเป็นเสียงเก่าโดยที่เขาไม่รู้ตัว
-      const canReuseDraft = draftReady && renderId && draftSignature === voiceSignatureNow();
-      const result = kind === "final" && canReuseDraft
-        ? await localApi.promoteRender(renderId, { styleId: selectedStyle, position })
-        : await localApi.startRender(id, {
-          kind,
+      const result = await localApi.startRender(id, {
+          kind: "final",
           styleId: selectedStyle,
           assets: persistedAssets(clipAssets, timelineClips),
           timelineClips: persistedTimeline(timelineClips),
@@ -1848,26 +1808,17 @@ export function ProjectWizard() {
         return;
       }
       setRenderId(result.renderId);
-      observeRender(result.renderId, kind, renderEditRevision);
+      observeRender(result.renderId, renderEditRevision);
     } catch (error) {
       if (editRevisionRef.current !== renderEditRevision) return;
       setRendering(false);
-      if (error instanceof ClipPangApiError && error.code === "STALE_DRAFT") {
-        setDraftReady(false);
-        setRenderId(null);
-        setRenderOutputs({});
-        setRenderProgress(0);
-        setOperationMessage("");
-        setRenderError("Timeline เปลี่ยนไปแล้ว กรุณากดสร้างร่างใหม่ก่อนสร้างคลิปตัวจริง");
-        return;
-      }
       setRenderError(error instanceof Error ? error.message : "เริ่มสร้างคลิปไม่สำเร็จ");
     }
   };
 
   const startRender = () => {
     if (engineState === "connected") {
-      void beginRender(draftReady ? "final" : "draft");
+      void beginRender();
       return;
     }
     setActiveStep(5);
@@ -2312,23 +2263,18 @@ export function ProjectWizard() {
             {activeStep === 5 && (
               <div className="step-panel results-panel">
                 <div className="step-panel-heading inline-heading">
-                  <div><span className="step-kicker">ขั้นที่ 5 จาก 5</span><h2>{renderDone ? "คลิปของคุณพร้อมแล้ว 🎉" : draftReady ? "ร่างพร้อมแล้ว—สร้างตัวจริงได้เลย" : "เลือกร่างที่ชอบที่สุด"}</h2><p>{renderDone ? "ตรวจดูแล้ว ดาวน์โหลดไฟล์ได้ทันที หรือเปิดโฟลเดอร์ผลงานบนเครื่อง" : draftReady ? "ระบบจะใช้เสียงและ timeline เดิม จึงไม่ยิง TTS ซ้ำ" : "ร่างใช้เสียงและจังหวะจริง เลือกหนึ่งแบบก่อนสร้างไฟล์คุณภาพเต็ม"}</p></div>
+                  <div><span className="step-kicker">ขั้นที่ 5 จาก 5</span><h2>{renderDone ? "คลิปของคุณพร้อมแล้ว 🎉" : "ตรวจดูก่อนสร้างคลิป"}</h2><p>{renderDone ? "ตรวจดูแล้ว ดาวน์โหลดไฟล์ได้ทันที หรือเปิดโฟลเดอร์ผลงานบนเครื่อง" : "ทุกอย่างพร้อมแล้ว กดสร้างได้เลย ย้อนกลับไปแก้ขั้นก่อนหน้าได้ตลอด"}</p></div>
                   {renderDone && <span className="ready-large"><CheckCircle2 size={17} /> พร้อมดาวน์โหลด</span>}
                 </div>
 
                 {!renderDone && !rendering && (
                   <>
-                    <div className="draft-grid">
-                      {captionStyles.slice(0, 3).map((style, index) => (
-                        <button type="button" className={`draft-card ${selectedDraft === index ? "selected" : ""}`} onClick={() => { setSelectedDraft(index); setSelectedStyle(style.id); }} key={style.id}>
-                          <span className="draft-video"><img src={stillPoster} alt="" /><b className={style.className}>{style.label}</b><i><Play size={16} fill="currentColor" /></i></span>
-                          <span><b>ร่าง {index + 1}</b><small>{style.name} · {formatDuration(selectedTotalSec)}</small></span>
-                          {selectedDraft === index && <em><Check size={13} /> เลือกแล้ว</em>}
-                        </button>
-                      ))}
+                    <div className="render-checklist">
+                      <div><span><Film size={15} /></span><div><small>คลิปและ Timeline</small><b>{orderedTimelineClips.length} ช่วง · {formatDuration(selectedTotalSec)}</b></div></div>
+                      <div><span><Mic2 size={15} /></span><div><small>เสียงพากย์</small><b>{selectedVoiceData.name}</b></div></div>
+                      <div><span><Captions size={15} /></span><div><small>สไตล์ซับ · ตำแหน่ง</small><b>{selectedStyleData.name} · {captionPosition}</b></div></div>
                     </div>
-                    {draftReady && renderedVideoUrl && <div className="draft-ready-preview"><video src={renderedVideoUrl} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video><span><CheckCircle2 size={15} /> ร่างที่ใช้ timeline และเสียงจริง</span></div>}
-                    <div className="render-summary"><div><span><Mic2 size={15} /> เสียง {selectedVoiceData.name}</span><span><Captions size={15} /> {selectedStyleData.name}</span><span><Clock3 size={15} /> {draftReady ? "ตัวจริงประมาณ 1–3 นาที" : "ร่างประมาณ 25–40 วินาที"}</span></div><button className="button button-primary" type="button" onClick={startRender}><Zap size={17} /> {draftReady ? "สร้างคลิปตัวจริง" : "สร้างร่างที่เลือก"}</button></div>
+                    <div className="render-summary"><div><span><Clock3 size={15} /> ใช้เวลาประมาณ 1–3 นาที</span><span><Zap size={15} /> สร้างเป็นไฟล์คุณภาพเต็มพร้อมโพสต์</span></div><button className="button button-primary" type="button" onClick={startRender}><Zap size={17} /> สร้างคลิป</button></div>
                   </>
                 )}
 
@@ -2336,7 +2282,7 @@ export function ProjectWizard() {
                   <div className="render-progress-card">
                     <div className="render-orbit"><span>{renderProgress}%</span></div>
                     <div className="render-copy">
-                      <span className="live-pill dark"><i /> กำลังสร้าง{renderKind === "draft" ? "ร่าง" : "คลิปตัวจริง"}</span>
+                      <span className="live-pill dark"><i /> กำลังสร้างคลิป</span>
                       <h3>{renderCounter && !hasCounter(renderStage) ? `${renderStage} ${renderCounter.current}/${renderCounter.total}` : renderStage}</h3>
                       <p>คุณปิดหน้านี้ได้ งานจะทำต่อและกลับมาดูความคืบหน้าได้เสมอ</p>
                       <div className="render-bar"><span style={{ width: `${renderProgress}%` }} /></div>
@@ -2382,7 +2328,7 @@ export function ProjectWizard() {
                 <button type="button" className="button button-primary" disabled={clipSelectionInvalid || analyzing || Boolean(operationMessage)} onClick={() => void finishTimelineEdit()}><Check size={17} /> เสร็จสิ้นการตัดต่อ</button>
               </> : <>
                 <button type="button" className="button button-quiet" disabled={activeStep === 1} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
-                {activeStep < 5 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || (activeStep === 1 && clipSelectionInvalid)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : "สร้างร่างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> {draftReady ? "สร้างคลิปตัวจริง" : "สร้างร่างที่เลือก"}</button> : null}
+                {activeStep < 5 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || (activeStep === 1 && clipSelectionInvalid)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : "สร้างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
               </>}
             </footer>
           </section>

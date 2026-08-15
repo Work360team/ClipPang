@@ -690,34 +690,6 @@ select:focus-visible,
   cursor: pointer;
 }
 
-.draft-ready-preview {
-  display: grid;
-  grid-template-columns: minmax(150px, 220px) 1fr;
-  align-items: center;
-  gap: 16px;
-  margin-top: 14px;
-  padding: 12px;
-  border: 1px solid rgba(28, 122, 84, 0.18);
-  border-radius: 13px;
-  background: rgba(28, 122, 84, 0.05);
-}
-
-.draft-ready-preview video {
-  width: 100%;
-  max-height: 240px;
-  border-radius: 9px;
-  background: #111;
-}
-
-.draft-ready-preview > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #1c704f;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .output-row:is(a) { text-decoration: none; }
 
 .notification-button {
@@ -4223,11 +4195,6 @@ select:focus-visible,
 }
 
 .caption-style-grid,
-.draft-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
 
 .caption-style-card {
   position: relative;
@@ -4391,99 +4358,37 @@ select:focus-visible,
   white-space: nowrap;
 }
 
-.draft-grid {
+.render-checklist {
+  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
 }
 
-.draft-card {
-  position: relative;
-  overflow: hidden;
-  padding: 6px;
-  border: 1px solid #e0e2db;
+.render-checklist > div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 15px;
+  border: 1px solid #e2e4dd;
   border-radius: 13px;
   background: #fff;
-  text-align: left;
-  cursor: pointer;
 }
 
-.draft-card.selected {
-  border-color: #d2a600;
-  box-shadow: 0 0 0 2px rgba(255, 210, 63, 0.17);
-}
-
-.draft-video {
-  position: relative;
-  aspect-ratio: 9 / 11;
-  display: block;
-  overflow: hidden;
-  border-radius: 9px;
-}
-
-.draft-video img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-}
-
-.draft-video > b {
-  position: absolute;
-  left: 6%;
-  right: 6%;
-  bottom: 14%;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.draft-video > i {
-  position: absolute;
-  width: 32px;
-  height: 32px;
+.render-checklist > div > span {
   display: grid;
+  flex: 0 0 34px;
   place-items: center;
-  left: 50%;
-  top: 50%;
-  border-radius: 50%;
-  background: rgba(14, 17, 13, 0.6);
-  color: #fff;
-  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: rgba(255, 210, 63, 0.22);
+  color: var(--yellow-dark);
 }
 
-.draft-card > span:nth-child(2) {
-  display: block;
-  padding: 8px 4px 4px;
-}
-
-.draft-card > span:nth-child(2) b,
-.draft-card > span:nth-child(2) small {
-  display: block;
-}
-
-.draft-card > span:nth-child(2) b {
-  font-size: 12.5px;
-  font-weight: 590;
-}
-
-.draft-card > span:nth-child(2) small {
-  color: #969c94;
-  font-size: 11px;
-}
-
-.draft-card > em {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 5px;
-  border-radius: 999px;
-  background: var(--yellow);
-  color: #473a0d;
-  font-size: 11px;
-  font-style: normal;
-}
+.render-checklist > div > div { min-width: 0; }
+.render-checklist small { display: block; font-size: 11.5px; color: var(--ink-faint); }
+.render-checklist b { display: block; margin-top: 2px; font-size: 13.5px; font-weight: 620; overflow-wrap: anywhere; }
 
 .render-summary {
   display: flex;
@@ -4927,12 +4832,10 @@ select:focus-visible,
   .voice-grid { grid-template-columns: 1fr; }
   .script-tabs { display: flex; overflow-x: auto; padding: 2px; }
   .script-tabs button { min-width: 130px; }
-  .caption-style-grid, .draft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .position-control, .render-summary { align-items: flex-start; flex-direction: column; }
   .render-progress-card { grid-template-columns: 1fr; justify-items: center; padding: 24px 19px; text-align: center; }
   .render-copy { width: 100%; }
   .final-result { grid-template-columns: 1fr; }
-  .draft-ready-preview { grid-template-columns: 1fr; }
   /* คอลัมน์เดียว ไม่มีรายการไฟล์ข้าง ๆ มากำหนดความสูง จึงตั้งความสูงให้ช่องตรง ๆ */
   .final-video-slot { min-height: 480px; }
   .live-preview-panel { display: block; }
@@ -4952,7 +4855,6 @@ select:focus-visible,
   .stats-strip { grid-template-columns: 1fr; }
   .stats-strip > div { border-right: 0; border-top: 1px solid #ebebe6; }
   .stats-strip > div:first-child { border-top: 0; }
-  .caption-style-grid, .draft-grid { grid-template-columns: 1fr 1fr; }
   .position-control > div:last-child { width: 100%; }
   .position-control button { flex: 1; }
   .output-head { grid-template-columns: 38px minmax(0, 1fr); }
@@ -5521,7 +5423,6 @@ a.notification-link:hover { background: #fafbf8; }
 .preview-config .is-pending { opacity: 0.55; }
 .preview-config .is-pending .config-icon { background: rgba(255, 255, 255, 0.06); color: #8b9289; }
 
-
 /* ---------- ตัวอย่างสไตล์ซับที่ขยับได้ (ใช้ร่วมกันระหว่างหน้าสไตล์ซับกับขั้นที่ 4) ---------- */
 
 .style-caption {
@@ -5881,4 +5782,5 @@ a.notification-link:hover { background: #fafbf8; }
   .timeline-mode .timeline-inspector-body { gap: 7px; }
   .timeline-mode .trim-duration-readout { padding: 6px 11px; }
   .timeline-mode .wizard-card-footer { padding-block: 8px; }
-}
+}  .render-checklist { grid-template-columns: 1fr; }
+
