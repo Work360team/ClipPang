@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClipPang — คู่มือติดตั้งและใช้งาน</title>
+<link rel="icon" href="/clippang-logo-192.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,600;0,700;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* Defensive reset — กันธีม/เพจแม่ที่มี section { padding: 64px 0; } ชนกับ layout ในนี้ */
+section { padding: 0; }
+#ez-toc-container { display: none !important; }
+
+:root{
+  --paper:#f8f9fc; --paper2:#eef1f8; --white:#ffffff; --border:#d8dde8; --border2:#c2c8d8;
+  --ink:#1a1e2e; --ink2:#2e3450; --muted:#4a5070;
+  --navy:#1a2b52; --navy-l:#eef1f9;
+  --teal:#0d6b5e; --teal-l:#eaf5f2;
+  --gold:#9a6b00; --gold-l:#fdf8ec;
+  --rust:#c0392b; --rust-l:#fdf0ee;
+  --violet:#5b2c99; --violet-l:#f4eeff;
+  --hero-bg-from:#eef1f9; --hero-bg-to:#e4eaf8;
+  --hero-accent:#1a2b52; --hero-text:#1a1e2e; --hero-sub:#3a4268;
+  --hero-stat-bg:rgba(255,255,255,.75); --hero-stat-bdr:rgba(26,43,82,.15);
+  --sans:'Sarabun','Noto Sans Thai',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --serif:'Lora','Noto Serif Thai',Georgia,serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.85;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--serif);color:var(--ink);margin:0}
+h2{font-size:clamp(24px,3.5vw,34px);font-weight:700;line-height:1.3}
+h3{font-size:20px;font-weight:600}
+p{margin:0 0 16px}
+a{color:var(--navy)}
+code{font-family:var(--mono);font-size:.88em;background:var(--navy-l);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--ink2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 24px}
+.sec{padding:64px 0}
+.sec-label{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--muted);margin-bottom:10px}
+.lead{color:var(--ink2);font-size:18px;margin-bottom:32px}
+
+/* progress + nav */
+#prog{position:fixed;top:0;left:0;height:3px;width:0;background:var(--navy);z-index:60}
+.nav{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);z-index:50}
+.nav-inner{max-width:900px;margin:auto;padding:0 24px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.nav-inner::-webkit-scrollbar{display:none}
+.nl{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--muted);text-decoration:none;padding:13px 11px;white-space:nowrap;border-bottom:2px solid transparent}
+.nl:hover{color:var(--ink)}
+.nl.on{color:var(--navy);border-bottom-color:var(--navy)}
+
+/* hero */
+.hero{background:linear-gradient(135deg,var(--hero-bg-from) 0%,var(--hero-bg-to) 100%);border-bottom:2px solid var(--border);padding:72px 24px 56px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:rgba(26,43,82,.05);top:-200px;right:-150px;pointer-events:none}
+.hero-inner{max-width:900px;margin:auto;position:relative;z-index:1}
+.hero-label{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--hero-accent);background:rgba(26,43,82,.08);border:1px solid rgba(26,43,82,.18);display:inline-block;padding:4px 12px;border-radius:4px;margin-bottom:20px}
+.hero h1{font-size:clamp(28px,5vw,52px);font-weight:700;color:var(--hero-text);line-height:1.2;margin:0 0 16px}
+.hero h1 em{color:var(--hero-accent);font-style:normal}
+.hero-sub{font-size:17px;color:var(--hero-sub);line-height:1.7;max-width:640px;margin:0 0 36px}
+.hero-stats{display:flex;flex-wrap:wrap;gap:12px}
+.hs{background:var(--hero-stat-bg);border:1px solid var(--hero-stat-bdr);border-radius:10px;padding:14px 22px;min-width:96px;text-align:center;backdrop-filter:blur(4px)}
+.hs-v{font-size:28px;font-weight:700;color:var(--hero-accent);font-family:var(--mono);line-height:1.1}
+.hs-l{font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--muted);margin-top:4px}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:28px 0}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px 22px}
+.card-ic{font-size:22px;margin-bottom:8px}
+.card h3{font-size:17px;margin-bottom:6px}
+.card p{font-size:15px;color:var(--ink2);margin:0;line-height:1.7}
+.pain{background:var(--rust-l);border:1px solid rgba(192,57,43,.2);border-left:4px solid var(--rust);border-radius:10px;padding:18px 20px}
+.pain b{display:block;font-size:15.5px;margin-bottom:4px;color:var(--ink)}
+.pain span{font-size:14.5px;color:var(--ink2);line-height:1.7}
+
+/* module accordion */
+.mod{border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.mod.m1{background:var(--navy-l);border-left:4px solid var(--navy)}
+.mod.m2{background:var(--teal-l);border-left:4px solid var(--teal)}
+.mod.m3{background:var(--gold-l);border-left:4px solid var(--gold)}
+.mod.m4{background:var(--violet-l);border-left:4px solid var(--violet)}
+.mod.m5{background:var(--rust-l);border-left:4px solid var(--rust)}
+.mod.m1 .mod-head{background:rgba(26,43,82,.07)}
+.mod.m2 .mod-head{background:rgba(13,107,94,.07)}
+.mod.m3 .mod-head{background:rgba(154,107,0,.07)}
+.mod.m4 .mod-head{background:rgba(91,44,153,.07)}
+.mod.m5 .mod-head{background:rgba(192,57,43,.07)}
+.mod-head{display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;user-select:none}
+.mod-icon{font-size:22px;flex:none}
+.mod-info{flex:1;min-width:0}
+.mod-num{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.12em;color:var(--muted)}
+.mod-name{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--ink);line-height:1.35}
+.mod-tag{font-size:14px;color:var(--muted);margin-top:2px}
+.mod-tog{font-family:var(--mono);font-size:19px;color:var(--muted);flex:none}
+.mod-body{display:none;padding:4px 20px 22px}
+.mod-body.show{display:block}
+.mod-body p{font-size:15.5px;color:var(--ink2)}
+.anatomy{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:6px 0 18px}
+.an-box{background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:9px;padding:11px 13px}
+.an-label{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--muted);margin-bottom:3px}
+.an-val{font-size:14.5px;color:var(--ink);line-height:1.55}
+.lbl{display:block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.12em;color:var(--muted);margin:18px 0 8px}
+.mod-body ul{margin:0 0 4px;padding-left:20px}
+.mod-body li{font-size:15.5px;color:var(--ink2);line-height:1.75;margin-bottom:5px}
+
+/* steps */
+.steps{margin-top:28px}
+.step{display:flex;gap:18px}
+.sl{display:flex;flex-direction:column;align-items:center;flex:none}
+.sn{width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;font-family:var(--mono);font-size:14px;font-weight:600;display:grid;place-items:center}
+.sl-line{flex:1;width:2px;background:var(--border2);margin:6px 0}
+.step:last-child .sl-line{display:none}
+.sb{padding-bottom:30px;flex:1;min-width:0}
+.stit{font-family:var(--serif);font-size:19px;font-weight:600;margin-bottom:5px;line-height:1.35}
+.sdesc{font-size:15.5px;color:var(--ink2);margin-bottom:10px}
+.sli{margin:0 0 10px;padding-left:20px}
+.sli li{font-size:15px;color:var(--ink2);line-height:1.75;margin-bottom:4px}
+.tip{display:flex;gap:9px;background:var(--teal-l);border:1px solid rgba(13,107,94,.2);border-radius:9px;padding:11px 14px;font-size:14.5px;color:var(--ink2);line-height:1.65}
+
+/* code block */
+.code{background:#1a1e2e;border-radius:10px;padding:15px 18px;margin:12px 0;overflow-x:auto}
+.code pre{margin:0;font-family:var(--mono);font-size:13.5px;line-height:1.75;color:rgba(255,255,255,.92);white-space:pre}
+.code .c{color:rgba(255,255,255,.5)}
+.os-tabs{display:flex;gap:8px;margin:22px 0 12px;flex-wrap:wrap}
+.ost{font-family:var(--mono);font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--border2);background:var(--white);color:var(--muted);cursor:pointer}
+.ost.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.ospane{display:none}
+.ospane.on{display:block}
+
+/* callouts */
+.callout{border-radius:10px;padding:16px 20px;margin:20px 0;font-size:15.5px;line-height:1.75}
+.callout b{display:block;margin-bottom:4px}
+.callout-navy{background:var(--navy-l);border:1px solid rgba(26,43,82,.2);border-left:4px solid var(--navy);color:var(--ink2)}
+.callout-teal{background:var(--teal-l);border:1px solid rgba(13,107,94,.2);border-left:4px solid var(--teal);color:var(--ink2)}
+.callout-gold{background:var(--gold-l);border:1px solid rgba(154,107,0,.25);border-left:4px solid var(--gold);color:var(--ink2)}
+.callout-rust{background:var(--rust-l);border:1px solid rgba(192,57,43,.2);border-left:4px solid var(--rust);color:var(--ink2)}
+
+/* table */
+.tbl-wrap{overflow-x:auto;margin:24px 0;border:1px solid var(--border);border-radius:12px;background:var(--white)}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--border);font-size:15px;vertical-align:top}
+th{background:var(--navy-l);font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+
+/* faq */
+.faq{border:1px solid var(--border);background:var(--white);border-radius:11px;margin-bottom:10px;overflow:hidden}
+.faq-q{display:flex;gap:12px;align-items:flex-start;padding:15px 18px;cursor:pointer;font-weight:600;font-size:16px;color:var(--ink)}
+.faq-q .qm{font-family:var(--mono);color:var(--rust);flex:none}
+.faq-a{display:none;padding:0 18px 16px 46px;font-size:15.5px;color:var(--ink2);line-height:1.8}
+.faq-a.show{display:block}
+.foot{background:var(--navy);color:rgba(255,255,255,.85);padding:40px 24px;text-align:center;font-size:14.5px}
+.foot b{color:#fff;font-family:var(--serif);font-size:17px;display:block;margin-bottom:6px}
+@media(max-width:640px){body{font-size:16px}.sec{padding:48px 0}.hero{padding:56px 20px 44px}}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-label">คู่มือติดตั้งและใช้งาน · เวอร์ชัน 0.3.0</div>
+    <h1>ClipPang<br><em>คลิปสินค้าดิบ → วิดีโอพร้อมโพสต์</em></h1>
+    <p class="hero-sub">โปรแกรมที่รันบนคอมพิวเตอร์ของคุณเอง เปลี่ยนคลิปสินค้าที่ถ่ายไว้ให้กลายเป็นวิดีโอแนวตั้งพร้อมเสียงพากย์ไทยและซับไตเติลตามคำพูด สำหรับปักตะกร้า TikTok Shop — ไม่ต้องสมัครสมาชิก ไม่ต้องอัปโหลดคลิปขึ้นคลาวด์</p>
+    <div class="hero-stats">
+      <div class="hs"><div class="hs-v">5</div><div class="hs-l">ขั้นตอน</div></div>
+      <div class="hs"><div class="hs-v">30</div><div class="hs-l">เสียงพากย์</div></div>
+      <div class="hs"><div class="hs-v">15</div><div class="hs-l">สไตล์ซับ</div></div>
+      <div class="hs"><div class="hs-v">60s</div><div class="hs-l">ความยาวสูงสุด</div></div>
+      <div class="hs"><div class="hs-v">1</div><div class="hs-l">สิ่งที่ต้องลงเอง</div></div>
+    </div>
+  </div>
+</div>
+
+<nav class="nav"><div class="nav-inner">
+  <a class="nl" href="#what">คืออะไร</a>
+  <a class="nl" href="#can">ทำอะไรได้</a>
+  <a class="nl" href="#need">ต้องมีอะไร</a>
+  <a class="nl" href="#install">ติดตั้ง</a>
+  <a class="nl" href="#firstrun">ตั้งค่าครั้งแรก</a>
+  <a class="nl" href="#use">วิธีใช้ 5 ขั้นตอน</a>
+  <a class="nl" href="#files">ไฟล์อยู่ไหน</a>
+  <a class="nl" href="#cost">โควตาและค่าใช้จ่าย</a>
+  <a class="nl" href="#mobile">ใช้จากมือถือ</a>
+  <a class="nl" href="#faq">ปัญหาที่พบบ่อย</a>
+  <a class="nl" href="#cheat">สรุปคำสั่ง</a>
+</div></nav>
+
+<section id="what" class="sec" style="background:var(--white)">
+  <div class="wrap">
+    <div class="sec-label">01 · ทำความรู้จัก</div>
+    <h2>ClipPang คืออะไร</h2>
+    <p class="lead">ClipPang เป็นเว็บแอปที่ <b>รันอยู่บนเครื่องคุณเอง</b> เปิดใช้ผ่านเบราว์เซอร์เหมือนเว็บทั่วไป แต่ไม่มีเซิร์ฟเวอร์กลาง ไม่มีค่าสมาชิกรายเดือน และคลิปทุกไฟล์ไม่เคยออกจากคอมพิวเตอร์ของคุณ</p>
+
+    <p>สิ่งที่มันทำคือรับ <b>คลิปสินค้าดิบ</b> ที่คุณถ่ายไว้ (ถ่ายด้วยมือถือก็ได้) แล้วเปลี่ยนเป็นวิดีโอแนวตั้ง 9:16 ที่มีเสียงพากย์ภาษาไทยและซับไตเติลขึ้นตามคำพูด พร้อมเอาไปโพสต์ปักตะกร้าได้เลย งานที่ปกติต้องเปิดโปรแกรมตัดต่อ หาคนพากย์ และพิมพ์ซับเองทีละคำ ถูกยุบเหลือ 5 ขั้นตอนบนหน้าเว็บเดียว</p>
+
+    <div class="grid">
+      <div class="card"><div class="card-ic">🔒</div><h3>ไฟล์อยู่กับคุณ</h3><p>เซิร์ฟเวอร์ฟังเฉพาะ 127.0.0.1 คลิปและไฟล์ผลลัพธ์ไม่ถูกอัปโหลดออกไปไหน มีแต่ข้อความสินค้าและสคริปต์เท่านั้นที่ส่งไปให้ AI ตอนสร้างเสียงหรือเขียนสคริปต์</p></div>
+      <div class="card"><div class="card-ic">💸</div><h3>ไม่มีค่ารายเดือน</h3><p>ตัวโปรแกรมไม่คิดเงิน ค่าใช้จ่ายเดียวคือ Gemini API ซึ่งมีโควตาฟรีให้ใช้ทุกวัน คลิปหนึ่งตัวถ้าจ่ายจริงตกราว ฿0.15</p></div>
+      <div class="card"><div class="card-ic">🎙️</div><h3>เสียงไทย 30 เสียง</h3><p>เลือกได้ทั้งเสียงชาย 16 เสียงและหญิง 14 เสียง ฟังตัวอย่างก่อนเลือกได้โดยไม่เปลืองโควตา</p></div>
+      <div class="card"><div class="card-ic">✍️</div><h3>ซับตรงคำพูด</h3><p>ซับขึ้นตามจังหวะเสียงจริง ไม่ใช่กะเอา เลือกได้ 15 สไตล์ และวางไว้ด้านบน กลาง หรือล่างของจอ</p></div>
+    </div>
+
+    <div class="callout callout-navy"><b>เหมาะกับใคร</b>คนขายของออนไลน์ที่ถ่ายคลิปสินค้าเองแล้วต้องทำวิดีโอโพสต์บ่อย ๆ โดยเฉพาะ TikTok Shop — ไม่ต้องมีพื้นฐานตัดต่อ แต่ต้องพอกดใช้คอมพิวเตอร์ได้</div>
+  </div>
+</section>
+
+<section id="can" class="sec" style="background:var(--paper)">
+  <div class="wrap">
+    <div class="sec-label">02 · ปัญหาที่มันแก้</div>
+    <h2>ก่อนมี ClipPang ต้องเจออะไรบ้าง</h2>
+    <p class="lead">คลิปหนึ่งตัวที่ดู "ธรรมดามาก" จริง ๆ แล้วกินเวลาไปหลายอย่างพร้อมกัน</p>
+    <div class="grid">
+      <div class="pain"><b>ตัดต่อเองทีละคลิป</b><span>เปิดโปรแกรมตัดต่อ ลากไทม์ไลน์ ตัดหัวตัดท้าย กว่าจะได้ 30 วินาทีก็หมดไปครึ่งชั่วโมง</span></div>
+      <div class="pain"><b>ไม่กล้าพากย์เอง</b><span>จะจ้างคนพากย์ก็มีค่าใช้จ่ายต่อคลิป จะพากย์เองก็ไม่มั่นใจเสียงตัวเอง</span></div>
+      <div class="pain"><b>พิมพ์ซับทีละคำ</b><span>ซับต้องตรงกับที่พูด ไม่งั้นดูแล้วขัดตา การไล่จับเวลาเองคืองานที่น่าเบื่อที่สุด</span></div>
+      <div class="pain"><b>คิดสคริปต์ขายไม่ออก</b><span>รู้ว่าสินค้าดียังไง แต่เรียบเรียงเป็นคำพูด 30 วินาทีที่คนดูจบไม่ถูก</span></div>
+    </div>
+
+    <h2 style="margin-top:44px">ClipPang ทำอะไรให้ได้บ้าง</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ความสามารถ</th><th>รายละเอียด</th></tr></thead>
+        <tbody>
+          <tr><td><b>รวมหลายคลิปเป็นตัวเดียว</b></td><td>อัปโหลดพร้อมกันได้สูงสุด 12 ไฟล์ ลากเรียงลำดับ ตัดหัวท้าย แยกคลิป และลบช่วงที่ไม่เอาได้บน Timeline (สูงสุด 24 ช่วง รวมไม่เกิน 60 วินาที)</td></tr>
+          <tr><td><b>ช่วยเขียนสคริปต์ขาย</b></td><td>กรอกรายละเอียดสินค้า แล้วให้ AI ร่างสคริปต์พากย์ให้ แก้ไขเองทีหลังได้ทุกประโยค</td></tr>
+          <tr><td><b>พากย์เสียงไทย</b></td><td>30 เสียงจาก Gemini TTS ปรับความเร็วและโทนได้ ฟังตัวอย่างทุกเสียงได้ฟรีก่อนเลือก</td></tr>
+          <tr><td><b>ใส่ซับตามคำพูด</b></td><td>15 สไตล์ — 3 สไตล์พื้นฐาน (เร็ว) และ 12 สไตล์พรีเมียมแบบมีอนิเมชัน เลือกตำแหน่งบน/กลาง/ล่างได้</td></tr>
+          <tr><td><b>ร่างก่อนของจริง</b></td><td>สั่งเรนเดอร์ "ร่าง" ดูผลเร็ว ๆ ก่อน ถ้าพอใจค่อยสั่งตัวจริงความละเอียดเต็ม</td></tr>
+          <tr><td><b>แคปชั่นสำหรับโพสต์</b></td><td>ระบบร่างแคปชั่นพร้อมแฮชแท็กให้อัตโนมัติตั้งแต่คลิปเสร็จ ก๊อปไปวางได้เลย</td></tr>
+          <tr><td><b>ไฟล์ครบชุด</b></td><td>ได้ MP4 พร้อมโพสต์ บวกไฟล์ซับ SRT/ASS ภาพปก และไฟล์เสียง เผื่อเอาไปแก้ต่อในโปรแกรมอื่น</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="need" class="sec" style="background:var(--white)">
+  <div class="wrap">
+    <div class="sec-label">03 · เตรียมตัว</div>
+    <h2>สิ่งที่ต้องมีก่อนติดตั้ง</h2>
+    <p class="lead">มีอยู่อย่างเดียวที่ต้องลงเองก่อน ที่เหลือ ClipPang จัดการให้ทั้งหมด</p>
+
+    <div class="grid">
+      <div class="card" style="border-left:4px solid var(--rust)"><div class="card-ic">1️⃣</div><h3>Node.js 22.13 ขึ้นไป</h3><p><b>ต้องลงเอง</b> — โหลดจาก <a href="https://nodejs.org/">nodejs.org</a> เลือกตัว LTS กด Next รัว ๆ จนจบ ตัวนี้คือเครื่องยนต์ที่ทำให้ ClipPang รันได้</p></div>
+      <div class="card" style="border-left:4px solid var(--teal)"><div class="card-ic">2️⃣</div><h3>FFmpeg</h3><p><b>ไม่ต้องลงเอง</b> — ClipPang มีปุ่มติดตั้งให้ในหน้าตั้งค่า กดปุ่มเดียวจบ ตัวนี้คือโปรแกรมที่ทำงานตัดต่อจริง ๆ เบื้องหลัง</p></div>
+      <div class="card" style="border-left:4px solid var(--gold)"><div class="card-ic">3️⃣</div><h3>Gemini API key</h3><p><b>ขอฟรี</b> — ใช้บัญชี Google ขอที่ <a href="https://aistudio.google.com/app/apikey">Google AI Studio</a> ไม่ต้องผูกบัตร ตัวนี้คือกุญแจสำหรับสร้างเสียงพากย์</p></div>
+      <div class="card"><div class="card-ic">💻</div><h3>เครื่องคอมพิวเตอร์</h3><p>Windows, macOS หรือ Linux ก็ได้ · พื้นที่ว่างสัก 5 GB สำหรับคลิปและไฟล์ผลลัพธ์ · การเรนเดอร์ใช้ CPU ค่อนข้างหนัก เครื่องแรงจะเสร็จไวกว่า</p></div>
+    </div>
+
+    <div class="callout callout-gold"><b>ยังไม่ต้องกังวลเรื่อง Gemini key ตอนนี้</b>ติดตั้งให้เปิดโปรแกรมได้ก่อน แล้วค่อยขอ key ทีหลังก็ได้ — หน้าตั้งค่าจะบอกเองว่ายังขาดอะไร</div>
+  </div>
+</section>
+
+<section id="install" class="sec" style="background:var(--paper2)">
+  <div class="wrap">
+    <div class="sec-label">04 · ติดตั้ง</div>
+    <h2>ติดตั้งและเปิดโปรแกรม</h2>
+    <p class="lead">ครั้งแรกจะช้าหน่อยเพราะต้องโหลดส่วนประกอบ (ราว 3–10 นาทีแล้วแต่เน็ต) ครั้งต่อ ๆ ไปเปิดได้ในไม่กี่วินาที</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="sl"><div class="sn">1</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">ลง Node.js ก่อน</div>
+          <div class="sdesc">เข้า <a href="https://nodejs.org/">nodejs.org</a> โหลดตัว <b>LTS</b> แล้วติดตั้งตามปกติ</div>
+          <div class="tip"><span>💡</span><span>อยากเช็กว่าลงสำเร็จไหม เปิด Terminal (Mac) หรือ Command Prompt (Windows) พิมพ์ <code>node -v</code> ถ้าขึ้นเลขเวอร์ชัน 22 ขึ้นไปคือใช้ได้</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">2</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">วางโฟลเดอร์ ClipPang ไว้ที่ที่จำได้</div>
+          <div class="sdesc">แตกไฟล์โปรแกรมไว้ที่ไหนก็ได้ที่คุณมีสิทธิ์เขียนไฟล์ เช่น <code>D:\ClipPang</code> หรือใน Documents</div>
+          <ul class="sli">
+            <li>อย่าวางไว้ใน Program Files หรือโฟลเดอร์ระบบ เพราะโปรแกรมต้องเขียนไฟล์ผลลัพธ์ลงในโฟลเดอร์ตัวเอง</li>
+            <li>ถ้าวางไว้บน OneDrive/Google Drive ที่ซิงก์ตลอด อาจช้าและชนกันได้ แนะนำให้วางในไดรฟ์ปกติ</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">3</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">เปิดโปรแกรม</div>
+          <div class="sdesc">เลือกตามระบบปฏิบัติการที่ใช้</div>
+
+          <div class="os-tabs">
+            <button class="ost on" onclick="osTab(this,'win')">Windows</button>
+            <button class="ost" onclick="osTab(this,'mac')">macOS</button>
+            <button class="ost" onclick="osTab(this,'linux')">Linux</button>
+          </div>
+
+          <div class="ospane on" data-os="win">
+            <p style="font-size:15.5px;color:var(--ink2)">ดับเบิลคลิกไฟล์ <code>เริ่มโปรแกรม.bat</code> ในโฟลเดอร์ ClipPang</p>
+            <div class="tip"><span>🛡️</span><span>ถ้า Windows ขึ้นหน้าจอฟ้า "Windows protected your PC" ให้กด <b>More info → Run anyway</b> — เกิดเพราะไฟล์ไม่ได้เซ็นดิจิทัล ไม่ใช่เพราะมีไวรัส</span></div>
+          </div>
+
+          <div class="ospane" data-os="mac">
+            <p style="font-size:15.5px;color:var(--ink2)">ครั้งแรกเปิด Terminal ที่โฟลเดอร์นี้แล้วรันคำสั่งนี้หนึ่งครั้ง</p>
+            <div class="code"><pre>chmod +x start.command start.sh
+./start.command</pre></div>
+            <p style="font-size:15.5px;color:var(--ink2)">หลังจากนั้นดับเบิลคลิก <code>start.command</code> ได้เลย</p>
+          </div>
+
+          <div class="ospane" data-os="linux">
+            <div class="code"><pre>chmod +x start.sh
+./start.sh</pre></div>
+          </div>
+
+          <div class="tip" style="margin-top:12px"><span>⚙️</span><span>ตัวเปิดโปรแกรมจะตรวจ Node ให้เอง ติดตั้งส่วนประกอบที่ขาด แล้วเปิดเบราว์เซอร์ไปที่ <code>http://127.0.0.1:4321</code> อัตโนมัติ — ถ้าพอร์ตนั้นมีคนใช้อยู่ ระบบจะเลื่อนไปพอร์ตถัดไปและบอก URL จริงในหน้าต่างดำ</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">4</div></div>
+        <div class="sb">
+          <div class="stit">อย่าปิดหน้าต่างดำ</div>
+          <div class="sdesc">หน้าต่างสีดำที่เด้งขึ้นมาคือตัวโปรแกรมเอง ถ้าปิดหน้าต่างนั้น เว็บจะใช้ไม่ได้ทันที ให้ย่อเก็บไว้แทน</div>
+          <div class="tip"><span>🔚</span><span>เลิกใช้งานเมื่อไหร่ ค่อยปิดหน้าต่างดำเพื่อปิดโปรแกรม งานที่เรนเดอร์ค้างอยู่จะหยุดไปด้วย</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="firstrun" class="sec" style="background:var(--white)">
+  <div class="wrap">
+    <div class="sec-label">05 · ตั้งค่าครั้งแรก</div>
+    <h2>ตั้งค่าครั้งแรก ทำครั้งเดียวจบ</h2>
+    <p class="lead">เปิดเว็บได้แล้วยังใช้งานไม่ได้ทันที ต้องเติมสองอย่างนี้ก่อน</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="sl"><div class="sn">1</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">ติดตั้ง FFmpeg จากในเว็บ</div>
+          <div class="sdesc">ไปที่เมนู <b>ตั้งค่า</b> (หรือ <b>ศูนย์ช่วยเหลือการติดตั้ง</b> มุมล่างซ้าย) ระบบจะตรวจให้เองว่ามี FFmpeg แล้วหรือยัง ถ้ายังไม่มีจะมีปุ่มติดตั้งให้กด</div>
+          <ul class="sli">
+            <li>ClipPang จะโหลดตัวติดตั้งที่ถูกต้องตามระบบปฏิบัติการให้เอง แล้วเก็บไว้ในโฟลเดอร์ตัวเอง ไม่ไปยุ่งกับที่อื่นในเครื่อง</li>
+            <li>ใช้เวลาราว 1–3 นาที ระหว่างนั้นจะเห็นแถบความคืบหน้า</li>
+          </ul>
+          <div class="tip"><span>💡</span><span>FFmpeg คือเครื่องมือตัดต่อวิดีโอที่ทำงานเบื้องหลัง ทุกอย่างที่เกี่ยวกับการรวมคลิป ใส่เสียง และเผาซับลงวิดีโอ ใช้ตัวนี้ทั้งหมด</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">2</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">ขอ Gemini API key แล้ววางในหน้าตั้งค่า</div>
+          <div class="sdesc">เข้า <a href="https://aistudio.google.com/app/apikey">Google AI Studio</a> ล็อกอินด้วยบัญชี Google กด <b>Create API key</b> แล้วคัดลอกมาวางในช่องของหน้าตั้งค่า</div>
+          <ul class="sli">
+            <li>key จะถูกบันทึกลงไฟล์ <code>.env</code> ในโฟลเดอร์โปรแกรม ไม่ได้ส่งไปเก็บที่ไหน</li>
+            <li>ใส่ได้หลายใบ ถ้าใบหนึ่งใช้ครบโควตาวันนั้น ระบบจะสลับไปใบถัดไปให้เอง</li>
+            <li>กด <b>ฟังเสียงทดสอบ</b> เพื่อดูว่า key ใช้ได้จริง (ใช้โควตา 1 คำขอ)</li>
+          </ul>
+          <div class="tip"><span>🔑</span><span>อยากได้โควตาเพิ่ม ต้องสร้าง key จาก <b>คนละโปรเจกต์ Google Cloud</b> — สร้างหลาย key ในโปรเจกต์เดียวกันใช้โควตาก้อนเดียวกัน ไม่ได้เพิ่มอะไร</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">3</div></div>
+        <div class="sb">
+          <div class="stit">เช็กว่าพร้อมแล้ว</div>
+          <div class="sdesc">ในหน้าตั้งค่าจะมีการ์ดสรุปสถานะ ถ้าขึ้นว่า <b>"เครื่องนี้พร้อมทำคลิปแล้ว"</b> ครบทั้งสามข้อ (ตัดต่อวิดีโอ / เสียงพากย์ / ผู้ช่วยเขียนสคริปต์) แปลว่าเริ่มใช้งานได้</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="use" class="sec" style="background:var(--paper2)">
+  <div class="wrap">
+    <div class="sec-label">06 · วิธีใช้งาน</div>
+    <h2>ทำคลิปหนึ่งตัว 5 ขั้นตอน</h2>
+    <p class="lead">กด <b>สร้างคลิปใหม่</b> แล้วเดินไปทีละขั้น ทุกขั้นย้อนกลับมาแก้ได้ตลอดเวลา งานถูกบันทึกอัตโนมัติ ปิดเบราว์เซอร์แล้วกลับมาทำต่อได้ · กดที่หัวข้อเพื่อดูรายละเอียด</p>
+
+    <div class="mod m1">
+      <div class="mod-head" onclick="tog(this)">
+        <div class="mod-icon">🎬</div>
+        <div class="mod-info"><div class="mod-num">ขั้นที่ 1 · คลิป</div><div class="mod-name">เลือกวิดีโอและเรียง Timeline</div><div class="mod-tag">อัปโหลดคลิปดิบ แล้วเรียงลำดับกับตัดส่วนที่ไม่เอาออก</div></div>
+        <div class="mod-tog">＋</div>
+      </div>
+      <div class="mod-body">
+        <div class="anatomy">
+          <div class="an-box"><div class="an-label">รับได้</div><div class="an-val">สูงสุด 12 ไฟล์พร้อมกัน</div></div>
+          <div class="an-box"><div class="an-label">Timeline</div><div class="an-val">สูงสุด 24 ช่วง</div></div>
+          <div class="an-box"><div class="an-label">ความยาว</div><div class="an-val">รวมไม่เกิน 60 วินาที</div></div>
+          <div class="an-box"><div class="an-label">ผลลัพธ์</div><div class="an-val">ลำดับคลิปที่จะใช้จริง</div></div>
+        </div>
+        <span class="lbl">ทำอะไรได้บ้าง</span>
+        <ul>
+          <li>ลากไฟล์มาวาง หรือกดเลือกจากเครื่อง — หรือจะก๊อปคลิปไปไว้ในโฟลเดอร์ <code>input/</code> ก็เห็นเหมือนกัน</li>
+          <li>ลากสลับลำดับคลิป ตัดหัวตัดท้าย แยกคลิปตรงจุดที่หยุดดู และลบช่วงที่ไม่เอา</li>
+          <li>คลิปต้นฉบับยังอยู่ใน Media Bin เสมอ ลบช่วงออกจาก Timeline แล้วกดเพิ่มกลับได้ ไม่ต้องอัปโหลดใหม่</li>
+        </ul>
+        <div class="callout callout-teal" style="margin:16px 0 0"><b>ทำไมจำกัด 60 วินาที</b>เพราะคลิปปักตะกร้าที่คนดูจนจบมักสั้น และเสียงพากย์ที่ยาวกว่านี้จะฟังเหมือนอ่านสเปกสินค้ามากกว่าชวนซื้อ</div>
+      </div>
+    </div>
+
+    <div class="mod m2">
+      <div class="mod-head" onclick="tog(this)">
+        <div class="mod-icon">📦</div>
+        <div class="mod-info"><div class="mod-num">ขั้นที่ 2 · สินค้า</div><div class="mod-name">บอกจุดขาย</div><div class="mod-tag">กรอกว่าขายอะไร เด่นตรงไหน ขายใคร</div></div>
+        <div class="mod-tog">＋</div>
+      </div>
+      <div class="mod-body">
+        <div class="anatomy">
+          <div class="an-box"><div class="an-label">ต้องกรอก</div><div class="an-val">ชื่อสินค้า + จุดเด่น</div></div>
+          <div class="an-box"><div class="an-label">ควรกรอก</div><div class="an-val">กลุ่มลูกค้า ราคา โปรโมชัน</div></div>
+          <div class="an-box"><div class="an-label">ใช้ทำอะไร</div><div class="an-val">เป็นวัตถุดิบให้ AI เขียนสคริปต์</div></div>
+          <div class="an-box"><div class="an-label">ผลลัพธ์</div><div class="an-val">สคริปต์ที่ตรงกับสินค้าจริง</div></div>
+        </div>
+        <span class="lbl">เคล็ดลับ</span>
+        <ul>
+          <li>เขียนจุดเด่นเป็นข้อ ๆ สั้น ๆ ดีกว่าเขียนยาวเป็นย่อหน้า</li>
+          <li>บอกให้ชัดว่าลูกค้าได้อะไร ไม่ใช่แค่สินค้ามีอะไร — "ชาร์จเต็มใน 30 นาที" ดีกว่า "รองรับ Fast Charge"</li>
+          <li>ถ้ามีคำที่อยากให้พูดแน่ ๆ เช่นชื่อแบรนด์ ใส่ลงไปเลย เดี๋ยวสคริปต์จะหยิบไปใช้</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mod m4">
+      <div class="mod-head" onclick="tog(this)">
+        <div class="mod-icon">🎙️</div>
+        <div class="mod-info"><div class="mod-num">ขั้นที่ 3 · เสียง</div><div class="mod-name">เลือกนักพากย์</div><div class="mod-tag">ฟังตัวอย่างได้ทั้ง 30 เสียงโดยไม่เปลืองโควตา</div></div>
+        <div class="mod-tog">＋</div>
+      </div>
+      <div class="mod-body">
+        <div class="anatomy">
+          <div class="an-box"><div class="an-label">จำนวนเสียง</div><div class="an-val">30 เสียง (ชาย 16 · หญิง 14)</div></div>
+          <div class="an-box"><div class="an-label">ปรับได้</div><div class="an-val">ความเร็วและโทนการพูด</div></div>
+          <div class="an-box"><div class="an-label">ฟังตัวอย่าง</div><div class="an-val">ฟรี ไม่ใช้โควตา</div></div>
+          <div class="an-box"><div class="an-label">ผลลัพธ์</div><div class="an-val">เสียงพากย์ของคลิปนี้</div></div>
+        </div>
+        <span class="lbl">วิธีเลือกให้ได้เสียงที่ใช่</span>
+        <ul>
+          <li>กรองเพศเสียงก่อน แล้วไล่ฟังเฉพาะกลุ่มที่สนใจ — ตัวอย่างทุกเสียงถูกสร้างไว้ล่วงหน้าแล้ว กดฟังได้ทันที</li>
+          <li>สินค้าความงาม/สุขภาพมักเข้ากับเสียงนุ่ม ส่วนของใช้ในบ้านหรือแกดเจ็ตมักเข้ากับเสียงกระฉับกระเฉง</li>
+          <li>เปลี่ยนเสียงทีหลังได้ แต่ต้องสร้างเสียงใหม่ ซึ่งใช้โควตาเพิ่ม</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mod m3">
+      <div class="mod-head" onclick="tog(this)">
+        <div class="mod-icon">✍️</div>
+        <div class="mod-info"><div class="mod-num">ขั้นที่ 4 · สคริปต์ + ซับ</div><div class="mod-name">ปรับคำพูดและสไตล์ซับ</div><div class="mod-tag">แก้ประโยคได้ทุกท่อน เลือกซับ 15 สไตล์</div></div>
+        <div class="mod-tog">＋</div>
+      </div>
+      <div class="mod-body">
+        <div class="anatomy">
+          <div class="an-box"><div class="an-label">สคริปต์</div><div class="an-val">AI ร่างให้ แก้เองได้ทุกท่อน</div></div>
+          <div class="an-box"><div class="an-label">สไตล์ซับ</div><div class="an-val">15 แบบ · ดูตัวอย่างเคลื่อนไหวได้</div></div>
+          <div class="an-box"><div class="an-label">ตำแหน่ง</div><div class="an-val">บน · กลาง · ล่าง</div></div>
+          <div class="an-box"><div class="an-label">ผลลัพธ์</div><div class="an-val">คำพูดและหน้าตาซับสุดท้าย</div></div>
+        </div>
+        <span class="lbl">สไตล์ซับสองแบบ ต่างกันยังไง</span>
+        <ul>
+          <li><b>พื้นฐาน (3 สไตล์)</b> — เผาซับลงวิดีโอตรง ๆ เรนเดอร์เร็วมาก เหมาะกับงานที่ต้องรีบโพสต์</li>
+          <li><b>พรีเมียม HyperFrames (12 สไตล์)</b> — มีอนิเมชันคำต่อคำ เด้ง ไล่สี เรืองแสง สวยกว่าแต่ใช้เวลาเรนเดอร์นานกว่า</li>
+        </ul>
+        <div class="callout callout-gold" style="margin:16px 0 0"><b>ระวังเรื่องความยาว</b>ถ้าสคริปต์ยาวจนเสียงพากย์เกินความยาว Timeline ระบบจะหยุดและบอกให้ย่อสคริปต์ แทนที่จะไปยืดคลิปเองจนภาพค้าง</div>
+      </div>
+    </div>
+
+    <div class="mod m5">
+      <div class="mod-head" onclick="tog(this)">
+        <div class="mod-icon">⬇️</div>
+        <div class="mod-info"><div class="mod-num">ขั้นที่ 5 · ผลลัพธ์</div><div class="mod-name">เรนเดอร์และดาวน์โหลด</div><div class="mod-tag">ดูร่างก่อน แล้วค่อยสั่งตัวจริง</div></div>
+        <div class="mod-tog">＋</div>
+      </div>
+      <div class="mod-body">
+        <div class="anatomy">
+          <div class="an-box"><div class="an-label">ร่าง</div><div class="an-val">เร็ว ใช้ดูว่าโอเคไหม</div></div>
+          <div class="an-box"><div class="an-label">ตัวจริง</div><div class="an-val">ความละเอียดเต็ม พร้อมโพสต์</div></div>
+          <div class="an-box"><div class="an-label">ได้ไฟล์</div><div class="an-val">MP4 · SRT · ASS · ภาพปก · เสียง</div></div>
+          <div class="an-box"><div class="an-label">แถม</div><div class="an-val">แคปชั่นพร้อมแฮชแท็ก</div></div>
+        </div>
+        <span class="lbl">ระหว่างรอ</span>
+        <ul>
+          <li>เปลี่ยนไปหน้าอื่นหรือทำงานอื่นได้ ความคืบหน้ายังเดินอยู่ และมีแจ้งเตือนที่กระดิ่งเมื่อเสร็จ</li>
+          <li>เวลาที่ใช้ขึ้นกับความยาวคลิปและสไตล์ซับ — แบบพื้นฐานมักไม่กี่นาที แบบพรีเมียมนานกว่า</li>
+          <li>กด <b>เปิดโฟลเดอร์ผลงาน</b> เพื่อไปที่ไฟล์จริงในเครื่องได้ทันที</li>
+        </ul>
+        <div class="callout callout-teal" style="margin:16px 0 0"><b>แนะนำให้ดูร่างก่อนเสมอ</b>ร่างเสร็จเร็วกว่ามาก ถ้าเสียงหรือซับไม่ถูกใจจะได้ย้อนไปแก้ก่อนเสียเวลาเรนเดอร์ตัวจริง</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="files" class="sec" style="background:var(--white)">
+  <div class="wrap">
+    <div class="sec-label">07 · ข้อมูลของคุณ</div>
+    <h2>ไฟล์ทุกอย่างเก็บไว้ที่ไหน</h2>
+    <p class="lead">ทั้งหมดอยู่ในโฟลเดอร์ ClipPang บนเครื่องคุณ ไม่มีอะไรอยู่บนคลาวด์ — สำรองข้อมูลคือก๊อปโฟลเดอร์นี้ทั้งอัน</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ตำแหน่ง</th><th>เก็บอะไร</th></tr></thead>
+        <tbody>
+          <tr><td><code>projects/&lt;id&gt;/out/</code></td><td>ผลงานที่เสร็จแล้ว — MP4, ภาพปก, ไฟล์เสียง, SRT, ASS และรายงานการเรนเดอร์</td></tr>
+          <tr><td><code>input/</code></td><td>คลิปดิบที่นำเข้ามา (ก๊อปไฟล์มาวางที่นี่เองก็ได้)</td></tr>
+          <tr><td><code>data/clippang.db</code></td><td>รายการโปรเจกต์และสถานะคิวงาน</td></tr>
+          <tr><td><code>data/trash/</code></td><td>โปรเจกต์ที่ลบไปแล้ว — ยังกู้กลับเองได้ ไม่ได้ลบถาวรทันที</td></tr>
+          <tr><td><code>.env</code></td><td>API key และรหัสผ่านสำหรับเข้าจากเครื่องอื่น <b>ไฟล์นี้ห้ามส่งให้ใคร</b></td></tr>
+          <tr><td><code>data/cache/</code></td><td>แคชเสียง ประโยคเดิมที่เคยสร้างแล้วจะไม่ยิงซ้ำ ช่วยประหยัดโควตา</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout callout-navy"><b>ย้ายเครื่องหรือสำรองข้อมูล</b>ก๊อปทั้งโฟลเดอร์ ClipPang ไปเครื่องใหม่ที่มี Node.js แล้วเปิดตัวเริ่มโปรแกรมได้เลย โปรเจกต์เก่ามาครบ ไม่ต้องตั้งค่าใหม่</div>
+  </div>
+</section>
+
+<section id="cost" class="sec" style="background:var(--navy-l)">
+  <div class="wrap">
+    <div class="sec-label">08 · โควตาและค่าใช้จ่าย</div>
+    <h2>ต้องจ่ายเท่าไหร่</h2>
+    <p class="lead">ตัวโปรแกรมฟรี ค่าใช้จ่ายอย่างเดียวคือการสร้างเสียงพากย์ผ่าน Gemini ซึ่งมีโควตาฟรีให้อยู่แล้ว</p>
+
+    <div class="grid">
+      <div class="card"><div class="card-ic">🆓</div><h3>แบบฟรี</h3><p>Gemini มีโควตาฟรีต่อ key ต่อวัน รีเซ็ตทุกวัน ทำคลิปเล่น ๆ วันละไม่กี่ตัวมักไม่ต้องจ่ายเลย ถ้าโควตาหมดให้รอวันถัดไป หรือเพิ่ม key จากคนละโปรเจกต์</p></div>
+      <div class="card"><div class="card-ic">💳</div><h3>แบบจ่ายเงิน</h3><p>เปิด billing กับ Google แล้วโควตาจะกว้างขึ้นมาก คลิป 30 วินาทีตกราว <b>฿0.15</b> ต่อคลิป — ถ้าทำวันละหลายตัว วิธีนี้คุ้มและไม่ต้องคอยสลับหลายบัญชี</p></div>
+      <div class="card"><div class="card-ic">📊</div><h3>ดูโควตาตัวเอง</h3><p>หน้าตั้งค่ามีการ์ด <b>โควตาของฉัน</b> บอกว่าวันนี้ใช้ไปกี่คำขอ เหลือเท่าไหร่ กำลังใช้ key ชุดไหน และสถิติย้อนหลัง 7 วัน</p></div>
+      <div class="card"><div class="card-ic">♻️</div><h3>ประหยัดโควตา</h3><p>ฟังตัวอย่างเสียงไม่เสียโควตา · ประโยคที่เคยสร้างเสียงแล้วจะถูกใช้ซ้ำจากแคช · ดูร่างก่อนสั่งตัวจริงช่วยลดการสร้างเสียงทิ้ง</p></div>
+    </div>
+    <div class="callout callout-gold"><b>ราคาอ้างอิง</b>ตัวเลขข้างบนคำนวณจากราคา Gemini API ณ สิงหาคม 2026 ควรเช็กหน้า pricing ของ Google อีกครั้งก่อนใช้งานปริมาณมาก</div>
+  </div>
+</section>
+
+<section id="mobile" class="sec" style="background:var(--white)">
+  <div class="wrap">
+    <div class="sec-label">09 · ใช้งานขั้นสูง</div>
+    <h2>ใช้จากมือถือ และแบ่งให้คนอื่นใช้</h2>
+    <p class="lead">ปกติ ClipPang เปิดได้เฉพาะบนเครื่องที่รันโปรแกรมเท่านั้น ซึ่งปลอดภัยที่สุด — แต่ถ้าอยากเปิดจากมือถือหรือให้ทีมใช้ด้วย ก็ทำได้</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="sl"><div class="sn">A</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">เปิดให้เข้าจากเครื่องอื่นได้</div>
+          <div class="sdesc">ต้องตั้งชื่อผู้ใช้กับรหัสผ่านก่อน แล้วระบุว่าอนุญาตให้เข้าผ่านชื่อโดเมนไหน</div>
+          <div class="code"><pre><span class="c"># ตั้งชื่อผู้ใช้และรหัสผ่าน (เก็บเป็น hash ไม่ใช่รหัสตรง ๆ)</span>
+node scripts/set-password.mjs ชื่อผู้ใช้ รหัสผ่าน
+
+<span class="c"># แล้วเพิ่มบรรทัดนี้ใน .env — ใส่โดเมนที่คุณชี้มาที่เครื่องนี้</span>
+CLIPPANG_ALLOWED_HOSTS=clippang.example.com</pre></div>
+          <div class="tip"><span>🔐</span><span>ต้องครบทั้งสามอย่าง (ชื่อผู้ใช้ + รหัสผ่าน + โดเมนที่อนุญาต) ระบบถึงจะยอมรับคำขอจากเครื่องอื่น ถ้าขาดอย่างใดอย่างหนึ่งจะยังล็อกไว้ที่เครื่องตัวเองเหมือนเดิม</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">B</div><div class="sl-line"></div></div>
+        <div class="sb">
+          <div class="stit">เพิ่มบัญชีให้คนในทีม</div>
+          <div class="sdesc">เจ้าของระบบเพิ่มบัญชีได้จากการ์ด <b>บัญชีผู้ใช้</b> ในหน้าตั้งค่า แต่ละคนจะเห็นเฉพาะโปรเจกต์ของตัวเอง</div>
+          <ul class="sli">
+            <li>แต่ละคนใส่ Gemini key ของตัวเองได้ โควตาจะแยกกันจริง ไม่แย่งกันใช้</li>
+            <li>ผู้ใช้เปลี่ยนรหัสผ่านตัวเองได้จากการ์ด <b>บัญชีของฉัน</b> ไม่ต้องรอเจ้าของ</li>
+            <li>เปลี่ยนรหัสเมื่อไหร่ เครื่องอื่นที่ค้างล็อกอินอยู่จะหลุดทั้งหมดทันที</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="sl"><div class="sn">C</div></div>
+        <div class="sb">
+          <div class="stit">ลองใช้โดยไม่ต้องมี Gemini key</div>
+          <div class="sdesc">อยากลองระบบก่อนขอ key ใช้โหมดทดสอบได้ — จะได้สคริปต์แบบเทมเพลตและเสียง "ตู๊ด" แทนเสียงพูดจริง แต่เห็นภาพว่าทุกอย่างทำงานยังไง</div>
+          <div class="code"><pre>npm run local:mock</pre></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-rust"><b>ข้อควรระวัง</b>การเปิดให้เข้าจากเครื่องอื่นหมายถึงเปิดเครื่องคุณสู่เครือข่ายภายนอก ควรใช้รหัสผ่านที่เดายาก และอย่าแชร์ไฟล์ <code>.env</code> ให้ใครเด็ดขาดเพราะในนั้นมี API key อยู่</div>
+  </div>
+</section>
+
+<section id="faq" class="sec" style="background:var(--paper)">
+  <div class="wrap">
+    <div class="sec-label">10 · แก้ปัญหา</div>
+    <h2>ปัญหาที่เจอบ่อยและวิธีแก้</h2>
+    <p class="lead">กดที่คำถามเพื่อดูคำตอบ</p>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>เปิดเว็บแล้วขึ้นว่าเข้าไม่ได้ / หน้าเปล่า</span></div><div class="faq-a">เช็กว่าหน้าต่างสีดำยังเปิดอยู่ไหม ถ้าเผลอปิดไปให้เปิดตัวเริ่มโปรแกรมใหม่ · ถ้ายังไม่ได้ ดูใน URL ว่าเป็น <code>127.0.0.1:4321</code> หรือเปล่า บางครั้งพอร์ตถูกใช้อยู่ระบบจะเลื่อนไปพอร์ตอื่นและบอกเลขจริงไว้ในหน้าต่างดำ</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>ขึ้นว่าโควตา Gemini เต็มทุกใบ</span></div><div class="faq-a">โควตาฟรีผูกกับ key และรีเซ็ตวันละครั้งตามเวลาแปซิฟิก (ราวบ่าย 2 ของไทย) รอรอบถัดไป หรือเพิ่ม key ใบใหม่ <b>จากคนละโปรเจกต์ Google Cloud</b> ในหน้าตั้งค่า — สร้าง key เพิ่มในโปรเจกต์เดิมไม่ช่วย เพราะใช้โควตาก้อนเดียวกัน</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>เรนเดอร์ไม่ผ่าน บอกว่าเสียงยาวเกิน Timeline</span></div><div class="faq-a">แปลว่าสคริปต์ที่พูดยาวกว่าคลิปที่มี ให้กลับไปขั้นที่ 4 แล้วตัดคำให้สั้นลง หรือเพิ่มความเร็วเสียง หรือย้อนไปขั้นที่ 1 เพื่อเพิ่มช่วงคลิป (รวมไม่เกิน 60 วินาที) — ระบบเลือกจะหยุดถามมากกว่ายืดภาพให้ค้างเอง</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>ลบโปรเจกต์ไม่ได้ บอกว่ามีไฟล์ถูกเปิดอยู่</span></div><div class="faq-a">มักเกิดจากยังมีวิดีโอของโปรเจกต์นั้นเปิดค้างในเบราว์เซอร์ ให้กด refresh หน้าเว็บหนึ่งครั้งแล้วลบใหม่ · ถ้ายังไม่ได้ ลองปิดโปรแกรมอื่นที่อาจเปิดไฟล์ในโฟลเดอร์นั้นอยู่ (เช่น player หรือโปรแกรมตัดต่อ)</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>Windows เตือนว่าเป็นไฟล์อันตราย</span></div><div class="faq-a">เกิดเพราะไฟล์เริ่มโปรแกรมไม่ได้เซ็นใบรับรองดิจิทัล ไม่ใช่เพราะตรวจเจอไวรัส กด <b>More info → Run anyway</b> ได้เลย</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>เรนเดอร์ช้ามาก</span></div><div class="faq-a">สไตล์ซับพรีเมียมใช้เวลามากกว่าแบบพื้นฐานหลายเท่า ถ้าต้องการเร็วให้เลือกสไตล์พื้นฐาน · ปิดโปรแกรมหนัก ๆ ตัวอื่นระหว่างเรนเดอร์ · และใช้ "ร่าง" ตรวจงานก่อนเสมอ จะได้ไม่ต้องเรนเดอร์ตัวจริงซ้ำหลายรอบ</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>คลิปที่ทำไปแล้วหายไปไหม ถ้าปิดโปรแกรม</span></div><div class="faq-a">ไม่หาย ทุกอย่างถูกบันทึกลงเครื่องทันที เปิดโปรแกรมใหม่แล้วโปรเจกต์เดิมยังอยู่ครบ ส่วนไฟล์ผลลัพธ์อยู่ใน <code>projects/&lt;id&gt;/out/</code> ตลอด แม้ลบโปรเจกต์ไปแล้วก็ยังกู้จาก <code>data/trash/</code> ได้</div></div>
+
+    <div class="faq"><div class="faq-q" onclick="fq(this)"><span class="qm">?</span><span>เสียงพากย์ออกเสียงคำบางคำผิด</span></div><div class="faq-a">แก้ที่สคริปต์ในขั้นที่ 4 โดยเขียนคำนั้นตามเสียงอ่าน เช่นคำทับศัพท์ภาษาอังกฤษเขียนเป็นคำไทยแทน แล้วสร้างเสียงใหม่</div></div>
+  </div>
+</section>
+
+<section id="cheat" class="sec" style="background:var(--paper2)">
+  <div class="wrap">
+    <div class="sec-label">11 · สรุป</div>
+    <h2>ตารางสรุปที่ใช้บ่อย</h2>
+
+    <h3 style="margin:28px 0 12px">ขั้นตอนทั้งหมดในหน้าเดียว</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ขั้น</th><th>ทำอะไร</th><th>ผลลัพธ์</th></tr></thead>
+        <tbody>
+          <tr><td><b>1 · คลิป</b></td><td>อัปโหลดสูงสุด 12 ไฟล์ เรียงและตัดบน Timeline</td><td>ลำดับภาพที่จะใช้จริง ไม่เกิน 60 วินาที</td></tr>
+          <tr><td><b>2 · สินค้า</b></td><td>กรอกชื่อ จุดเด่น กลุ่มลูกค้า</td><td>วัตถุดิบให้ AI เขียนสคริปต์</td></tr>
+          <tr><td><b>3 · เสียง</b></td><td>ฟังและเลือกจาก 30 เสียง ปรับความเร็ว/โทน</td><td>นักพากย์ของคลิปนี้</td></tr>
+          <tr><td><b>4 · สคริปต์ + ซับ</b></td><td>แก้คำพูดทุกท่อน เลือก 1 ใน 15 สไตล์ซับ</td><td>คำพูดและหน้าตาซับสุดท้าย</td></tr>
+          <tr><td><b>5 · ผลลัพธ์</b></td><td>เรนเดอร์ร่าง → ตรวจ → เรนเดอร์ตัวจริง</td><td>MP4 พร้อมโพสต์ + แคปชั่น</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin:36px 0 12px">คำสั่งสำหรับคนที่ถนัด Terminal</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>คำสั่ง</th><th>ใช้ทำอะไร</th></tr></thead>
+        <tbody>
+          <tr><td><code>npm install</code></td><td>ติดตั้งส่วนประกอบ (ตัวเริ่มโปรแกรมทำให้อัตโนมัติอยู่แล้ว)</td></tr>
+          <tr><td><code>npm run local</code></td><td>เปิดโปรแกรมแบบใช้งานจริง</td></tr>
+          <tr><td><code>npm run local:mock</code></td><td>เปิดโหมดทดสอบ ไม่เรียก AI ไม่เปลืองโควตา</td></tr>
+          <tr><td><code>node scripts/set-password.mjs &lt;ชื่อ&gt; &lt;รหัส&gt;</code></td><td>ตั้งบัญชีสำหรับเข้าจากเครื่องอื่น</td></tr>
+          <tr><td><code>node scripts/users.mjs list</code></td><td>ดูรายชื่อผู้ใช้ทั้งหมดและจำนวนโปรเจกต์</td></tr>
+          <tr><td><code>node scripts/users.mjs add &lt;ชื่อ&gt; &lt;รหัส&gt;</code></td><td>เพิ่มบัญชีผู้ใช้ใหม่</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-navy" style="margin-top:32px"><b>ยังติดอยู่ตรงไหน</b>ในโปรแกรมมีเมนู <b>ศูนย์ช่วยเหลือการติดตั้ง</b> อยู่มุมล่างซ้าย ซึ่งตรวจสถานะเครื่องคุณแบบสด ๆ และบอกว่าขาดอะไรอยู่ — ดูที่นั่นก่อนเป็นอันดับแรกเสมอ</div>
+  </div>
+</section>
+
+<div class="foot">
+  <b>ClipPang · คลิปปัง</b>
+  เปลี่ยนคลิปสินค้าให้พร้อมขาย · ทำงานบนเครื่องคุณเอง · เวอร์ชัน 0.3.0
+</div>
+
+<script>
+window.addEventListener('scroll',function(){
+  var t=document.documentElement.scrollHeight-document.documentElement.clientHeight;
+  document.getElementById('prog').style.width=(document.documentElement.scrollTop/t*100)+'%';
+});
+document.querySelectorAll('section[id]').forEach(function(s){
+  new IntersectionObserver(function(e){
+    e.forEach(function(x){
+      if(x.isIntersecting){
+        document.querySelectorAll('.nl').forEach(function(n){n.classList.remove('on')});
+        var a=document.querySelector('.nl[href="#'+x.target.id+'"]');
+        if(a)a.classList.add('on');
+      }
+    });
+  },{threshold:0.2}).observe(s);
+});
+function tog(h){
+  var b=h.nextElementSibling,t=h.querySelector('.mod-tog');
+  var open=b.classList.toggle('show');
+  t.textContent=open?'－':'＋';
+}
+function fq(q){ q.nextElementSibling.classList.toggle('show'); }
+function osTab(btn,os){
+  document.querySelectorAll('.ost').forEach(function(b){b.classList.remove('on')});
+  btn.classList.add('on');
+  document.querySelectorAll('.ospane').forEach(function(p){
+    p.classList.toggle('on', p.dataset.os===os);
+  });
+}
+</script>
+</body>
+</html>
