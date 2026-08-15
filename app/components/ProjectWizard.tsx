@@ -341,6 +341,9 @@ export function ProjectWizard() {
   const [draggingClipId, setDraggingClipId] = useState<string | null>(null);
   const [timelineClips, setTimelineClips] = useState<LocalTimelineClip[]>([]);
   const [timelineEditorOpen, setTimelineEditorOpen] = useState(false);
+  // บนมือถือ กล่องเครื่องมือทั้งสามกองซ้อนกันจนต้องเลื่อนจอขึ้นลงตลอดเวลาเพื่อแก้ทีละอย่าง
+  // จึงสลับให้เห็นทีละกล่องแทน โดยจอพรีวิวยังอยู่กับที่ตลอด (จอใหญ่ยังเห็นครบเหมือนเดิม)
+  const [mobileEditorTab, setMobileEditorTab] = useState<"timeline" | "trim" | "media">("timeline");
   const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string | null>(null);
   const [timelinePlayheadMs, setTimelinePlayheadMs] = useState(0);
   const [timelinePlaying, setTimelinePlaying] = useState(false);
@@ -1947,7 +1950,7 @@ export function ProjectWizard() {
           <section className="wizard-card">
             {(uploadError || renderError) && <div className="form-alert error wizard-global-alert" role="alert"><CircleAlert size={17} />{uploadError || renderError}<button type="button" onClick={() => { setUploadError(""); setRenderError(""); }} aria-label="ปิด"><X size={14} /></button></div>}
             {activeStep === 1 && (
-              <div className={`step-panel ${timelineEditorOpen ? "timeline-editor-panel" : ""}`}>
+              <div className={`step-panel ${timelineEditorOpen ? "timeline-editor-panel" : ""}`} data-mtab={timelineEditorOpen ? mobileEditorTab : undefined}>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -2074,6 +2077,18 @@ export function ProjectWizard() {
                       </aside>
                     </div>
 
+                    <div className="timeline-mobile-tabs" role="tablist" aria-label="สลับกล่องเครื่องมือ">
+                      <button type="button" role="tab" aria-selected={mobileEditorTab === "timeline"} className={mobileEditorTab === "timeline" ? "on" : ""} onClick={() => setMobileEditorTab("timeline")}>
+                        <Film size={15} /> ไทม์ไลน์ <small>{orderedTimelineClips.length}</small>
+                      </button>
+                      <button type="button" role="tab" aria-selected={mobileEditorTab === "trim"} className={mobileEditorTab === "trim" ? "on" : ""} onClick={() => setMobileEditorTab("trim")}>
+                        <Scissors size={15} /> ตัดต่อ {selectedTimelineClip && <small>ช่วง {orderedTimelineClips.findIndex((clip) => clip.id === selectedTimelineClip.id) + 1}</small>}
+                      </button>
+                      <button type="button" role="tab" aria-selected={mobileEditorTab === "media"} className={mobileEditorTab === "media" ? "on" : ""} onClick={() => setMobileEditorTab("media")}>
+                        <UploadCloud size={15} /> คลังคลิป <small>{orderedClipAssets.length}</small>
+                      </button>
+                    </div>
+
                     <div className="timeline-toolbar">
                       <div><span className="timeline-track-badge">V1</span><div><b>ไทม์ไลน์วิดีโอ</b><span>{orderedTimelineClips.length}/{MAX_TIMELINE_CLIPS} ช่วง · ลากเพื่อเรียง หรือใช้ปุ่มบนคลิป · กด Delete เพื่อลบ</span></div></div>
                       <button type="button" className="button button-outline button-small" disabled={clipAssets.length >= MAX_CLIPS || analyzing || engineState === "checking"} onClick={() => fileInputRef.current?.click()}><UploadCloud size={15} /> เพิ่มคลิป</button>
@@ -2109,7 +2124,7 @@ export function ProjectWizard() {
                               onDragEnd={() => setDraggingClipId(null)}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={() => dropTimelineClip(clip.id)}
-                              onClick={() => selectTimelineClip(clip)}
+                              onClick={() => { selectTimelineClip(clip); if (window.matchMedia("(max-width: 720px)").matches) setMobileEditorTab("trim"); }}
                               onKeyDown={(event) => {
                                 if (event.target !== event.currentTarget) return;
                                 if (event.key === "Enter" || event.key === " ") {
