@@ -4194,7 +4194,11 @@ select:focus-visible,
   font-size: 11.5px;
 }
 
-.caption-style-grid,
+.caption-style-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
 
 .caption-style-card {
   position: relative;
@@ -4832,6 +4836,7 @@ select:focus-visible,
   .voice-grid { grid-template-columns: 1fr; }
   .script-tabs { display: flex; overflow-x: auto; padding: 2px; }
   .script-tabs button { min-width: 130px; }
+  .caption-style-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .position-control, .render-summary { align-items: flex-start; flex-direction: column; }
   .render-progress-card { grid-template-columns: 1fr; justify-items: center; padding: 24px 19px; text-align: center; }
   .render-copy { width: 100%; }
@@ -4855,6 +4860,7 @@ select:focus-visible,
   .stats-strip { grid-template-columns: 1fr; }
   .stats-strip > div { border-right: 0; border-top: 1px solid #ebebe6; }
   .stats-strip > div:first-child { border-top: 0; }
+  .caption-style-grid { grid-template-columns: 1fr 1fr; }
   .position-control > div:last-child { width: 100%; }
   .position-control button { flex: 1; }
   .output-head { grid-template-columns: 38px minmax(0, 1fr); }
