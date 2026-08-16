@@ -4352,12 +4352,14 @@ img.mini-project-thumb::after { content: none; }
 
 .color-samples {
   display: grid;
+  padding: 5px 5px 0;
   grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
 
 .color-sample {
+  position: relative;
   display: block;
   padding: 0 0 7px;
   border: 2px solid transparent;
@@ -4393,8 +4395,28 @@ img.mini-project-thumb::after { content: none; }
 
 .color-sample:hover { border-color: #cfd4cb; }
 
-.color-sample.active { border-color: var(--ink); background: var(--ink); }
-.color-sample.active .color-sample-name { color: #fff; font-weight: 600; }
+/* ตัวที่เลือกใช้สีเหลืองของแบรนด์ ไม่ใช่สีเข้ม เพราะพื้นตัวอย่างเป็นสีดำอยู่แล้ว
+   ขอบเข้มกับพื้นเข้มเลยกลืนกันจนดูไม่ออกว่าอันไหนถูกเลือก */
+.color-sample.active {
+  border-color: var(--yellow-dark);
+  background: rgba(255, 210, 63, 0.22);
+}
+
+.color-sample.active .color-sample-name { color: #6b5300; font-weight: 620; }
+
+.color-sample-check {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #fafbf8;
+  border-radius: 50%;
+  background: var(--yellow-dark);
+  color: #fff;
+}
 
 @media (max-width: 470px) {
   .color-samples { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }

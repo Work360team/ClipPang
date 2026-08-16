@@ -2322,6 +2322,7 @@ export function ProjectWizard() {
                           <i style={{ color: selectedStyleData?.params?.emphasisFill ?? "#FF3B6B" }}>เน้น</i>
                         </span>
                         <span className="color-sample-name">ตามสไตล์</span>
+                        {captionColor === "" && <span className="color-sample-check" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>}
                       </button>
                       {colorSets.map((set) => (
                         <button
@@ -2338,6 +2339,7 @@ export function ProjectWizard() {
                             <i style={{ color: set.secondary }}>เน้น</i>
                           </span>
                           <span className="color-sample-name">{set.name}</span>
+                          {captionColor === set.id && <span className="color-sample-check" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>}
                         </button>
                       ))}
                     </div>
