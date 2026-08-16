@@ -31,6 +31,7 @@ import {
   shotScore,
 } from "./media.mjs";
 import { estimateMs, generateScript } from "./script.mjs";
+import { CAPTION_COLOR_SETS, applyColorSet, captionColorSet } from "./caption-colors.mjs";
 import {
   DEFAULT_VOICE,
   VOICES,
@@ -72,7 +73,7 @@ function canonicalStyleId(value) {
   return STYLE_ALIASES.get(String(value || "karaoke-pop").toLowerCase()) || String(value || "karaoke-pop");
 }
 
-function resolveStyle(styleId, position) {
+function resolveStyle(styleId, position, colorSetId) {
   const id = canonicalStyleId(styleId);
   const file = path.join(STYLES_DIR, `${id}.json`);
   if (!fs.existsSync(file)) {
@@ -101,6 +102,14 @@ function resolveStyle(styleId, position) {
     if (position.marginH != null) style.params.position.marginH = Number(position.marginH);
   }
 
+  // ชุดสีทาทับหลังโหลดสไตล์ ใช้ทางเดียวกับตำแหน่งซับ คือ override ที่จุดเดียวตรงนี้
+  // งานเรนเดอร์ทุกเลนจึงได้ params ชุดเดียวกันโดยไม่ต้องรู้เรื่องชุดสีเลย
+  const colorSet = captionColorSet(colorSetId);
+  if (colorSet) {
+    applyColorSet(style.params, colorSet);
+    style.colorSetId = colorSet.id;
+  }
+
   style.params.position.anchor = normalizeAnchor(style.params.position.anchor);
   style.params.font.family ||= "Kanit";
   style.params.font.file ||= style.params.font.weight >= 800 ? "Kanit-ExtraBold.ttf" : "Kanit-Bold.ttf";
@@ -124,6 +133,8 @@ function providerAvailable(provider) {
     return false;
   }
 }
+
+export { CAPTION_COLOR_SETS, captionColorSet };
 
 export async function listStyles() {
   return fs.readdirSync(STYLES_DIR)
@@ -450,7 +461,7 @@ export async function runPipeline(options = {}) {
 
   const brief = options.brief || { name: "ClipPang" };
   const kind = options.kind === "draft" ? "draft" : "final";
-  const style = resolveStyle(options.styleId || "karaoke-pop", options.position);
+  const style = resolveStyle(options.styleId || "karaoke-pop", options.position, options.captionColor);
   const width = Number(options.width || 1080);
   const height = Number(options.height || 1920);
   const fps = Number(options.fps || 30);

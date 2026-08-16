@@ -53,6 +53,7 @@ import {
   watchRender,
   type LocalEngineState,
   type LocalAsset,
+  type LocalColorSet,
   type LocalOutput,
   type LocalProjectAsset,
   type LocalRender,
@@ -372,6 +373,26 @@ export function ProjectWizard() {
   );
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
   const [captionPosition, setCaptionPosition] = useState("ล่าง");
+  // ชุดสีไฮไลต์ ค่าว่าง = ใช้สีประจำสไตล์นั้นตามเดิม
+  const [captionColor, setCaptionColor] = useState("");
+  const [colorSets, setColorSets] = useState<LocalColorSet[]>([]);
+  const activeColorSet = colorSets.find((set) => set.id === captionColor) ?? null;
+  /**
+   * ทาชุดสีลงพารามิเตอร์ก่อนส่งให้พรีวิว ให้เห็นผลทันทีที่กดโดยไม่ต้องเรนเดอร์
+   * กติกาเดียวกับฝั่ง pipeline เป๊ะ: สไตล์ที่คำพูดสีเดียวกับคำปกติ (ไฮไลต์คำสำคัญ
+   * เผยทีละคำ) สีของชุดต้องไปอยู่ที่คำเน้น ไม่งั้นทั้งประโยคกลายเป็นสีเดียว
+   */
+  const paintStyle = (params?: StylePreviewParams): StylePreviewParams | undefined => {
+    if (!params || !activeColorSet) return params;
+    const painted = { ...params };
+    if ((painted.activeFill ?? "").toUpperCase() !== (painted.fill ?? "").toUpperCase()) {
+      painted.activeFill = activeColorSet.primary;
+      if (painted.emphasisFill) painted.emphasisFill = activeColorSet.secondary;
+    } else {
+      painted.emphasisFill = activeColorSet.primary;
+    }
+    return painted;
+  };
   const [rendering, setRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderDone, setRenderDone] = useState(false);
@@ -761,6 +782,7 @@ export function ProjectWizard() {
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
+    if (typeof config.captionColor === "string") setCaptionColor(config.captionColor);
     // งานที่กำลังรันต้องกลับมาเห็นเสมอ แม้จะถูกมาร์กว่า stale เพราะผู้ใช้แก้ timeline
     // ต่อหลังกดสร้าง — ไม่งั้นออกไปหน้าอื่นแล้วกลับมาจะเหมือนงานหายไปเฉย ๆ
     // ทั้งที่ยังทำอยู่เบื้องหลัง
@@ -924,6 +946,7 @@ export function ProjectWizard() {
               };
             }));
           }
+          if (active && Array.isArray(styleResult.colorSets)) setColorSets(styleResult.colorSets);
         } catch {
           // สไตล์โหลดไม่ได้ไม่ควรทำให้เปิดโปรเจกต์ไม่ได้ — ใช้ค่าตั้งต้นต่อไป
         }
@@ -988,7 +1011,7 @@ export function ProjectWizard() {
       timelineClips: savedTimeline,
       ...(legacyAsset ? { asset: legacyAsset } : {}),
       scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
-      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, styleId: selectedStyle, position: captionPosition },
+      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, styleId: selectedStyle, position: captionPosition, captionColor },
       ...extra,
     };
   };
@@ -1806,6 +1829,7 @@ export function ProjectWizard() {
             tone,
             styleId: selectedStyle,
             position,
+            captionColor,
           },
         });
       if (editRevisionRef.current !== renderEditRevision) {
@@ -2251,9 +2275,9 @@ export function ProjectWizard() {
                     <button type="button" className={`caption-style-card ${selectedStyle === style.id ? "selected" : ""}`} onClick={() => setSelectedStyle(style.id)} key={style.id}>
                       {/* ตัวอย่างเดียวกับหน้าแกลเลอรี — ขยับตามพารามิเตอร์ของสไตล์นั้นจริง ๆ
                           ของเดิมเป็นข้อความนิ่งทับรูปนิ่ง เลือกยากเพราะความต่างอยู่ที่การเคลื่อนไหว */}
-                      <span className="style-preview" style={stylePreviewVars(style.params)}>
+                      <span className="style-preview" style={stylePreviewVars(paintStyle(style.params))}>
                         <img src={stillPoster} alt="" />
-                        <StyleCaptionPreview params={style.params} />
+                        <StyleCaptionPreview params={paintStyle(style.params)} />
                       </span>
                       <span className="style-info"><b>{style.name}</b><small>{style.note}</small></span>
                       <em>{style.speed}</em>
@@ -2261,6 +2285,36 @@ export function ProjectWizard() {
                     </button>
                   ))}
                 </div>
+                {colorSets.length > 0 && (
+                  <div className="color-control">
+                    <div><b>สีไฮไลต์</b><small>เปลี่ยนสีคำที่กำลังพูด · ไม่ต้องสร้างเสียงใหม่</small></div>
+                    <div className="color-swatches" role="radiogroup" aria-label="ชุดสีไฮไลต์">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={captionColor === ""}
+                        className={`swatch swatch-default ${captionColor === "" ? "active" : ""}`}
+                        onClick={() => setCaptionColor("")}
+                      >
+                        <i aria-hidden="true" />ตามสไตล์
+                      </button>
+                      {colorSets.map((set) => (
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={captionColor === set.id}
+                          title={set.hint}
+                          className={`swatch ${captionColor === set.id ? "active" : ""}`}
+                          onClick={() => setCaptionColor(set.id)}
+                          key={set.id}
+                        >
+                          <i aria-hidden="true" style={{ background: set.primary, borderColor: set.secondary }} />
+                          {set.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="position-control"><div><b>ตำแหน่งซับ</b><small>หลบสินค้าและปุ่มบนแพลตฟอร์ม</small></div><div>{['บน','กลาง','ล่าง'].map((position) => <button type="button" className={captionPosition === position ? "active" : ""} onClick={() => setCaptionPosition(position)} key={position}>{position}</button>)}</div></div>
               </div>
             )}

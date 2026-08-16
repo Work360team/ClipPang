@@ -133,7 +133,7 @@ export const localApi = {
   generateScripts: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; scripts: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script`, { method: "POST", body: JSON.stringify(body) }),
   regenerateChunk: (id: string, variantId: string, index: number, body: Record<string, unknown>) => apiFetch<{ ok: true; chunk: string; scripts?: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script/${encodeURIComponent(variantId)}/chunk/${index}`, { method: "POST", body: JSON.stringify(body) }),
   voices: () => apiFetch<{ ok: true; voices: LocalVoice[] }>("/api/voices"),
-  styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[] }>("/api/styles"),
+  styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[]; colorSets?: LocalColorSet[] }>("/api/styles"),
   previewVoice: async (voiceId: string, body: Record<string, unknown>) => {
     const response = await fetch(`/api/voices/${encodeURIComponent(voiceId)}/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!response.ok) await parseResponse(response);
@@ -200,6 +200,7 @@ export interface LocalTimelineClip {
 export interface LocalScript { id: string; name?: string; tag?: string; score?: number; chunks: string[] }
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
+export interface LocalColorSet { id: string; name: string; primary: string; secondary: string; hint?: string }
 export interface LocalUser {
   id: string;
   username: string;

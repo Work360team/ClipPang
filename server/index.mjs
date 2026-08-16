@@ -237,6 +237,7 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       },
       styleId: config.styleId ?? render.styleId ?? render.style_id ?? "pop-yellow",
       position: config.position ?? config.captionPosition ?? "bottom",
+      captionColor: config.captionColor ?? null,
       kind: render.kind,
       ...(prepared.selectedTotalMs != null ? {
         targetSec: prepared.selectedTotalMs / 1000,

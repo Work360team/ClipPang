@@ -4336,6 +4336,63 @@ img.mini-project-thumb::after { content: none; }
   color: #44380d;
 }
 
+/* ---------- ชุดสีไฮไลต์ซับ (ขั้นที่ 4) ---------- */
+.color-control {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #e2e4dd;
+  border-radius: 13px;
+  background: #fafbf8;
+}
+
+.color-control > div:first-child b { display: block; font-size: 14px; font-weight: 620; }
+.color-control > div:first-child small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-faint); }
+
+.color-swatches { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+/* จุดสีบอกสีคำที่พูด ขอบจุดบอกสีคำที่เน้น — เห็นทั้งชุดในวงเดียว */
+.swatch i {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.swatch-default i { background: repeating-linear-gradient(45deg, #cfd3cb 0 3px, #eef0ea 3px 6px); }
+
+.swatch:hover { border-color: var(--ink-faint); }
+
+.swatch.active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .color-control { flex-direction: column; align-items: stretch; }
+  .color-swatches { justify-content: flex-start; }
+}
+
 .position-control {
   display: flex;
   align-items: center;

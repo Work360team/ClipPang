@@ -30,6 +30,7 @@ import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
 import { hashPassword, verifyPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import {
+  CAPTION_COLOR_SETS,
   generateScripts,
   listStyles,
   listVoices,
@@ -614,7 +615,10 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
       }
 
       if (method === "GET" && pathname === "/api/voices") return json({ ok: true, voices: await listVoices() });
-      if (method === "GET" && pathname === "/api/styles") return json({ ok: true, styles: await listStyles() });
+      // ส่งชุดสีไปพร้อมสไตล์ หน้าเลือกสไตล์ใช้ทั้งสองอย่างในจอเดียวกัน ไม่ต้องยิงซ้ำ
+      if (method === "GET" && pathname === "/api/styles") {
+        return json({ ok: true, styles: await listStyles(), colorSets: CAPTION_COLOR_SETS });
+      }
 
       const previewMatch = /^\/api\/voices\/([^/]+)\/preview$/.exec(pathname);
       if (previewMatch && method === "POST") {
