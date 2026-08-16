@@ -2289,29 +2289,41 @@ export function ProjectWizard() {
                 </div>
                 {colorSets.length > 0 && (
                   <div className="color-control">
-                    <div><b>สีไฮไลต์</b><small>เปลี่ยนสีคำที่กำลังพูด · ไม่ต้องสร้างเสียงใหม่</small></div>
-                    <div className="color-swatches" role="radiogroup" aria-label="ชุดสีไฮไลต์">
+                    <div className="color-control-head">
+                      <b>สีไฮไลต์</b>
+                      <small>กดเลือกสีที่อยากให้คำเด้งขึ้นมาตอนพูด · เปลี่ยนแล้วไม่ต้องสร้างเสียงใหม่</small>
+                    </div>
+                    <div className="color-samples" role="radiogroup" aria-label="สีไฮไลต์">
+                      {/* ตัวอย่างคำจริงในสีจริง อ่านแล้วรู้ทันทีว่าจะได้อะไร ไม่ต้องแปลจากจุดสี */}
                       <button
                         type="button"
                         role="radio"
                         aria-checked={captionColor === ""}
-                        className={`swatch swatch-default ${captionColor === "" ? "active" : ""}`}
+                        aria-label="ใช้สีประจำสไตล์"
+                        className={`color-sample ${captionColor === "" ? "active" : ""}`}
                         onClick={() => setCaptionColor("")}
                       >
-                        <i aria-hidden="true" />ตามสไตล์
+                        <span className="color-sample-stage">
+                          <em style={{ color: selectedStyleData?.params?.activeFill ?? "#FFD400" }}>ข้อความ</em>
+                          <i style={{ color: selectedStyleData?.params?.emphasisFill ?? "#FF3B6B" }}>เน้น</i>
+                        </span>
+                        <span className="color-sample-name">ตามสไตล์</span>
                       </button>
                       {colorSets.map((set) => (
                         <button
                           type="button"
                           role="radio"
                           aria-checked={captionColor === set.id}
-                          title={set.hint}
-                          className={`swatch ${captionColor === set.id ? "active" : ""}`}
+                          aria-label={`${set.name}${set.hint ? ` — ${set.hint}` : ""}`}
+                          className={`color-sample ${captionColor === set.id ? "active" : ""}`}
                           onClick={() => setCaptionColor(set.id)}
                           key={set.id}
                         >
-                          <i aria-hidden="true" style={{ background: set.primary, borderColor: set.secondary }} />
-                          {set.name}
+                          <span className="color-sample-stage">
+                            <em style={{ color: set.primary }}>ข้อความ</em>
+                            <i style={{ color: set.secondary }}>เน้น</i>
+                          </span>
+                          <span className="color-sample-name">{set.name}</span>
                         </button>
                       ))}
                     </div>

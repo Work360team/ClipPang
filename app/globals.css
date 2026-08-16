@@ -4336,61 +4336,69 @@ img.mini-project-thumb::after { content: none; }
   color: #44380d;
 }
 
-/* ---------- ชุดสีไฮไลต์ซับ (ขั้นที่ 4) ---------- */
+/* ---------- สีไฮไลต์ซับ (ขั้นที่ 4) ----------
+   แต่ละตัวเลือกโชว์คำจริงในสีจริงบนพื้นเข้มแบบเดียวกับในคลิป
+   ของเดิมเป็นจุดสีเล็ก ๆ ที่ต้องแปลเอาเองว่าจุดคือสีอะไร ขอบจุดคือสีอะไร */
 .color-control {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
   margin-top: 14px;
-  padding: 14px 16px;
+  padding: 15px 16px 16px;
   border: 1px solid #e2e4dd;
   border-radius: 13px;
   background: #fafbf8;
 }
 
-.color-control > div:first-child b { display: block; font-size: 14px; font-weight: 620; }
-.color-control > div:first-child small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-faint); }
+.color-control-head b { display: block; font-size: 14px; font-weight: 620; }
+.color-control-head small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-faint); }
 
-.color-swatches { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.color-samples {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
 
-.swatch {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 11px 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ink-soft);
+.color-sample {
+  display: block;
+  padding: 0 0 7px;
+  border: 2px solid transparent;
+  border-radius: 11px;
+  background: #eef0ea;
   font: inherit;
-  font-size: 12.5px;
+  text-align: center;
   cursor: pointer;
 }
 
-/* จุดสีบอกสีคำที่พูด ขอบจุดบอกสีคำที่เน้น — เห็นทั้งชุดในวงเดียว */
-.swatch i {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-  border: 2px solid transparent;
-  border-radius: 50%;
+.color-sample-stage {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  padding: 13px 8px 12px;
+  border-radius: 9px 9px 0 0;
+  background: #141714;
+  font-family: "Kanit", "Leelawadee UI", system-ui, sans-serif;
+  /* ขอบดำหนาแบบเดียวกับซับจริง สีอ่อนอย่างเหลืองหรือขาวจึงยังอ่านออกบนพื้นเข้ม */
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
 }
 
-.swatch-default i { background: repeating-linear-gradient(45deg, #cfd3cb 0 3px, #eef0ea 3px 6px); }
+.color-sample-stage em { font-size: 16px; font-style: normal; font-weight: 800; }
+.color-sample-stage i { font-size: 12.5px; font-style: normal; font-weight: 800; }
 
-.swatch:hover { border-color: var(--ink-faint); }
-
-.swatch.active {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
-  font-weight: 600;
+.color-sample-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
-@media (max-width: 720px) {
-  .color-control { flex-direction: column; align-items: stretch; }
-  .color-swatches { justify-content: flex-start; }
+.color-sample:hover { border-color: #cfd4cb; }
+
+.color-sample.active { border-color: var(--ink); background: var(--ink); }
+.color-sample.active .color-sample-name { color: #fff; font-weight: 600; }
+
+@media (max-width: 470px) {
+  .color-samples { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .color-sample-stage em { font-size: 15px; }
 }
 
 .position-control {
