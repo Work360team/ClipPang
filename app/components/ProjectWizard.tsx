@@ -761,12 +761,17 @@ export function ProjectWizard() {
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
-    setActiveStep(Math.max(1, Math.min(5, Number(project.wizard_step ?? 1))) as WizardStep);
     // งานที่กำลังรันต้องกลับมาเห็นเสมอ แม้จะถูกมาร์กว่า stale เพราะผู้ใช้แก้ timeline
     // ต่อหลังกดสร้าง — ไม่งั้นออกไปหน้าอื่นแล้วกลับมาจะเหมือนงานหายไปเฉย ๆ
     // ทั้งที่ยังทำอยู่เบื้องหลัง
     const renders = project.renders ?? [];
     const running = renders.find((render) => RUNNING_RENDER_STATES.has(String(render.state)));
+    // โปรเจกต์ที่มีคลิปตัวจริงเสร็จแล้ว เปิดกลับมาต้องเห็นผลลัพธ์ทันที ไม่ใช่ไปโผล่
+    // ขั้นที่เผลอกดค้างไว้ก่อนออกจากหน้า เพราะสิ่งที่คนกลับเข้ามาทำคือดาวน์โหลดคลิป
+    // ไม่ใช่แก้ต่อ — ยกเว้นงานที่ stale เพราะคลิปนั้นไม่ตรงกับ timeline ปัจจุบันแล้ว
+    const finished = renders.some((render) => render.kind === "final" && render.state === "ready" && !render.stale);
+    const savedStep = Math.max(1, Math.min(5, Number(project.wizard_step ?? 1))) as WizardStep;
+    setActiveStep(finished ? 5 : savedStep);
     // ร่างไม่ถูกสร้างอีกแล้ว แต่โปรเจกต์เก่าอาจมีค้างอยู่ ถ้าหยิบมาแสดงจะกลายเป็นว่า
     // เปิดโปรเจกต์เก่าขึ้นมาแล้วเห็นร่างเป็น "คลิปที่เสร็จแล้ว" ทั้งที่ยังไม่ได้สร้างตัวจริง
     const latest = running ?? renders.find((render) => !render.stale && render.kind !== "draft");
