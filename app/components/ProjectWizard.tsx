@@ -645,11 +645,21 @@ export function ProjectWizard() {
     video.muted = true;
     video.preload = "metadata";
     video.crossOrigin = "anonymous";
+    // iOS ไม่ยอมถอดรหัสเฟรมให้ถ้าวิดีโอไม่ได้อยู่ในหน้าและไม่ได้ตั้ง playsInline
+    // ต้องแปะไว้จริง ๆ แต่ซ่อนด้วยขนาด 1px กับ opacity 0 — ใช้ display:none ไม่ได้
+    // เพราะ Safari ถือว่าไม่ต้องเรนเดอร์แล้วเลยไม่ให้เฟรมมา ผลคือบนมือถือการ์ดเลือก
+    // สไตล์ตกไปใช้ภาพสำรองเสมอ ไม่เคยเห็นคลิปของตัวเอง
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("aria-hidden", "true");
+    video.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
+    document.body.appendChild(video);
     video.src = source;
 
     const cleanup = () => {
       video.removeAttribute("src");
       video.load();
+      video.remove();
     };
     const capture = () => {
       if (cancelled) return;
@@ -671,6 +681,7 @@ export function ProjectWizard() {
       const target = ((segment?.sourceStartMs ?? 0) + 250) / 1000;
       video.currentTime = Math.min(target, Math.max(0, (video.duration || 1) - 0.05));
     };
+    video.addEventListener("loadedmetadata", onLoaded, { once: true });
     video.addEventListener("loadeddata", onLoaded, { once: true });
     video.addEventListener("seeked", capture, { once: true });
     video.addEventListener("error", cleanup, { once: true });
@@ -678,7 +689,10 @@ export function ProjectWizard() {
   }, [programSegments, activeClip]);
 
   // ภาพนิ่งที่ใช้ทั่วหน้า — ของผู้ใช้ถ้ามี ไม่งั้นค่อยใช้ภาพตัวอย่าง
-  const stillPoster = projectPosterUrl ?? "/clippang-sample-poster.jpg";
+  // ภาพสำรองต้องเป็นเฟรมที่ "ไม่มีซับติดมา" เพราะการ์ดนี้มีไว้ดูสไตล์ซับ
+  // ถ้าพื้นหลังมีซับของคลิปเดิมเผาติดอยู่ จะเห็นซับสองชุดซ้อนกันจนแยกไม่ออกว่าอันไหน
+  // คือสไตล์ที่กำลังเลือก (clippang-sample-poster.jpg มีคำว่า "ค่ะเจ้าตัวนี้" ติดมา)
+  const stillPoster = projectPosterUrl ?? "/clippang-style-preview-poster.jpg";
 
   const renderStage = useMemo(() => {
     // ข้อความจริงมาจากเซิร์ฟเวอร์ผ่าน SSE — ข้างล่างเป็นข้อความสำรองตอนยังไม่ต่อ Local เท่านั้น
