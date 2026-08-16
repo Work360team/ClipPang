@@ -22,55 +22,6 @@ import { HardLink as Link } from "./HardLink";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
 import { projectPoster, refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 
-type DashboardCard = {
-  id: string | null;
-  running: boolean;
-  title: string;
-  meta: string;
-  status: string;
-  statusClass: string;
-  image: string;
-  href: string;
-  updated: string;
-  progress?: number;
-};
-
-const demoProjects: DashboardCard[] = [
-  {
-    id: null,
-    running: false,
-    title: "หัวชาร์จพกพาแม่เหล็ก",
-    meta: "29 วินาที · ซับป๊อปเหลือง",
-    status: "พร้อมดาวน์โหลด",
-    statusClass: "ready",
-    image: "/clippang-sample-poster.jpg",
-    href: "/p/charger",
-    updated: "12 นาทีที่แล้ว",
-  },
-  {
-    id: null,
-    running: false,
-    title: "เซรั่มผิวโกลว์ 7 วัน",
-    meta: "42 วินาที · ซับมินิมอล",
-    status: "ร่าง 3 เวอร์ชัน",
-    statusClass: "draft",
-    image: "/clippang-sample-poster.jpg",
-    href: "/p/serum",
-    updated: "เมื่อวาน 18:24",
-  },
-  {
-    id: null,
-    running: false,
-    title: "แก้วเก็บความเย็น 890 ml",
-    meta: "กำลังสร้างเสียงพากย์",
-    status: "กำลังทำ 58%",
-    statusClass: "running",
-    image: "/clippang-sample-poster.jpg",
-    href: "/p/cup",
-    updated: "กำลังทำงาน",
-  },
-];
-
 export function Dashboard() {
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
   const [localProjects, setLocalProjects] = useState<LocalProject[]>([]);
@@ -92,6 +43,10 @@ export function Dashboard() {
   // ใช้คลังกลางร่วมกับเมนูซ้าย ลบที่นี่เมนูซ้ายหายตาม และกลับกัน
   useEffect(() => subscribeProjects(setLocalProjects), []);
 
+  // เคยมีรายการโปรเจกต์ตัวอย่างเขียนตายไว้ แล้วโชว์ทุกครั้งที่ยังต่อ engine ไม่ติด
+  // ซึ่งรวมถึงเสี้ยววินาทีแรกของทุกการโหลดหน้า ผู้ใช้ที่เพิ่งล็อกอินจึงเห็นโปรเจกต์
+  // ชื่อแปลก ๆ ที่ไม่ใช่ของตัวเอง แยกไม่ออกว่าเป็นข้อมูลจริงของคนอื่นหรือของปลอม
+  // ไม่มีรายการปลอมแล้ว ต่อไม่ติดก็แสดงว่างไว้ตรง ๆ
   const projects = useMemo(() => engineState === "connected"
     ? localProjects.map((project) => {
       const latest = project.renders?.[0];
@@ -111,11 +66,9 @@ export function Dashboard() {
         progress: latest?.progress ?? 0,
       };
     })
-    : demoProjects, [engineState, localProjects]);
+    : [], [engineState, localProjects]);
 
-  const runningProject = engineState === "connected"
-    ? projects.find((project) => project.statusClass === "running")
-    : projects[2];
+  const runningProject = projects.find((project) => project.statusClass === "running");
 
   // สถิติต้องนับจากงานจริงบนเครื่อง ไม่ใช่ตัวเลขที่เขียนตายไว้
   // ตัวเลขปลอมในแดชบอร์ดทำให้ผู้ใช้เลิกเชื่อทั้งหน้า รวมถึงส่วนที่จริงด้วย
@@ -247,8 +200,10 @@ export function Dashboard() {
             </div>
 
             <div className="project-list">
-              {projects.length === 0 && engineState === "connected" ? (
-                <div className="projects-empty"><Film size={22} /><b>ยังไม่มีโปรเจกต์</b><p>เริ่มจากคลิปแรกได้เลย ทุกไฟล์จะอยู่บนเครื่องนี้</p><Link href="/p/new" className="button button-primary"><Plus size={16} /> สร้างคลิปแรก</Link></div>
+              {projects.length === 0 ? (
+                engineState === "checking"
+                  ? <div className="projects-empty"><Film size={22} /><b>กำลังโหลดโปรเจกต์ของคุณ</b><p>รอสักครู่…</p></div>
+                  : <div className="projects-empty"><Film size={22} /><b>ยังไม่มีโปรเจกต์</b><p>เริ่มจากคลิปแรกได้เลย ทุกไฟล์จะอยู่บนเครื่องนี้</p><Link href="/p/new" className="button button-primary"><Plus size={16} /> สร้างคลิปแรก</Link></div>
               ) : projects.map((project) => (
                 <div className="project-row-wrap" key={project.id ?? project.title}>
                   <Link href={project.href} className="project-row">

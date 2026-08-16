@@ -415,6 +415,8 @@ select:focus-visible,
   background: rgba(255, 255, 255, 0.04);
 }
 
+.mini-project-loading { opacity: .55; cursor: default; }
+
 .mini-project-thumb {
   position: relative;
   width: 31px;

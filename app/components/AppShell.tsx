@@ -296,16 +296,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             )
           ) : (
-            <>
-              <Link href="/p/charger" className="mini-project">
-                <span className="mini-project-thumb thumb-peach" aria-hidden="true" />
-                <span><b>หัวชาร์จพกพา</b><small>ตัวอย่างพร้อมดาวน์โหลด</small></span>
-              </Link>
-              <Link href="/p/serum" className="mini-project">
-                <span className="mini-project-thumb thumb-mint" aria-hidden="true" />
-                <span><b>เซรั่มผิวโกลว์</b><small>ตัวอย่างร่าง 3 เวอร์ชัน</small></span>
-              </Link>
-            </>
+            // เดิมโชว์โปรเจกต์ตัวอย่างสองอันตอนยังต่อ engine ไม่ติด ซึ่งเกิดทุกครั้งที่โหลดหน้า
+            // คนที่เพิ่งล็อกอินจึงเห็นชื่อโปรเจกต์ที่ไม่ใช่ของตัวเองแวบหนึ่ง เหมือนข้อมูลรั่ว
+            <div className="mini-project mini-project-loading">
+              <span className="mini-project-thumb thumb-mint" aria-hidden="true" />
+              <span><b>{engineState === "checking" ? "กำลังโหลด…" : "ยังไม่ได้เชื่อมต่อ"}</b><small>{engineState === "checking" ? "ดึงโปรเจกต์ของคุณอยู่" : "เปิด ClipPang Local เพื่อดูโปรเจกต์"}</small></span>
+            </div>
           )}
         </div>
 
