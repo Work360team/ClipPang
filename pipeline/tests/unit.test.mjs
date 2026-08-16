@@ -261,6 +261,42 @@ test("HyperFrames composition compiles with bundled font and GSAP assets", async
   assert.match(html, /gsap\.timeline/);
 });
 
+test("12-bit ProRes overlay passes alpha validation, opaque and empty ones do not", async (t) => {
+  if (!(await ffmpegAvailable())) return t.skip("FFmpeg is not installed");
+  // เลเยอร์ซับจริงเป็น ProRes 4444 ซึ่งถอดรหัสมาเป็น 12 บิตและบีบช่วงค่า
+  // (โปร่งสุด=256 ทึบสุด=3750 บนสเกล 4095) เคยทำให้ตัวตรวจเทียบกับ 0–255 แล้ว
+  // ตัดสินว่าซับปกติ "ไม่มีความโปร่งใส" จนถอยไปใช้ ASS แทบทุกครั้ง
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-alpha-test-"));
+  const make = async (alphaExpr, name) => {
+    const file = path.join(dir, name);
+    await run("ffmpeg", [
+      "-v", "error",
+      "-f", "lavfi",
+      "-i", `color=c=white:s=160x120:d=1:r=25,format=rgba,geq=r='255':g='255':b='255':a='${alphaExpr}'`,
+      "-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", "yuva444p12le",
+      "-t", "1", "-y", file,
+    ]);
+    return file;
+  };
+  const timeline = { chunks: [{ startMs: 0, endMs: 900 }] };
+  try {
+    const half = await make("if(lt(Y,60),255,0)", "half.mov");
+    const result = await validateOverlayAlpha(half, timeline);
+    assert.match(result.pixelFormat, /^yuva444p12le$/);
+    assert.ok(result.alphaAverage > 100 && result.alphaAverage < 155,
+      `alpha ครึ่งเฟรมควรอ่านได้ราว 127 จาก 255 แต่ได้ ${result.alphaAverage}`);
+
+    for (const [expr, name] of [["255", "opaque.mov"], ["0", "clear.mov"]]) {
+      await assert.rejects(
+        validateOverlayAlpha(await make(expr, name), timeline),
+        (error) => error instanceof AlphaOverlayError && error.code === "ALPHA_OVERLAY_INVALID",
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("opaque video is rejected instead of being used as an alpha overlay", async () => {
   await assert.rejects(
     validateOverlayAlpha(

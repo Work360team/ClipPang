@@ -1,9 +1,39 @@
 import { EventEmitter } from "node:events";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const TERMINAL_STATES = new Set(["ready", "failed", "canceled"]);
 
+const STYLES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "pipeline", "styles");
+let laneByStyle = null;
+
+/**
+ * เลนของแต่ละสไตล์ อ่านจากไฟล์สไตล์เดียวกับที่ pipeline ใช้
+ *
+ * เดิมฮาร์ดโค้ดไว้ว่ามีแค่ kanit-hf ที่เป็นเลน hyperframes ซึ่งจริงตอนที่มีสไตล์
+ * พรีเมียมอยู่ใบเดียว พอเพิ่ม hf-* มาอีก 11 สไตล์ ทุกใบถูกจัดเข้าเลน ass หมด
+ * ผลคือคิวคิดว่าเป็นงานเบา ปล่อยรันพร้อมกันได้ 2 งาน ทั้งที่เลน hyperframes
+ * ตั้งเพดานไว้ที่ 1 เพราะมันกิน CPU หนัก
+ */
+function styleLanes() {
+  if (laneByStyle) return laneByStyle;
+  laneByStyle = new Map();
+  try {
+    for (const file of fs.readdirSync(STYLES_DIR)) {
+      if (!file.endsWith(".json")) continue;
+      const style = JSON.parse(fs.readFileSync(path.join(STYLES_DIR, file), "utf8"));
+      if (!style?.slug) continue;
+      laneByStyle.set(String(style.slug).toLowerCase(), style.lane === "hyperframes" ? "hyperframes" : "ass");
+    }
+  } catch {
+    // อ่านแคตตาล็อกไม่ได้ก็ปล่อยแมปว่างไว้ แล้วถอยไปเลน ass ซึ่งเป็นค่าที่ปลอดภัยกว่า
+  }
+  return laneByStyle;
+}
+
 export function renderLaneForStyle(styleId) {
-  return String(styleId || "").toLowerCase() === "kanit-hf" ? "hyperframes" : "ass";
+  return styleLanes().get(String(styleId || "").toLowerCase()) ?? "ass";
 }
 
 function parseMaybeJson(value, fallback = {}) {

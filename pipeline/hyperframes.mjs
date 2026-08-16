@@ -281,7 +281,10 @@ export async function validateOverlayAlpha(file, timeline, opts = {}) {
       "-ss", atSec.toFixed(3),
       "-i", file,
       "-frames:v", "1",
-      "-vf", "alphaextract,signalstats,metadata=print",
+      // ต้องแปลงเป็น rgba ก่อนเสมอ ไม่งั้น YAVG ออกมาในสเกลดิบของไฟล์: ProRes 4444
+      // ที่เราใช้เป็นเลเยอร์ซับเป็น 12 บิตและยังบีบช่วงอีก (โปร่งสุด=256 ทึบสุด=3750)
+      // เทียบกับเกณฑ์ 0–255 ตรง ๆ ไม่ได้เลย
+      "-vf", "format=rgba,alphaextract,signalstats,metadata=print",
       "-f", "null", "-",
     ], { signal: opts.signal, timeoutMs: opts.timeoutMs }));
   } catch (error) {
@@ -290,9 +293,11 @@ export async function validateOverlayAlpha(file, timeline, opts = {}) {
   }
 
   const alphaAverage = Number(/lavfi\.signalstats\.YAVG=([0-9.]+)/.exec(diagnostics)?.[1]);
+  // ผ่าน format=rgba มาแล้วค่าจึงอยู่บนสเกล 0–255 จริง เทียบกับสองปลายได้ตรง ๆ:
+  // 0 = โปร่งทั้งเฟรม (ไม่มีซับ) · 255 = ทึบทั้งเฟรม (เอาไปทับวิดีโอแล้วจอดำ)
   if (!Number.isFinite(alphaAverage) || alphaAverage <= 0.05 || alphaAverage >= 254.95) {
     throw new AlphaOverlayError(
-      `alpha frame ผิดปกติ (ค่าเฉลี่ย ${Number.isFinite(alphaAverage) ? alphaAverage.toFixed(2) : "อ่านไม่ได้"})`,
+      `alpha frame ผิดปกติ (ค่าเฉลี่ย ${Number.isFinite(alphaAverage) ? alphaAverage.toFixed(2) : "อ่านไม่ได้"} จาก 255)`,
       { file, pixelFormat, alphaAverage },
     );
   }
@@ -338,7 +343,7 @@ export async function renderOverlay(timeline, style, runDir, opts, onLog = () =>
 
   try {
     const alpha = await validateOverlayAlpha(file, timeline, opts);
-    await onLog(`ตรวจ alpha ผ่าน: ${alpha.pixelFormat} · avg ${alpha.alphaAverage.toFixed(2)}`);
+    await onLog(`ตรวจ alpha ผ่าน: ${alpha.pixelFormat} · avg ${alpha.alphaAverage.toFixed(2)}/255`);
   } catch (error) {
     fs.rmSync(file, { force: true });
     if (error instanceof AlphaOverlayError) throw error;
