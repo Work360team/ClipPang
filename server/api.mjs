@@ -934,6 +934,9 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           passwordChangedAt: viewer.passwordChangedAt || null,
           // เครื่องที่รันโปรแกรมเองไม่มีรหัสผ่านให้เปลี่ยน มันเข้าได้เพราะเป็น localhost
           canChangePassword: !isLocal,
+          // ปุ่มออกจากระบบมีความหมายเฉพาะกับคนที่เข้ามาผ่านหน้าล็อกอิน
+          // บนเครื่องตัวเองกดออกไปก็เข้าได้ใหม่ทันที ไม่ต้องมีปุ่มให้สับสน
+          canSignOut: !isLocal,
         });
       }
 

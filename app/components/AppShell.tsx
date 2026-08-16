@@ -15,6 +15,7 @@ import {
   Radio,
   Settings,
   Sparkles,
+  LogOut,
   Trash2,
   X,
 } from "lucide-react";
@@ -59,6 +60,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
   const [setupReady, setSetupReady] = useState(false);
+  // ใครที่เข้ามาผ่านหน้าล็อกอินเท่านั้นที่ควรเห็นปุ่มออกจากระบบ
+  const [account, setAccount] = useState<{ username: string; canSignOut: boolean } | null>(null);
   const [allProjects, setAllProjects] = useState<LocalProject[]>([]);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -76,13 +79,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
       setEngineState("connected");
       try {
-        const [status, settings] = await Promise.all([
+        const [status, settings, me] = await Promise.all([
           localApi.setupStatus(),
           localApi.settings().catch(() => null),
+          localApi.account().catch(() => null),
         ]);
         if (active) {
           setSetupReady(Boolean(status.ready));
           setPinnedIds(parsePinned(settings?.settings?.pinnedProjects));
+          setAccount(me ? { username: me.username, canSignOut: me.canSignOut } : null);
         }
       } catch {
         if (active) setSetupReady(false);
@@ -318,6 +323,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <CircleHelp size={17} />
             ศูนย์ช่วยเหลือการติดตั้ง
           </Link>
+          {account?.canSignOut && (
+            // ส่งเป็นฟอร์ม POST จริง ไม่ใช่ลิงก์ เพราะ GET ที่เตะคนออกจากระบบได้
+            // ถูกกดแทนผู้ใช้จากที่อื่นได้ และยังทำงานต่อได้แม้ JS ไม่ทำงาน
+            <form method="post" action="/api/auth/logout" className="signout-form">
+              <button type="submit" className="signout-button">
+                <LogOut size={17} />
+                <span>ออกจากระบบ<small>{account.username}</small></span>
+              </button>
+            </form>
+          )}
         </div>
       </aside>
 

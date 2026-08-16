@@ -479,7 +479,9 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       if (requestUrl.pathname === "/api/auth/login" && request.method === "POST") {
         return sendWebResponse(res, await handleLogin(request, ip, runtime.store), request.method);
       }
-      if (requestUrl.pathname === "/api/auth/logout") {
+      // รับเฉพาะ POST — ถ้าเป็นลิงก์ GET ตัว prefetch ของเบราว์เซอร์หรือรูปที่ฝัง
+      // ในหน้าอื่นกดแทนผู้ใช้ได้ กลายเป็นเตะคนออกจากระบบโดยที่เขาไม่ได้สั่ง
+      if (requestUrl.pathname === "/api/auth/logout" && request.method === "POST") {
         return sendWebResponse(res, new Response(null, {
           status: 303,
           headers: { location: "/", "set-cookie": sessionCookie("", { clear: true }) },

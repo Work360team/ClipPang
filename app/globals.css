@@ -555,6 +555,40 @@ img.mini-project-thumb::after { content: none; }
   color: #d7dbd5;
 }
 
+.signout-form { margin-top: 2px; }
+
+.signout-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #727a73;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.signout-button span { display: block; min-width: 0; }
+
+.signout-button small {
+  display: block;
+  margin-top: 1px;
+  color: #5c645d;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signout-button:hover { background: #1c201d; color: #e6b8b2; }
+.signout-button:hover small { color: #9aa09a; }
+.signout-button svg { flex: 0 0 auto; }
+
 .content-frame {
   width: calc(100% - 252px);
   min-width: 0;

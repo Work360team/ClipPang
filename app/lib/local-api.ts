@@ -218,6 +218,7 @@ export interface LocalAccount {
   createdAt: number;
   passwordChangedAt: number | null;
   canChangePassword: boolean;
+  canSignOut: boolean;
 }
 export interface LocalQuota {
   ok: true;
