@@ -248,6 +248,9 @@ export interface LocalRender {
   // ต้องประกาศไว้ ไม่งั้นโค้ดที่อ่านเสียง/สคริปต์ของร่างจะหลุด type check
   config?: Record<string, unknown> | null;
   stale?: boolean;
+  // เวลาของงาน ใช้เลือกว่างานไหนใหม่กว่ากันตอนหยิบภาพปกมาแสดง
+  created_at?: string; finished_at?: string | null;
+  createdAt?: string; finishedAt?: string | null;
 }
 export interface LocalProject {
   id: string; title: string; wizard_step?: number; product?: Record<string, unknown>;

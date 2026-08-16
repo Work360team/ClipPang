@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
-import { refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
+import { projectPoster, refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 import { HardLink as Link } from "./HardLink";
 import { NotificationBell } from "./NotificationBell";
 
@@ -226,10 +226,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               const pinned = pinnedIds.includes(project.id);
               const title = project.title || "โปรเจกต์ไม่มีชื่อ";
               const open = pathname === `/p/${project.id}`;
+              const poster = projectPoster(project);
               return (
                 <div className={`mini-project-row ${openMenu === project.id ? "menu-open" : ""} ${open ? "is-open" : ""}`} key={project.id}>
                   <Link href={`/p/${project.id}`} className="mini-project" aria-current={open ? "page" : undefined}>
-                    <span className={`mini-project-thumb ${index % 2 ? "thumb-mint" : "thumb-peach"}`} aria-hidden="true" />
+                    {poster
+                      ? <img className="mini-project-thumb" src={poster} alt="" loading="lazy" />
+                      : <span className={`mini-project-thumb ${index % 2 ? "thumb-mint" : "thumb-peach"}`} aria-hidden="true" />}
                     <span>
                       <b>{pinned && <Pin size={11} aria-label="ปักหมุดไว้" />}{title}</b>
                       <small>{status}</small>

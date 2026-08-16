@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "./AppShell";
 import { HardLink as Link } from "./HardLink";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
-import { refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
+import { projectPoster, refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
 
 type DashboardCard = {
   id: string | null;
@@ -104,7 +104,8 @@ export function Dashboard() {
         meta: ready ? (latest.kind === "final" ? "คลิปตัวจริงพร้อมแล้ว" : "ร่างพร้อมให้เลือก") : running ? latest.message || "กำลังประมวลผล" : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`,
         status: ready ? "พร้อมดาวน์โหลด" : running ? `กำลังทำ ${latest.progress ?? 0}%` : "บันทึกแล้ว",
         statusClass: ready ? "ready" : running ? "running" : "draft",
-        image: "/clippang-sample-poster.jpg",
+        // เฟรมจริงจากคลิปที่เรนเดอร์แล้ว ถ้ายังไม่เคยเรนเดอร์ค่อยใช้ภาพตัวอย่าง
+        image: projectPoster(project) ?? "/clippang-sample-poster.jpg",
         href: `/p/${encodeURIComponent(project.id)}`,
         updated: project.updated_at ? new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short" }).format(new Date(project.updated_at)) : "เมื่อสักครู่",
         progress: latest?.progress ?? 0,

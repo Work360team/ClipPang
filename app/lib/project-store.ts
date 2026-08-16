@@ -1,6 +1,6 @@
 "use client";
 
-import { localApi, type LocalProject } from "./local-api";
+import { localApi, type LocalProject, type LocalRender } from "./local-api";
 
 /**
  * รายชื่อโปรเจกต์ก้อนเดียวที่ทุกหน้าต่างของแอปใช้ร่วมกัน
@@ -47,6 +47,24 @@ export function removeProjectLocally(id: string) {
   if (next.length === projects.length) return;
   projects = next;
   emit();
+}
+
+/**
+ * ภาพปกของโปรเจกต์ = เฟรมจริงจากคลิปที่เรนเดอร์ล่าสุด
+ *
+ * ทุกงานเรนเดอร์ทิ้ง poster ไว้ใน out/ อยู่แล้ว แต่รายการโปรเจกต์กลับโชว์ภาพ
+ * ตัวอย่างใบเดียวกันหมดทุกอัน ทำให้ดูไม่ออกว่าอันไหนเป็นสินค้าอะไร
+ * เลือกงานตัวจริงก่อน ถ้ายังไม่มีค่อยใช้ร่าง และข้ามงานที่ถูกมาร์กว่า stale
+ * เพราะภาพของมันไม่ตรงกับสิ่งที่อยู่บน timeline แล้ว
+ */
+export function projectPoster(project: { renders?: LocalRender[] } | null | undefined): string | null {
+  const renders = (project?.renders ?? []).filter((render) => !render.stale && render.outputs?.poster?.url);
+  if (!renders.length) return null;
+  const newest = (list: LocalRender[]) => list.reduce((best, render) => (
+    String(render.finishedAt ?? render.createdAt ?? "") > String(best.finishedAt ?? best.createdAt ?? "") ? render : best
+  ));
+  const finals = renders.filter((render) => render.kind === "final");
+  return newest(finals.length ? finals : renders).outputs!.poster!.url ?? null;
 }
 
 /**

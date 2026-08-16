@@ -424,6 +424,14 @@ select:focus-visible,
   border-radius: 8px;
 }
 
+/* ภาพปกจริงของคลิป ใช้แทนบล็อกสีเมื่อโปรเจกต์เคยเรนเดอร์แล้ว */
+img.mini-project-thumb {
+  object-fit: cover;
+  background: #262b26;
+}
+
+img.mini-project-thumb::after { content: none; }
+
 .mini-project-thumb::after {
   content: "";
   position: absolute;
