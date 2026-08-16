@@ -8,6 +8,8 @@ export type StylePreviewParams = {
   activeFill?: string;
   emphasisFill?: string;
   outline?: { color?: string; width?: number };
+  box?: { color?: string; alpha?: number };
+  idleAlpha?: number;
   font?: { family?: string; weight?: number; size?: number };
   position?: { anchor?: string };
   pill?: { color?: string; padV?: number; padH?: number; radius?: number };
@@ -32,9 +34,19 @@ export function stylePreviewVars(params?: StylePreviewParams): CSSProperties {
   return {
     "--style-fill": params.fill ?? "#fff",
     "--style-active": params.activeFill ?? "var(--yellow)",
+    "--style-emphasis": params.emphasisFill ?? params.activeFill ?? "var(--yellow)",
     "--style-weight": String(params.font?.weight ?? 800),
     "--style-stroke": `${-outlineWidth}px ${-outlineWidth}px 0 ${outlineColor}, ${outlineWidth}px ${-outlineWidth}px 0 ${outlineColor}, ${-outlineWidth}px ${outlineWidth}px 0 ${outlineColor}, ${outlineWidth}px ${outlineWidth}px 0 ${outlineColor}`,
   } as CSSProperties;
+}
+
+/** #RRGGBB → rgba() สำหรับพื้นกล่องที่ต้องคุมความทึบ */
+function hexToRgba(hex: string, alpha: number) {
+  const value = hex.replace("#", "");
+  const r = Number.parseInt(value.slice(0, 2), 16) || 0;
+  const g = Number.parseInt(value.slice(2, 4), 16) || 0;
+  const b = Number.parseInt(value.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
 }
 
 /** ประโยคตัวอย่างที่ใช้ทุกสไตล์ ให้เทียบกันได้ว่าจังหวะต่างกันยังไง */
@@ -60,6 +72,7 @@ export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePrevi
 
   const enter = params?.animation?.enter ?? "blur";
   const pill = params?.pill;
+  const box = params?.box;
   const glow = params?.glow;
   const gradient = params?.gradient;
   const glitch = params?.glitch;
@@ -68,7 +81,13 @@ export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePrevi
   const anchor = params?.position?.anchor === "top" ? "top" : params?.position?.anchor === "middle" ? "middle" : "bottom";
   const big = (params?.font?.size ?? 90) >= 110;
 
+  const boxOpacity = box ? Math.max(0, Math.min(1, 1 - (box.alpha ?? 0x40) / 255)) : 0;
   const lineStyle: CSSProperties = {
+    ...(box ? {
+      background: hexToRgba(box.color ?? "#000000", boxOpacity),
+      padding: "2px 7px",
+      borderRadius: "2px",
+    } : {}),
     ...(pill ? {
       background: pill.color ?? "rgba(0,0,0,0.62)",
       borderRadius: `${Math.round((pill.radius ?? 999) / 3)}px`,
@@ -77,7 +96,9 @@ export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePrevi
   };
 
   const wordStyle = (state: "done" | "now" | "todo", isEmphasis: boolean): CSSProperties => ({
-    color: gradient ? "transparent" : state === "now" ? "var(--style-active)" : "var(--style-fill)",
+    color: gradient ? "transparent"
+      : state === "now" ? (isEmphasis ? "var(--style-emphasis)" : "var(--style-active)")
+      : "var(--style-fill)",
     ...(gradient ? {
       backgroundImage: `linear-gradient(${gradient.angle ?? 100}deg, ${gradient.from}, ${gradient.to})`,
       WebkitBackgroundClip: "text",
@@ -94,7 +115,9 @@ export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePrevi
     ...(emphasis && isEmphasis ? { fontSize: `${emphasis.scale ?? 1.5}em`, fontWeight: emphasis.weight ?? 800 } : {}),
     ...(weightShift ? { fontWeight: state === "now" ? (weightShift.active ?? 800) : (weightShift.base ?? 600) } : {}),
     transform: state === "now" ? `scale(${params?.animation?.scale ?? 1.12})` : "scale(1)",
-    opacity: state === "todo" && !pill ? 0.72 : 1,
+    opacity: state === "todo" && !pill && !box
+      ? (params?.idleAlpha != null ? Math.max(0, Math.min(1, 1 - params.idleAlpha / 255)) : 0.72)
+      : 1,
     transitionDuration: `${params?.animation?.durationMs ?? 160}ms`,
   });
 

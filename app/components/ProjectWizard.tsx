@@ -269,10 +269,10 @@ type WizardStyle = { id: string; name: string; note: string; label: string; clas
  * /api/styles ไม่งั้นวางไฟล์สไตล์ใหม่ใน pipeline/styles แล้ว wizard จะไม่เห็น
  */
 const fallbackCaptionStyles: WizardStyle[] = [
-  { id: "karaoke-pop", name: "ป๊อปขายดี", note: "เด่น อ่านไว", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว" },
-  { id: "reveal-clean", name: "คลีนมินิมอล", note: "สะอาด ดูแพง", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว" },
-  { id: "box-bold", name: "กล่องครีเอเตอร์", note: "ชัดบนทุกพื้นหลัง", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว" },
-  { id: "kanit-hf", name: "คาราโอเกะพรีเมียม", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด" },
+  { id: "karaoke-pop", name: "คาราโอเกะ ป๊อป", note: "ขาวขอบดำหนา คำที่พูดเด้งเป็นสีเหลือง", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว" },
+  { id: "reveal-clean", name: "เผยทีละคำ มินิมอล", note: "คำที่ยังไม่พูดจางไว้ก่อน", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว" },
+  { id: "box-bold", name: "กล่องทึบ อ่านง่าย", note: "พื้นกล่องทึบ อ่านชัดแม้ฉากสว่างจ้า", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว" },
+  { id: "kanit-hf", name: "Kanit เด้ง (HyperFrames)", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด" },
 ];
 
 /** หน้าตาของซับในพรีวิวยังอิง class เดิม — จับคู่จาก id ที่รู้จัก ที่เหลือใช้ค่ากลาง */
@@ -937,8 +937,10 @@ export function ProjectWizard() {
               const fallback = fallbackCaptionStyles.find((item) => item.id === style.id);
               return {
                 id: style.id,
-                name: fallback?.name || style.name || style.id,
-                note: fallback?.note || (style.description || "").slice(0, 28),
+                // ชื่อและคำอธิบายต้องมาจากไฟล์สไตล์เสมอ ไม่ใช่จากตารางสำรองในโค้ด
+                // ไม่งั้นสไตล์เดียวกันจะชื่อหนึ่งในหน้าสร้างคลิป อีกชื่อในหน้าคลังสไตล์
+                name: style.name || fallback?.name || style.id,
+                note: (style.description || fallback?.note || "").slice(0, 34),
                 label: fallback?.label || "ตัวอย่างซับ",
                 className: STYLE_CLASSNAMES[style.id] || "caption-pop",
                 speed: style.lane === "hyperframes" ? "ละเอียด" : "เร็ว",
