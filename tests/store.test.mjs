@@ -222,3 +222,31 @@ test("init imports project folders that predate the database", (t) => {
   assert.deepEqual(project.product, { name: "สินค้า" });
   store.close();
 });
+
+test("user API keys are encrypted at rest and legacy plaintext rows upgrade themselves", (t) => {
+  // ฐานข้อมูลอาจถูกก๊อปออกไปทั้งไฟล์ คีย์ของลูกค้าคนอื่นจึงต้องอ่านไม่ได้จากไฟล์นั้นอย่างเดียว
+  const { rootDir, store, options } = fixture(t);
+  const user = store.createUser({ username: "keyowner", passwordHash: "scrypt$a$b", role: "member" });
+  const secret = "AIzaSyTESTKEY0123456789abcdef";
+  store.addUserKey(user.id, secret);
+
+  assert.equal(store.listUserKeys(user.id)[0].key, secret, "อ่านกลับมาต้องได้คีย์เดิม");
+
+  const dbFile = readFileSync(path.join(rootDir, "data", "clippang.db")).toString("latin1");
+  assert.ok(!dbFile.includes(secret), "คีย์ต้องไม่โผล่เป็น plaintext ในไฟล์ฐานข้อมูล");
+  assert.ok(existsSync(path.join(rootDir, "data", "secret.key")), "กุญแจต้องอยู่คนละไฟล์กับฐานข้อมูล");
+
+  // แถวเก่าที่บันทึกไว้ก่อนมีการเข้ารหัส ต้องยังใช้ได้และถูกอัปเกรดให้เอง
+  const legacy = "AIzaSyLEGACY9876543210zyxwvu";
+  store.raw?.() ?? null;
+  const database = store.database ?? null;
+  assert.ok(database, "ต้องเข้าถึง database ได้เพื่อจำลองแถวเก่า");
+  database.prepare("INSERT INTO user_keys (user_id, slot, api_key, created_at) VALUES (?,?,?,?)")
+    .run(user.id, 7, legacy, Date.now());
+  const listed = store.listUserKeys(user.id).find((entry) => entry.slot === 7);
+  assert.equal(listed.key, legacy, "คีย์เก่าต้องยังอ่านได้หลังอัปเดต");
+  const stored = database.prepare("SELECT api_key FROM user_keys WHERE slot = 7").get().api_key;
+  assert.ok(stored.startsWith("v1:"), "อ่านครั้งแรกแล้วต้องเขียนทับเป็นแบบเข้ารหัส");
+  assert.ok(!stored.includes("LEGACY"), "ต้องไม่เหลือ plaintext ค้างไว้");
+  assert.ok(options);
+});

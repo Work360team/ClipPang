@@ -13,6 +13,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { decryptSecret, encryptSecret, isEncrypted } from "../secret-box.mjs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
@@ -873,10 +874,22 @@ export class SqliteStore {
   /* ---------- คีย์ Gemini รายคน ---------- */
 
   listUserKeys(userId) {
-    return this.#db()
+    const owner = String(userId ?? "");
+    const rows = this.#db()
       .prepare("SELECT slot, api_key, created_at FROM user_keys WHERE user_id = ? ORDER BY slot ASC")
-      .all(String(userId ?? ""))
-      .map((row) => ({ slot: Number(row.slot), key: row.api_key, createdAt: Number(row.created_at) }));
+      .all(owner);
+    return rows.map((row) => {
+      // แถวที่บันทึกไว้ก่อนมีการเข้ารหัส ให้เขียนทับเป็นแบบเข้ารหัสตอนอ่านครั้งแรก
+      // ผู้ใช้เดิมจึงไม่ต้องมาใส่คีย์ใหม่ และไม่มี plaintext ค้างอยู่ในฐานข้อมูล
+      if (!isEncrypted(row.api_key)) {
+        try {
+          this.#db().prepare("UPDATE user_keys SET api_key = ? WHERE user_id = ? AND slot = ?")
+            .run(encryptSecret(row.api_key, this.dataDir), owner, row.slot);
+        } catch { /* อัปเกรดไม่ได้ก็ยังใช้คีย์เดิมได้ */ }
+        return { slot: Number(row.slot), key: row.api_key, createdAt: Number(row.created_at) };
+      }
+      return { slot: Number(row.slot), key: decryptSecret(row.api_key, this.dataDir), createdAt: Number(row.created_at) };
+    });
   }
 
   addUserKey(userId, apiKey, { maxKeys = 9 } = {}) {
@@ -893,7 +906,7 @@ export class SqliteStore {
     let slot = 1;
     while (used.has(slot)) slot += 1;
     this.#db().prepare("INSERT INTO user_keys (user_id, slot, api_key, created_at) VALUES (?, ?, ?, ?)")
-      .run(owner, slot, key, this.#timestamp());
+      .run(owner, slot, encryptSecret(key, this.dataDir), this.#timestamp());
     return { slot, key, createdAt: this.#timestamp() };
   }
 
