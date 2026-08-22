@@ -9,10 +9,57 @@
 //
 // เก็บแยกรายคีย์เพราะโควตานับต่อโปรเจกต์ คีย์ใบหนึ่งหมดไม่ได้แปลว่าใบอื่นหมดด้วย
 
+import fs from "node:fs";
+
 /** keyId → สถานะ 429 ล่าสุดของคีย์นั้น */
 const states = new Map();
 
 const GLOBAL = "__global__";
+
+/**
+ * ไฟล์จำสถานะข้ามการรีสตาร์ต
+ *
+ * โควตารายวันของ Google กินเวลาถึงเที่ยงคืนแปซิฟิกกว่าจะคืน แต่สถานะเดิมอยู่ใน
+ * หน่วยความจำล้วน ปิดโปรแกรมแล้วเปิดใหม่ระบบจึงลืมหมดและไปยิงคีย์ที่เต็มอยู่ซ้ำ
+ * ผู้ใช้ต้องนั่งรอ timeout ทีละใบกว่าจะรู้ว่าต้องข้าม
+ *
+ * keyId เป็น sha256 ของคีย์ตัดมา 12 ตัว จึงคงที่ข้ามการรีสตาร์ตและไม่เปิดเผยคีย์
+ * ไฟล์นี้ไม่มีความลับอยู่ข้างใน
+ */
+let storeFile = null;
+let saveTimer = null;
+
+export function configureQuotaStore(file) {
+  storeFile = file || null;
+  if (!storeFile) return;
+  try {
+    const saved = JSON.parse(fs.readFileSync(storeFile, "utf8"));
+    const now = Date.now();
+    for (const state of Array.isArray(saved?.states) ? saved.states : []) {
+      if (!state?.keyId) continue;
+      // ทิ้งอันที่หมดอายุไปแล้ว จะได้ไม่บล็อกคีย์ที่กลับมาใช้ได้แล้วตั้งแต่ตอนปิดเครื่อง
+      if (!statusFor(state, now, 0).limited) continue;
+      states.set(state.keyId, state);
+    }
+  } catch {
+    // ไม่มีไฟล์หรืออ่านไม่ได้ = เริ่มจากว่าง ไม่ใช่เรื่องผิดปกติ
+  }
+}
+
+function persist() {
+  if (!storeFile) return;
+  // รวบการเขียนไว้รอบเดียว งานเรนเดอร์หนึ่งอาจชน 429 หลายครั้งติดกัน
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      fs.writeFileSync(storeFile, JSON.stringify({ savedAt: Date.now(), states: [...states.values()] }));
+    } catch {
+      // เขียนไม่ได้ก็ยังทำงานต่อได้ แค่ลืมสถานะเมื่อรีสตาร์ตเหมือนเดิม
+    }
+  }, 200);
+  saveTimer.unref?.();
+}
 
 /**
  * เรียกเมื่อ provider เจอ 429 จากการสร้างเสียงจริง
@@ -35,11 +82,12 @@ export function noteRateLimited({ provider = "gemini", keyId = GLOBAL, retryAfte
     daily: /PerDay/i.test(quotaId),
     detail: text.slice(0, 400),
   });
+  persist();
 }
 
 /** เรียกเมื่อสร้างเสียงด้วยคีย์นี้สำเร็จ — ถือว่าโควตาของคีย์นี้กลับมาใช้ได้ */
 export function noteQuotaOk(keyId = GLOBAL) {
-  states.delete(keyId);
+  if (states.delete(keyId)) persist();
 }
 
 function statusFor(state, now, graceMs) {
@@ -117,4 +165,5 @@ export function nextPacificMidnight(now = Date.now()) {
 
 export function resetQuotaState() {
   states.clear();
+  persist();
 }

@@ -20,6 +20,7 @@ import { prepareSources } from "./sources.mjs";
 import { createStore } from "./store/index.mjs";
 import { RenderQueue } from "./queue.mjs";
 import { getSetupStatus } from "./setup.mjs";
+import { configureQuotaStore } from "../pipeline/tts-quota.mjs";
 import { runPipeline } from "../pipeline/index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -196,6 +197,8 @@ export function pickScript(config, product) {
 
 export async function createLocalRuntime({ store: providedStore, processor } = {}) {
   ensureDirectories();
+  // จำไว้ว่าคีย์ไหนโควตาหมด เพื่อไม่ให้เปิดโปรแกรมใหม่แล้วไปยิงคีย์ที่เต็มซ้ำ
+  configureQuotaStore(path.join(PATHS.data, "tts-quota.json"));
   const store = providedStore ?? createStore({
     rootDir: PATHS.root,
     dataDir: PATHS.data,

@@ -261,6 +261,34 @@ test("HyperFrames composition compiles with bundled font and GSAP assets", async
   assert.match(html, /gsap\.timeline/);
 });
 
+test("quota state survives a restart, but an expired per-minute block does not", async () => {
+  // ก่อนหน้านี้สถานะอยู่ในหน่วยความจำล้วน เปิดโปรแกรมใหม่แล้วระบบลืมว่าคีย์ไหนเต็ม
+  // แล้วไปยิงซ้ำจนผู้ใช้ต้องรอ timeout ทีละใบ
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-quota-test-"));
+  const file = path.join(dir, "tts-quota.json");
+  try {
+    const first = await import(`../tts-quota.mjs?restart=1`);
+    first.configureQuotaStore(file);
+    first.noteRateLimited({ keyId: "daily-key", retryAfterMs: 30_000, detail: '{"quotaId":"GenerateRequestsPerDayPerProject"}' });
+    first.noteRateLimited({ keyId: "minute-key", retryAfterMs: 1, detail: '{"quotaId":"GenerateRequestsPerMinute"}' });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.ok(fs.existsSync(file), "ต้องเขียนไฟล์สถานะไว้");
+
+    // โหลดโมดูลใหม่ = จำลองการเปิดโปรแกรมใหม่ทั้งโปรเซส
+    const second = await import(`../tts-quota.mjs?restart=2`);
+    second.configureQuotaStore(file);
+    assert.equal(second.keyQuotaStatus("daily-key").limited, true, "โควตารายวันต้องยังบล็อกอยู่หลังรีสตาร์ต");
+    assert.equal(second.keyQuotaStatus("minute-key").limited, false, "โควตาต่อนาทีที่หมดอายุแล้วต้องไม่ถูกกู้กลับมาบล็อก");
+    assert.equal(second.keyQuotaStatus("never-used").limited, false);
+
+    second.noteQuotaOk("daily-key");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.equal(second.keyQuotaStatus("daily-key").limited, false, "ยิงสำเร็จแล้วต้องปลดบล็อก");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("12-bit ProRes overlay passes alpha validation, opaque and empty ones do not", async (t) => {
   if (!(await ffmpegAvailable())) return t.skip("FFmpeg is not installed");
   // เลเยอร์ซับจริงเป็น ProRes 4444 ซึ่งถอดรหัสมาเป็น 12 บิตและบีบช่วงค่า
