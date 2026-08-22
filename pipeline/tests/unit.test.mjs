@@ -261,6 +261,45 @@ test("HyperFrames composition compiles with bundled font and GSAP assets", async
   assert.match(html, /gsap\.timeline/);
 });
 
+test("batched audio is split back into one file per chunk, and a bad split is refused", async (t) => {
+  if (!(await ffmpegAvailable())) return t.skip("FFmpeg is not installed");
+  // เสียงที่รวมมาในคำขอเดียวต้องตัดกลับให้ตรงจำนวนท่อน ถ้าตัดไม่ลงตัวต้องปฏิเสธ
+  // ไม่ใช่เดา เพราะตัดผิดตำแหน่งแปลว่าซับเลื่อนไม่ตรงเสียงทั้งคลิป
+  const { splitOnSilence, cutSpans, buildBatchPrompt } = await import("../tts-batch.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-batch-test-"));
+  try {
+    const joined = path.join(dir, "joined.wav");
+    await run("ffmpeg", [
+      "-v", "error",
+      "-f", "lavfi", "-i", "sine=f=300:d=1.2",
+      "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono:d=1",
+      "-f", "lavfi", "-i", "sine=f=400:d=0.9",
+      "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono:d=1",
+      "-f", "lavfi", "-i", "sine=f=500:d=1.4",
+      "-filter_complex", "[0:a][1:a][2:a][3:a][4:a]concat=n=5:v=0:a=1[a]",
+      "-map", "[a]", "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le", "-y", joined,
+    ]);
+
+    const spans = await splitOnSilence(joined, 3);
+    assert.equal(spans?.length, 3, "เสียงสามท่อนคั่นด้วยความเงียบต้องตัดได้สามช่วง");
+    assert.ok(spans[0].startSec < spans[1].startSec && spans[1].startSec < spans[2].startSec, "ช่วงต้องเรียงตามเวลา");
+
+    assert.equal(await splitOnSilence(joined, 5), null, "จำนวนช่วงไม่ตรงต้องคืน null ไม่ใช่เดา");
+    assert.equal(await splitOnSilence(joined, 1), null, "ท่อนเดียวไม่ต้องรวมอยู่แล้ว");
+
+    const outs = [0, 1, 2].map((i) => path.join(dir, `part${i}.wav`));
+    await cutSpans(joined, spans, outs);
+    for (const file of outs) assert.ok(fs.statSync(file).size > 1000, `${path.basename(file)} ต้องมีเสียงจริง`);
+
+    const prompt = buildBatchPrompt(["บรรทัดหนึ่ง", "บรรทัดสอง"], "เป็นกันเอง");
+    assert.match(prompt, /บรรทัดหนึ่ง/);
+    assert.match(prompt, /บรรทัดสอง/);
+    assert.match(prompt, /pause/i, "prompt ต้องสั่งให้เว้นจังหวะ ไม่งั้นตัดกลับไม่ได้");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("quota state survives a restart, but an expired per-minute block does not", async () => {
   // ก่อนหน้านี้สถานะอยู่ในหน่วยความจำล้วน เปิดโปรแกรมใหม่แล้วระบบลืมว่าคีย์ไหนเต็ม
   // แล้วไปยิงซ้ำจนผู้ใช้ต้องรอ timeout ทีละใบ

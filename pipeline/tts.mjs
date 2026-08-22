@@ -9,6 +9,7 @@ import { durationMs, ensureDir, ffmpeg, run, sha256, throwIfAborted, toAbortErro
 import { keyQuotaStatus, noteQuotaOk, noteRateLimited } from "./tts-quota.mjs";
 import { listGeminiKeys } from "./gemini-keys.mjs";
 import { graphemeCount } from "./core.mjs";
+import { buildBatchPrompt, cutSpans, splitOnSilence } from "./tts-batch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -149,12 +150,12 @@ function ttsNoAudioMessage({ blocked, finish, spoken, text, attempts = 1 }) {
     + `อาการนี้เป็นที่ฝั่งโมเดลไม่ใช่ที่ข้อความของเรา รอสักครู่แล้วกดสร้างใหม่มักจะผ่าน`;
 }
 
-async function geminiTts({ text, voice, styleHint, signal, timeoutMs, geminiEnv, onRequest }, rawFile) {
-  const prompt = styleHint ? `${styleHint}: ${text}` : text;
+async function geminiTts({ text, voice, styleHint, signal, timeoutMs, geminiEnv, onRequest, promptOverride }, rawFile) {
+  const prompt = promptOverride || (styleHint ? `${styleHint}: ${text}` : text);
   // โมเดลตอบกลับเป็นข้อความแทนเสียงได้ ถ้าท่อนนั้นอ่านแล้วเหมือนคำถามหรือคำสั่ง
   // (Google เรียกอาการนี้ว่า "Model tried to generate text") สั่งย้ำให้อ่านตามตัวอักษร
   // แล้วลองใหม่หนึ่งรอบ ดีกว่าทิ้งงานเรนเดอร์ทั้งงานเพราะท่อนเดียว
-  const strictPrompt = `Read the following text aloud, verbatim and in its original language. Do not answer it, translate it, or add words.${styleHint ? ` Style: ${styleHint}.` : ""}
+  const strictPrompt = promptOverride || `Read the following text aloud, verbatim and in its original language. Do not answer it, translate it, or add words.${styleHint ? ` Style: ${styleHint}.` : ""}
 
 ${text}`;
   let useStrictPrompt = false;
@@ -313,6 +314,23 @@ async function mockTts({ text, signal, timeoutMs }, rawFile) {
  * สร้างเสียงหนึ่งท่อน แล้วคืนความยาวจริงที่วัดจากไฟล์
  * cache key ผูกกับ provider+voice+speed+text → พูดประโยคเดิมซ้ำไม่เสียเงินอีก
  */
+/**
+ * ทำให้ไฟล์เสียงเป็นรูปแบบเดียวกันทุก provider + เร่ง/ลดความเร็ว
+ * แยกออกมาเพราะทางที่รวมหลายท่อนเป็นคำขอเดียวก็ต้องผ่านขั้นตอนนี้เหมือนกัน
+ */
+async function normalizeAudio(rawFile, outFile, { provider, speed, signal, timeoutMs }) {
+  const filters = provider === "silence" || provider === "mock"
+    ? []
+    : ["silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05"];
+  if (provider !== "edge" && Math.abs(speed - 1) > 0.01) filters.push(`atempo=${speed.toFixed(3)}`);
+  await ffmpeg([
+    "-i", rawFile,
+    ...(filters.length ? ["-af", filters.join(",")] : []),
+    "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+    "-y", outFile,
+  ], { signal, timeoutMs });
+}
+
 export async function synthesize({
   text,
   provider,
@@ -367,17 +385,7 @@ export async function synthesize({
     else if (provider === "mock") await mockTts(providerOpts, rawFile);
     else throw new Error(`ไม่รู้จัก TTS provider: ${provider}`);
 
-    // ทำให้เป็นรูปแบบเดียวกันทุกเจ้า + เร่ง/ลดความเร็วสำหรับเจ้าที่ไม่มี rate ในตัว
-    const filters = provider === "silence" || provider === "mock"
-      ? []
-      : ["silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05"];
-    if (provider !== "edge" && Math.abs(speed - 1) > 0.01) filters.push(`atempo=${speed.toFixed(3)}`);
-    await ffmpeg([
-      "-i", rawFile,
-      ...(filters.length ? ["-af", filters.join(",")] : []),
-      "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
-      "-y", outFile,
-    ], { signal, timeoutMs });
+    await normalizeAudio(rawFile, outFile, { provider, speed, signal, timeoutMs });
   } finally {
     fs.rmSync(rawFile, { force: true });
   }
@@ -402,9 +410,85 @@ export function concurrencyFor(provider) {
   return 4;
 }
 
+/** ไฟล์แคชของท่อนหนึ่ง — กติกาเดียวกับใน synthesize() */
+function cachePathFor({ provider, voice, speed, styleHint, text }, cacheDir) {
+  if (!cacheDir) return null;
+  const key = sha256([provider, voice, speed, styleHint, text].join(" ")).slice(0, 32);
+  return path.join(cacheDir, `${key}.wav`);
+}
+
+/**
+ * ยิงทุกท่อนที่ยังไม่มีในแคชด้วยคำขอเดียว แล้วตัดเสียงกลับเป็นรายท่อน
+ *
+ * คืน true เมื่อสำเร็จครบทุกท่อน — ถ้าตัดกลับไม่ลงตัวจะคืน false โดยไม่เขียนไฟล์อะไรเลย
+ * ให้ผู้เรียกถอยไปยิงทีละท่อนตามเดิม ยอมเสียหนึ่งคำขอดีกว่าปล่อยเสียงเลื่อนไม่ตรงซับ
+ */
+async function tryBatchSynthesize(items, opts) {
+  const { provider, voice, speed, styleHint = "", cacheDir, signal, timeoutMs, geminiEnv, onRequest } = opts;
+  // โฟลเดอร์ปลายทางกับแคชต้องมีก่อน — ทางเดิมสร้างไว้ใน synthesize() ซึ่งทางนี้ไม่ได้ผ่าน
+  for (const item of items) ensureDir(path.dirname(item.outFile));
+  if (cacheDir) ensureDir(cacheDir);
+  const scratch = `${items[0].outFile}.batch.wav`;
+  try {
+    await geminiTts({
+      text: items.map((item) => item.text).join(" "),
+      voice, styleHint, signal, timeoutMs, geminiEnv, onRequest,
+      promptOverride: buildBatchPrompt(items.map((item) => item.text), styleHint),
+    }, scratch);
+
+    const spans = await splitOnSilence(scratch, items.length, { signal, timeoutMs });
+    if (!spans) return false;
+
+    const rawFiles = items.map((item) => `${item.outFile}.seg.wav`);
+    try {
+      await cutSpans(scratch, spans, rawFiles, { signal, timeoutMs });
+      for (let i = 0; i < items.length; i += 1) {
+        await normalizeAudio(rawFiles[i], items[i].outFile, { provider, speed, signal, timeoutMs });
+        const cached = cachePathFor({ provider, voice, speed, styleHint, text: items[i].text }, cacheDir);
+        if (cached) fs.copyFileSync(items[i].outFile, cached);
+      }
+    } finally {
+      for (const file of rawFiles) fs.rmSync(file, { force: true });
+    }
+    return true;
+  } finally {
+    fs.rmSync(scratch, { force: true });
+  }
+}
+
 /** ยิงหลายท่อนพร้อมกันแบบจำกัดจำนวน (กัน rate limit ของ provider) */
 export async function synthesizeAll(items, opts, concurrency = 4, onEach = () => {}) {
   if (!items.length) return [];
+  // จำนวนท่อนที่ได้เสียงมาจากคำขอเดียว ติดไปกับผลลัพธ์เพื่อให้รายงานบอกได้ว่าประหยัดจริงไหม
+  let batchedCount = 0;
+
+  // รวมเป็นคำขอเดียวก่อน ถ้าทำได้ — free tier ให้ 10 คำขอต่อวันต่อคีย์ คลิปหนึ่งมี
+  // สคริปต์ราว 9 ท่อน การยิงทีละท่อนจึงกินโควตาทั้งวันไปกับคลิปเดียว
+  // ท่อนที่มีในแคชแล้วไม่ต้องนับ เพราะไม่ได้ยิงอยู่แล้ว
+  if (opts?.provider === "gemini" && items.length > 1 && process.env.GEMINI_TTS_BATCH !== "0") {
+    const pending = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => {
+        const cached = cachePathFor({ ...opts, ...item }, opts.cacheDir);
+        return !(cached && fs.existsSync(cached));
+      });
+    if (pending.length > 1) {
+      try {
+        const ok = await tryBatchSynthesize(pending.map(({ item }) => ({ ...opts, ...item })), opts);
+        if (ok) batchedCount = pending.length;
+        if (ok && process.env.TTS_VERBOSE) {
+          process.stderr.write(`   [tts] รวม ${pending.length} ท่อนเป็นคำขอเดียวสำเร็จ
+`);
+        }
+      } catch (error) {
+        if (error?.name === "AbortError" || error?.code === "PROCESS_TIMEOUT") throw error;
+        // รวมไม่สำเร็จก็ไม่เป็นไร ด้านล่างจะยิงทีละท่อนตามเดิม
+        if (process.env.TTS_VERBOSE) process.stderr.write(`   [tts] รวมคำขอไม่สำเร็จ (${error.message}) → ยิงทีละท่อน
+`);
+      }
+    }
+  }
+
   const workerCount = Math.max(1, Math.min(Number(concurrency) || 1, items.length));
   const results = new Array(items.length);
   let cursor = 0;
@@ -432,5 +516,6 @@ export async function synthesizeAll(items, opts, concurrency = 4, onEach = () =>
   const settled = await Promise.allSettled(workers);
   const rejected = settled.find((result) => result.status === "rejected");
   if (rejected) throw rejected.reason;
+  Object.defineProperty(results, "batchedCount", { value: batchedCount, enumerable: false });
   return results;
 }

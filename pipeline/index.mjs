@@ -842,6 +842,8 @@ export async function runPipeline(options = {}) {
         speed,
         chunks: reuse ? timeline.chunks.length : takes.length,
         cached: reuse ? timeline.chunks.length : takes.filter((take) => take.cached).length,
+        // กี่ท่อนที่ได้เสียงมาจากคำขอเดียว — ใช้ดูว่าการรวมคำขอทำงานจริงไหม
+        batched: reuse ? 0 : (takes.batchedCount ?? 0),
         reused: Boolean(reuse),
         sourceRenderId: reuse?.renderId || null,
       },
