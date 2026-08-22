@@ -602,4 +602,31 @@ if (invokedDirectly) {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+
+  // ---- กันโปรเซสตายเงียบ ----
+  // เครื่องนี้ให้บริการอยู่จริง ถ้าโปรเซสหลุดไปโดยไม่มีใครรู้ เว็บก็ดับไปด้วย
+  // และคนใช้งานอยู่จะเจอหน้าเปล่าโดยไม่มีคำอธิบาย
+
+  // Promise ที่ไม่มีใครรับ error มักมาจากคำขอที่ถูกยกเลิกกลางคัน (เบราว์เซอร์ปิดวิดีโอ
+  // ระหว่างสตรีม) ซึ่งไม่ได้ทำให้เซิร์ฟเวอร์เสียหาย — บันทึกไว้แล้วให้บริการต่อ
+  process.on("unhandledRejection", (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    console.error(`[ClipPang Local] มี Promise ที่ไม่ได้จัดการ: ${error.message}`);
+    if (process.env.CLIPPANG_VERBOSE) console.error(error.stack);
+  });
+
+  // ข้อผิดพลาดระดับนี้แปลว่าสถานะในหน่วยความจำอาจเพี้ยนไปแล้ว ยกเว้นกลุ่มที่รู้แน่ว่า
+  // เป็นเรื่องของ socket ฝั่งตรงข้ามล้วน ๆ — นอกนั้นปิดให้เรียบร้อยแล้วออกด้วยรหัส 1
+  // เพื่อให้ตัวเปิดโปรแกรมสตาร์ตใหม่ ดีกว่ารันต่อทั้งที่สถานะพัง
+  const SOCKET_NOISE = new Set(["EPIPE", "ECONNRESET", "ECONNABORTED", "ERR_STREAM_PREMATURE_CLOSE"]);
+  process.on("uncaughtException", (error) => {
+    if (SOCKET_NOISE.has(error?.code)) {
+      console.error(`[ClipPang Local] การเชื่อมต่อถูกตัดกลางคัน (${error.code}) — ทำงานต่อ`);
+      return;
+    }
+    console.error(`[ClipPang Local] เกิดข้อผิดพลาดที่ไม่ได้จัดการ: ${error?.message}`);
+    console.error(error?.stack || error);
+    console.error("[ClipPang Local] กำลังปิดเพื่อให้ตัวเปิดโปรแกรมสตาร์ตใหม่");
+    running.close().catch(() => undefined).finally(() => process.exit(1));
+  });
 }

@@ -81,4 +81,23 @@ fi
 echo "[3/3] กำลังเปิด ClipPang ที่ http://127.0.0.1:4321"
 echo "กด Ctrl+C เมื่อต้องการปิดโปรแกรม"
 echo ""
-exec npm run local
+
+# ออกด้วยรหัส 0 = ผู้ใช้สั่งปิดเอง · รหัสอื่น = ล้มเอง ให้เปิดใหม่
+# เครื่องที่เปิดให้คนอื่นใช้ผ่านโดเมนด้วย ถ้าดับแล้วไม่มีใครรู้จนกว่าจะมีคนทัก
+restarts=0
+while true; do
+  npm run local
+  code=$?
+  [ "$code" -eq 0 ] && exit 0
+  # 130 = Ctrl+C, 143 = SIGTERM — ทั้งคู่คือคนสั่งปิด ไม่ใช่ของล้ม
+  if [ "$code" -eq 130 ] || [ "$code" -eq 143 ]; then exit "$code"; fi
+  restarts=$((restarts + 1))
+  if [ "$restarts" -ge 20 ]; then
+    echo ""
+    echo "ClipPang ล้มซ้ำ $restarts ครั้งติดกัน หยุดเปิดใหม่แล้ว — ดูข้อความข้างบนเพื่อหาสาเหตุ" >&2
+    exit "$code"
+  fi
+  echo ""
+  echo "ClipPang หยุดทำงานด้วยรหัส $code — เปิดใหม่ครั้งที่ $restarts ใน 3 วินาที"
+  sleep 3
+done

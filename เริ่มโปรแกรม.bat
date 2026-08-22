@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
@@ -47,11 +47,27 @@ if "%CLIPPANG_LAUNCHER_CHECK_ONLY%"=="1" goto check_ok
 echo [3/3] กำลังเปิด ClipPang ที่ http://127.0.0.1:4321
 echo กด Ctrl+C เมื่อต้องการปิด ClipPang
 echo.
+set "RESTARTS=0"
+
+:run_server
 call npm.cmd run local
 set "EXIT_CODE=%ERRORLEVEL%"
 if "%EXIT_CODE%"=="0" exit /b 0
+
+rem ออกด้วยรหัสที่ไม่ใช่ 0 = ล้มเอง ไม่ใช่ผู้ใช้สั่งปิด — เปิดใหม่ให้เลย
+rem เครื่องนี้เปิดให้คนอื่นใช้ผ่านโดเมนด้วย ถ้าปล่อยดับไว้จะไม่มีใครรู้จนกว่าจะมีคนทัก
+if %RESTARTS% GEQ 20 goto too_many_restarts
+set /a RESTARTS=%RESTARTS%+1
 echo.
-echo ClipPang หยุดทำงานด้วยรหัส %EXIT_CODE%
+echo ClipPang หยุดทำงานด้วยรหัส %EXIT_CODE% — เปิดใหม่ครั้งที่ %RESTARTS% ใน 3 วินาที
+echo (กด Ctrl+C ตอนนี้ถ้าไม่ต้องการให้เปิดใหม่)
+timeout /t 3 /nobreak >nul
+goto run_server
+
+:too_many_restarts
+echo.
+echo ClipPang ล้มซ้ำ %RESTARTS% ครั้งติดกัน หยุดเปิดใหม่แล้ว
+echo กรุณาดูข้อความข้างบนเพื่อหาสาเหตุ
 pause
 exit /b %EXIT_CODE%
 
