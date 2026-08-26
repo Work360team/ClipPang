@@ -1,14 +1,22 @@
 // tts-batch — ยิงหลายท่อนในคำขอเดียว แล้วตัดเสียงกลับเป็นรายท่อน
 //
-// ทำไมต้องมี: Gemini free tier ให้ 10 คำขอต่อวันต่อคีย์ แต่คลิป 30 วินาทีมีสคริปต์
-// ราว 9 ท่อน = 9 คำขอ คลิปเดียวกินโควตาของคีย์ทั้งวัน การรวมเป็นคำขอเดียวจึงเพิ่ม
-// จำนวนคลิปต่อวันได้หลายเท่า
+// ทำไมต้องมี: Gemini free tier ให้ราว 15 คำขอต่อวันต่อโปรเจกต์ (ไม่ใช่ต่อคีย์ —
+// โควตานับเป็น PerProjectPerModel) แต่คลิป 30 วินาทีมีสคริปต์ราว 9 ท่อน = 9 คำขอ
+// คลิปเดียวจึงกินโควตาเกือบทั้งวัน การรวมเป็นคำขอเดียวเพิ่มจำนวนคลิปได้ราว 15 เท่า
 //
 // ความเสี่ยงคือการตัดกลับ: ถ้าตัดผิดตำแหน่ง ซับจะเลื่อนไม่ตรงเสียงทั้งคลิป ซึ่งแย่กว่า
-// เปลืองโควตามาก โค้ดนี้จึงตัดจากช่วงเงียบจริงในไฟล์ แล้ว **ต้องได้จำนวนช่วงเท่ากับ
-// จำนวนท่อนพอดี** ไม่งั้นถือว่าใช้ไม่ได้และให้ผู้เรียกถอยไปยิงทีละท่อนแทน
+// เปลืองโควตามาก จึงมีสองวิธีเรียงตามความน่าเชื่อถือ:
+//
+//   1. จับคู่ข้อความ (tts-align) — ใช้ whisper.cpp หาเวลาแล้วเทียบกับสคริปต์ที่เรารู้อยู่แล้ว
+//   2. ช่วงเงียบ (splitOnSilence) — สำรองไว้เมื่อยังไม่ได้ติดตั้ง whisper.cpp
+//
+// วัดกับเสียงจริงแล้ววิธีที่ 2 ใช้ไม่ได้เลยกับ Gemini เพราะมันไม่ทำตามคำสั่งเว้นจังหวะ
+// บางคู่ถูกอ่านติดกันจนไม่มีความเงียบให้ตัด ไม่ว่าจะตั้งเกณฑ์เท่าไรก็หาไม่เจอ
+// เก็บไว้เป็นทางสำรองเท่านั้น ไม่ใช่ทางหลักอีกต่อไป
 
-import { ffmpeg } from "./lib.mjs";
+import { durationMs, ffmpeg } from "./lib.mjs";
+import { alignChunks } from "./tts-align.mjs";
+import { transcribeTokens, whisperReady } from "./whisper.mjs";
 
 /** ให้โมเดลเว้นจังหวะให้ชัดพอที่ silencedetect จะจับได้ */
 export function buildBatchPrompt(texts, styleHint = "") {
@@ -81,4 +89,40 @@ export async function cutSpans(sourceFile, spans, outFiles, { signal, timeoutMs 
     ], { signal, timeoutMs });
   }
   return outFiles;
+}
+
+/**
+ * วางแผนว่าจะตัดไฟล์เสียงรวมตรงไหน
+ *
+ * ลองวิธีที่เชื่อถือได้มากกว่าก่อนเสมอ แล้วบอกกลับด้วยว่าใช้วิธีไหนและทำไมถึงไม่ผ่าน
+ * ผู้เรียกต้องเอาเหตุผลไปบันทึกลงรายงาน ไม่งั้นเวลาการรวมคำขอล้มเหลว จะไม่มีใคร
+ * รู้เลยว่าล้มเพราะอะไร — ปัญหานี้เคยทำให้ระบบถอยไปยิงทีละท่อนอยู่เงียบ ๆ นานมาก
+ *
+ * คืน { spans, method } เมื่อสำเร็จ หรือ { spans: null, reason } เมื่อไม่ควรเชื่อผลลัพธ์
+ */
+export async function planSpans(file, texts, options = {}) {
+  const { signal, timeoutMs, environment = process.env } = options;
+  const expected = texts.length;
+  const attempts = [];
+
+  if (whisperReady(environment)) {
+    try {
+      const totalMs = await durationMs(file, { signal });
+      const tokens = await transcribeTokens(file, { environment, signal, timeoutMs });
+      const aligned = alignChunks(texts, tokens, { totalMs });
+      if (aligned.ok) return { spans: aligned.spans, method: "align", coverage: aligned.coverage };
+      attempts.push(`จับคู่ข้อความ: ${aligned.reason}`);
+    } catch (error) {
+      if (error?.name === "AbortError" || error?.code === "PROCESS_TIMEOUT") throw error;
+      attempts.push(`จับคู่ข้อความ: ${error.message}`);
+    }
+  } else {
+    attempts.push("จับคู่ข้อความ: ยังไม่ได้ติดตั้ง whisper.cpp");
+  }
+
+  const spans = await splitOnSilence(file, expected, { signal, timeoutMs });
+  if (spans) return { spans, method: "silence" };
+  attempts.push("ช่วงเงียบ: จำนวนช่วงที่ตัดได้ไม่เท่ากับจำนวนท่อน");
+
+  return { spans: null, reason: attempts.join(" | ") };
 }

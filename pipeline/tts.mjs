@@ -9,7 +9,7 @@ import { durationMs, ensureDir, ffmpeg, run, sha256, throwIfAborted, toAbortErro
 import { keyQuotaStatus, noteQuotaOk, noteRateLimited } from "./tts-quota.mjs";
 import { listGeminiKeys } from "./gemini-keys.mjs";
 import { graphemeCount } from "./core.mjs";
-import { buildBatchPrompt, cutSpans, splitOnSilence } from "./tts-batch.mjs";
+import { buildBatchPrompt, cutSpans, planSpans } from "./tts-batch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -356,7 +356,7 @@ export async function synthesize({
   ensureDir(path.dirname(outFile));
   if (cacheDir) ensureDir(cacheDir);
 
-  const key = sha256([provider, voice, speed, styleHint, text].join(" ")).slice(0, 32);
+  const key = cacheKeyFor({ provider, voice, speed, styleHint, text });
   const cached = cacheDir ? path.join(cacheDir, `${key}.wav`) : null;
 
   if (cached && fs.existsSync(cached)) {
@@ -411,17 +411,31 @@ export function concurrencyFor(provider) {
 }
 
 /** ไฟล์แคชของท่อนหนึ่ง — กติกาเดียวกับใน synthesize() */
+/**
+ * กุญแจของเสียงหนึ่งท่อนในแคช
+ *
+ * ต้องมีที่เดียวและใช้ร่วมกันทุกที่ ก่อนหน้านี้ synthesize กับ cachePathFor คำนวณ
+ * คนละสูตร (ตัวคั่นเป็น NUL กับช่องว่าง) จึงมองไม่เห็นแคชของกันและกัน ผลคือเสียง
+ * ที่ได้จากการรวมคำขอถูกทิ้งแล้วยิงใหม่ทีละท่อน — เปลืองโควตาสองเด้งโดยไม่มีใครรู้
+ *
+ * ใช้ NUL เป็นตัวคั่นเพราะข้อความมีช่องว่างได้ ถ้าคั่นด้วยช่องว่างจะมีโอกาสที่
+ * ค่าคนละชุดรวมกันแล้วได้สตริงเดียวกัน
+ */
+export function cacheKeyFor({ provider, voice, speed, styleHint = "", text }) {
+  return sha256([provider, voice, speed, styleHint, text].join("\u0000")).slice(0, 32);
+}
+
 function cachePathFor({ provider, voice, speed, styleHint, text }, cacheDir) {
   if (!cacheDir) return null;
-  const key = sha256([provider, voice, speed, styleHint, text].join(" ")).slice(0, 32);
-  return path.join(cacheDir, `${key}.wav`);
+  return path.join(cacheDir, `${cacheKeyFor({ provider, voice, speed, styleHint, text })}.wav`);
 }
 
 /**
  * ยิงทุกท่อนที่ยังไม่มีในแคชด้วยคำขอเดียว แล้วตัดเสียงกลับเป็นรายท่อน
  *
- * คืน true เมื่อสำเร็จครบทุกท่อน — ถ้าตัดกลับไม่ลงตัวจะคืน false โดยไม่เขียนไฟล์อะไรเลย
- * ให้ผู้เรียกถอยไปยิงทีละท่อนตามเดิม ยอมเสียหนึ่งคำขอดีกว่าปล่อยเสียงเลื่อนไม่ตรงซับ
+ * คืน { ok: true, method } เมื่อสำเร็จครบทุกท่อน — ถ้าตัดกลับไม่ลงตัวจะคืน
+ * { ok: false, reason } โดยไม่เขียนไฟล์อะไรเลย ให้ผู้เรียกถอยไปยิงทีละท่อนตามเดิม
+ * ยอมเสียหนึ่งคำขอดีกว่าปล่อยเสียงเลื่อนไม่ตรงซับ
  */
 async function tryBatchSynthesize(items, opts) {
   const { provider, voice, speed, styleHint = "", cacheDir, signal, timeoutMs, geminiEnv, onRequest } = opts;
@@ -436,8 +450,9 @@ async function tryBatchSynthesize(items, opts) {
       promptOverride: buildBatchPrompt(items.map((item) => item.text), styleHint),
     }, scratch);
 
-    const spans = await splitOnSilence(scratch, items.length, { signal, timeoutMs });
-    if (!spans) return false;
+    const plan = await planSpans(scratch, items.map((item) => item.text), { signal, timeoutMs });
+    if (!plan.spans) return { ok: false, reason: plan.reason };
+    const spans = plan.spans;
 
     const rawFiles = items.map((item) => `${item.outFile}.seg.wav`);
     try {
@@ -450,7 +465,7 @@ async function tryBatchSynthesize(items, opts) {
     } finally {
       for (const file of rawFiles) fs.rmSync(file, { force: true });
     }
-    return true;
+    return { ok: true, method: plan.method, coverage: plan.coverage };
   } finally {
     fs.rmSync(scratch, { force: true });
   }
@@ -461,9 +476,13 @@ export async function synthesizeAll(items, opts, concurrency = 4, onEach = () =>
   if (!items.length) return [];
   // จำนวนท่อนที่ได้เสียงมาจากคำขอเดียว ติดไปกับผลลัพธ์เพื่อให้รายงานบอกได้ว่าประหยัดจริงไหม
   let batchedCount = 0;
+  // วิธีที่ใช้ตัด และเหตุผลตอนล้ม — ต้องไปโผล่ในรายงาน ไม่งั้นเวลาถอยไปยิงทีละท่อน
+  // จะเงียบสนิทจนไม่มีใครรู้ว่าโควตาหายไปไหน
+  let batchMethod = null;
+  let batchReason = null;
 
-  // รวมเป็นคำขอเดียวก่อน ถ้าทำได้ — free tier ให้ 10 คำขอต่อวันต่อคีย์ คลิปหนึ่งมี
-  // สคริปต์ราว 9 ท่อน การยิงทีละท่อนจึงกินโควตาทั้งวันไปกับคลิปเดียว
+  // รวมเป็นคำขอเดียวก่อน ถ้าทำได้ — free tier ให้ราว 15 คำขอต่อวันต่อโปรเจกต์ คลิปหนึ่งมี
+  // สคริปต์ราว 9 ท่อน การยิงทีละท่อนจึงกินโควตาเกือบทั้งวันไปกับคลิปเดียว
   // ท่อนที่มีในแคชแล้วไม่ต้องนับ เพราะไม่ได้ยิงอยู่แล้ว
   if (opts?.provider === "gemini" && items.length > 1 && process.env.GEMINI_TTS_BATCH !== "0") {
     const pending = items
@@ -474,15 +493,23 @@ export async function synthesizeAll(items, opts, concurrency = 4, onEach = () =>
       });
     if (pending.length > 1) {
       try {
-        const ok = await tryBatchSynthesize(pending.map(({ item }) => ({ ...opts, ...item })), opts);
-        if (ok) batchedCount = pending.length;
-        if (ok && process.env.TTS_VERBOSE) {
-          process.stderr.write(`   [tts] รวม ${pending.length} ท่อนเป็นคำขอเดียวสำเร็จ
+        const outcome = await tryBatchSynthesize(pending.map(({ item }) => ({ ...opts, ...item })), opts);
+        if (outcome.ok) {
+          batchedCount = pending.length;
+          batchMethod = outcome.method;
+          if (process.env.TTS_VERBOSE) {
+            process.stderr.write(`   [tts] รวม ${pending.length} ท่อนเป็นคำขอเดียวสำเร็จ (วิธี ${outcome.method})
+`);
+          }
+        } else {
+          batchReason = outcome.reason;
+          if (process.env.TTS_VERBOSE) process.stderr.write(`   [tts] ตัดกลับไม่ได้ (${outcome.reason}) → ยิงทีละท่อน
 `);
         }
       } catch (error) {
         if (error?.name === "AbortError" || error?.code === "PROCESS_TIMEOUT") throw error;
         // รวมไม่สำเร็จก็ไม่เป็นไร ด้านล่างจะยิงทีละท่อนตามเดิม
+        batchReason = error.message;
         if (process.env.TTS_VERBOSE) process.stderr.write(`   [tts] รวมคำขอไม่สำเร็จ (${error.message}) → ยิงทีละท่อน
 `);
       }
@@ -517,5 +544,7 @@ export async function synthesizeAll(items, opts, concurrency = 4, onEach = () =>
   const rejected = settled.find((result) => result.status === "rejected");
   if (rejected) throw rejected.reason;
   Object.defineProperty(results, "batchedCount", { value: batchedCount, enumerable: false });
+  Object.defineProperty(results, "batchMethod", { value: batchMethod, enumerable: false });
+  Object.defineProperty(results, "batchReason", { value: batchReason, enumerable: false });
   return results;
 }

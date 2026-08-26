@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   FolderLock,
+  Gauge,
   HardDrive,
   KeyRound,
   LoaderCircle,
@@ -29,7 +30,7 @@ import {
 } from "../lib/local-api";
 import styles from "./setup.module.css";
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ Clip360 พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
 
 const steps = [
@@ -51,6 +52,12 @@ const steps = [
     description: "สำหรับเสียงพากย์และสคริปต์",
     icon: KeyRound,
   },
+  {
+    id: 4 as Step,
+    title: "ประหยัดโควตา",
+    description: "ไม่บังคับ · ข้ามได้",
+    icon: Gauge,
+  },
 ];
 
 function progressMessage(progress: number) {
@@ -63,6 +70,17 @@ function progressMessage(progress: number) {
 type DetailedSetupStatus = Omit<SetupStatus, "node" | "ffmpeg"> & {
   node?: boolean | { ready?: boolean; version?: string; required?: string };
   kanit?: boolean | { ready?: boolean; directory?: string; files?: string[]; reason?: string };
+  whisper?: {
+    ready?: boolean;
+    supported?: boolean;
+    gpu?: boolean;
+    approxBytes?: number | null;
+    reason?: string | null;
+  };
+  whisperInstalling?: boolean;
+  whisperProgress?: number | null;
+  whisperMessage?: string | null;
+  whisperError?: string | null;
   ffmpeg?: boolean | {
     ready?: boolean;
     found?: boolean;
@@ -107,6 +125,14 @@ export default function SetupPage() {
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
   const [voicePreviewError, setVoicePreviewError] = useState("");
+  const [whisperReady, setWhisperReady] = useState(false);
+  const [whisperSupported, setWhisperSupported] = useState(true);
+  const [whisperGpu, setWhisperGpu] = useState(false);
+  const [whisperBytes, setWhisperBytes] = useState<number | null>(null);
+  const [whisperInstalling, setWhisperInstalling] = useState(false);
+  const [whisperProgress, setWhisperProgress] = useState(0);
+  const [whisperMessage, setWhisperMessage] = useState("");
+  const [whisperError, setWhisperError] = useState("");
 
   const applySetupStatus = useCallback((result: DetailedSetupStatus, chooseStep = false) => {
     const nodeReady = isReady(result.node);
@@ -123,6 +149,16 @@ export default function SetupPage() {
     setInstallProgress(nextFfmpegReady ? 100 : Math.max(0, Math.min(100, Number(result.installProgress ?? 0))));
     setKeyValid(Boolean(key?.configured));
     setSavedKeyEnding(key?.last4 ?? "");
+
+    const whisper = result.whisper;
+    setWhisperReady(Boolean(whisper?.ready));
+    setWhisperSupported(whisper?.supported !== false);
+    setWhisperGpu(Boolean(whisper?.gpu));
+    setWhisperBytes(whisper?.approxBytes ?? null);
+    setWhisperInstalling(Boolean(result.whisperInstalling));
+    setWhisperProgress(whisper?.ready ? 100 : Math.max(0, Math.min(100, Number(result.whisperProgress ?? 0))));
+    setWhisperMessage(result.whisperMessage ?? "");
+    setWhisperError(result.whisperError ?? "");
 
     if (chooseStep) {
       setCurrentStep(!nextSystemReady ? 1 : !nextFfmpegReady ? 2 : 3);
@@ -165,6 +201,36 @@ export default function SetupPage() {
       if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
     };
   }, [voicePreviewUrl]);
+
+  useEffect(() => {
+    if (!whisperInstalling || engineState !== "connected") return;
+    let active = true;
+
+    const poll = async () => {
+      try {
+        const result = await localApi.setupStatus() as DetailedSetupStatus;
+        if (!active) return;
+        applySetupStatus(result);
+        if (result.whisper?.ready) {
+          setWhisperInstalling(false);
+          setWhisperProgress(100);
+          setWhisperError("");
+        } else if (!result.whisperInstalling) {
+          setWhisperInstalling(false);
+          // เก็บข้อความจากเซิร์ฟเวอร์ไว้ ผู้ใช้จะได้รู้ว่าติดตรงดาวน์โหลดหรือตรงตรวจสอบ
+          setWhisperError(result.whisperError || "ติดตั้ง whisper.cpp ไม่สำเร็จ กดลองใหม่ได้");
+        }
+      } catch {
+        // เน็ตสะดุดระหว่าง poll ไม่ใช่เหตุให้เลิกติดตั้ง รอบหน้าค่อยถามใหม่
+      }
+    };
+
+    const timer = window.setInterval(() => void poll(), 1500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [whisperInstalling, engineState, applySetupStatus]);
 
   useEffect(() => {
     if (!installing || engineState !== "connected") return;
@@ -213,6 +279,22 @@ export default function SetupPage() {
     } catch (error) {
       setInstalling(false);
       setInstallError(messageFrom(error, "สั่งติดตั้ง FFmpeg ไม่สำเร็จ กรุณาลองอีกครั้ง"));
+    }
+  };
+
+  const startWhisperInstall = async () => {
+    if (engineState !== "connected") {
+      setWhisperError("หน้านี้เป็นเว็บตัวอย่าง กรุณาเปิด Clip360 Local บนคอมก่อนติดตั้ง");
+      return;
+    }
+    setWhisperProgress(0);
+    setWhisperError("");
+    setWhisperInstalling(true);
+    try {
+      await localApi.installWhisper();
+    } catch (error) {
+      setWhisperInstalling(false);
+      setWhisperError(messageFrom(error, "สั่งติดตั้ง whisper.cpp ไม่สำเร็จ กรุณาลองอีกครั้ง"));
     }
   };
 
@@ -732,11 +814,11 @@ export default function SetupPage() {
                         <span><strong>บันทึกคีย์แล้ว แต่เสียงทดสอบยังไม่สำเร็จ</strong>{voicePreviewError}</span>
                       </div>
                     )}
-                    <button type="button" className={styles.readyButton} onClick={goHome}>
-                      ไปหน้าแรก
+                    <button type="button" className={styles.readyButton} onClick={() => setCurrentStep(4)}>
+                      {whisperReady ? "ไปขั้นตอนสุดท้าย" : "อีกขั้นเดียว · ประหยัดโควตา"}
                       <ArrowRight size={19} aria-hidden="true" />
                     </button>
-                    <small>ครั้งหน้าที่เปิด Clip360 จะเข้าหน้าแรกให้ทันที</small>
+                    <small>หรือ <button type="button" className={styles.textButton} onClick={goHome}>ข้ามไปหน้าแรกเลย</button></small>
                   </div>
                 )}
 
@@ -752,6 +834,134 @@ export default function SetupPage() {
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className={styles.panelInner}>
+                <div className={styles.sectionHeading}>
+                  <span className={styles.sectionIcon}>
+                    <Gauge size={22} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <span className={styles.stepKicker}>ขั้นที่ 4 · ไม่บังคับ</span>
+                    <h2>ประหยัดโควตา Gemini</h2>
+                    <p>ติดตั้ง whisper.cpp เพื่อสร้างคลิปได้มากขึ้นต่อวัน</p>
+                  </div>
+                </div>
+
+                <p>
+                  โควตาฟรีของ Gemini ให้สร้างเสียงได้ราว 15 ครั้งต่อวัน คลิปหนึ่งมีบทพูดราว 9 ท่อน
+                  ถ้าสร้างทีละท่อนจะได้แค่วันละคลิปเดียว
+                </p>
+                <p>
+                  whisper.cpp ทำให้สร้างเสียงทั้งคลิปในครั้งเดียวได้ แล้วหาเองว่าแต่ละท่อนอยู่ช่วงไหน
+                  <strong> ทำให้ได้ราว 15 คลิปต่อวันแทน</strong>
+                </p>
+
+                {!whisperSupported && (
+                  <div className={styles.errorMessage} role="status">
+                    <CircleAlert size={18} aria-hidden="true" />
+                    <span>
+                      <strong>เครื่องนี้ยังไม่มีตัวติดตั้งอัตโนมัติ</strong>
+                      {setupStatus?.whisper?.reason ?? "ติดตั้งเองแล้วตั้ง WHISPER_CLI_PATH ใน .env ได้"}
+                    </span>
+                  </div>
+                )}
+
+                {whisperSupported && !whisperReady && !whisperInstalling && (
+                  <div className={styles.installIntro}>
+                    <div className={styles.toolTile} aria-hidden="true">
+                      <HardDrive size={32} />
+                      <span>W</span>
+                    </div>
+                    <div>
+                      <h3>ต้องดาวน์โหลดราว {whisperBytes ? Math.round((whisperBytes / 1e9) * 10) / 10 : 3.8} GB</h3>
+                      <p>
+                        {whisperGpu
+                          ? "ตรวจพบการ์ดจอ NVIDIA จะใช้รุ่นที่เร็วกว่า"
+                          : "ไม่พบการ์ดจอ NVIDIA จะใช้รุ่นสำหรับ CPU ซึ่งไฟล์เล็กกว่ามาก"}
+                      </p>
+                      <ul>
+                        <li>เก็บไว้ใน data/bin เหมือน FFmpeg ไม่แก้ระบบของเครื่อง</li>
+                        <li>ข้ามตอนนี้ได้ กลับมาติดตั้งทีหลังจากหน้านี้ก็ได้</li>
+                        <li>ไม่มีก็ยังทำคลิปได้ตามปกติ แค่เปลืองโควตามากกว่า</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {whisperInstalling && (
+                  <div className={styles.progressBlock} aria-live="polite">
+                    <div className={styles.progressTopline}>
+                      <span>{whisperMessage || "กำลังติดตั้ง…"}</span>
+                      <strong>{whisperProgress}%</strong>
+                    </div>
+                    <div
+                      className={styles.progressTrack}
+                      role="progressbar"
+                      aria-label="ความคืบหน้าการติดตั้ง whisper.cpp"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={whisperProgress}
+                    >
+                      <span style={{ width: `${whisperProgress}%` }} />
+                    </div>
+                    <div className={styles.progressMeta}>
+                      <span>ไฟล์โมเดลใหญ่ ใช้เวลาสักครู่</span>
+                      <span>ปิดหน้านี้ได้ งานยังทำต่อบนเครื่อง</span>
+                    </div>
+                  </div>
+                )}
+
+                {whisperReady && (
+                  <div className={styles.goodMessage} role="status">
+                    <CheckCircle2 size={19} aria-hidden="true" />
+                    <span>
+                      <strong>whisper.cpp พร้อมใช้งานแล้ว</strong>
+                      ระบบจะสร้างเสียงทั้งคลิปในคำขอเดียวให้อัตโนมัติ
+                    </span>
+                  </div>
+                )}
+
+                {whisperError && (
+                  <div className={styles.errorMessage} role="alert">
+                    <CircleAlert size={18} aria-hidden="true" />
+                    <span><strong>ติดตั้งไม่สำเร็จ</strong>{whisperError}</span>
+                  </div>
+                )}
+
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    onClick={goHome}
+                    disabled={whisperInstalling}
+                  >
+                    {whisperReady ? "ไปหน้าแรก" : "ข้ามไปก่อน"}
+                  </button>
+                  {!whisperReady && whisperSupported && (
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={() => void startWhisperInstall()}
+                      disabled={whisperInstalling || engineState !== "connected"}
+                    >
+                      {whisperInstalling ? (
+                        <LoaderCircle className={styles.spin} size={18} aria-hidden="true" />
+                      ) : (
+                        <Download size={18} aria-hidden="true" />
+                      )}
+                      {whisperInstalling ? "กำลังติดตั้ง…" : "ดาวน์โหลดและติดตั้ง"}
+                    </button>
+                  )}
+                  {whisperReady && (
+                    <button type="button" className={styles.primaryButton} onClick={goHome}>
+                      เริ่มทำคลิป
+                      <ArrowRight size={18} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

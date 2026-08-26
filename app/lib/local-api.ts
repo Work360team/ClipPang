@@ -98,6 +98,7 @@ async function uploadAssetFile(file: File, onProgress?: (progress: number) => vo
 export const localApi = {
   setupStatus: () => apiFetch<SetupStatus>("/api/setup/status"),
   installFfmpeg: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/ffmpeg", { method: "POST", body: "{}" }),
+  installWhisper: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/whisper", { method: "POST", body: "{}" }),
   saveKey: (key: string) => apiFetch<{ ok: true; key: { configured: boolean; last4: string; masked: string } }>("/api/setup/key", { method: "POST", body: JSON.stringify({ key }) }),
   listInput: () => apiFetch<{ ok: true; files: LocalAsset[] }>("/api/input"),
   uploadAsset: uploadAssetFile,

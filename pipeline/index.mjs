@@ -844,6 +844,11 @@ export async function runPipeline(options = {}) {
         cached: reuse ? timeline.chunks.length : takes.filter((take) => take.cached).length,
         // กี่ท่อนที่ได้เสียงมาจากคำขอเดียว — ใช้ดูว่าการรวมคำขอทำงานจริงไหม
         batched: reuse ? 0 : (takes.batchedCount ?? 0),
+        // วิธีที่ใช้หารอยตัด ("align" = จับคู่ข้อความ, "silence" = ช่วงเงียบ) และเหตุผล
+        // ตอนล้ม — batched: 0 เฉย ๆ บอกไม่ได้ว่าล้มเพราะโควตา เพราะตัดไม่ลง หรือเพราะ
+        // ยังไม่ได้ติดตั้ง whisper.cpp ซึ่งสามอย่างนี้ต้องแก้คนละทาง
+        batchMethod: reuse ? null : (takes.batchMethod ?? null),
+        batchReason: reuse ? null : (takes.batchReason ?? null),
         reused: Boolean(reuse),
         sourceRenderId: reuse?.renderId || null,
       },

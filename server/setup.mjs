@@ -13,6 +13,7 @@ import {
   getGeminiKeyStatus,
   saveGeminiApiKey,
 } from "./security.mjs";
+import { getWhisperStatus } from "./whisper-setup.mjs";
 
 const PROCESS_TIMEOUT_MS = 12_000;
 const MAX_PROCESS_OUTPUT_BYTES = 2 * 1024 * 1024;
@@ -357,6 +358,14 @@ export async function getSetupStatus(options = {}) {
     platform: options.platform ?? process.platform,
     signal: options.signal,
   });
+  // whisper.cpp ไม่ได้อยู่ในเงื่อนไข ready เพราะไม่มีมันก็ยังสร้างคลิปได้ตามปกติ
+  // แค่เปลืองโควตา Gemini มากกว่า — บังคับให้โหลด 3.7 GB ก่อนใช้งานครั้งแรกจะเกินไป
+  const whisper = await getWhisperStatus({
+    appPaths,
+    environment: options.environment ?? process.env,
+    platform: options.platform ?? process.platform,
+    arch: options.arch ?? process.arch,
+  });
 
   return {
     ready: node.ready && kanit.ready && ffmpeg.ready && key.configured,
@@ -364,6 +373,7 @@ export async function getSetupStatus(options = {}) {
     node,
     kanit,
     ffmpeg,
+    whisper,
     key,
   };
 }

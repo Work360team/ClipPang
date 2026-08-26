@@ -24,6 +24,7 @@ import {
   installFfmpeg,
   testGeminiApiKey,
 } from "./setup.mjs";
+import { installWhisper } from "./whisper-setup.mjs";
 import { generateCaptions } from "../pipeline/caption.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
@@ -338,6 +339,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   if (!store || !queue) throw new TypeError("API requires store and queue");
   ensureDirectories();
   let ffmpegInstall = null;
+  let whisperInstall = null;
   const generateScriptsImpl = services.generateScripts ?? generateScripts;
   const generateCaptionsImpl = services.generateCaptions ?? generateCaptions;
   const regenerateChunkImpl = services.regenerateChunk ?? regenerateChunk;
@@ -397,7 +399,17 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       if (method === "GET" && pathname === "/api/setup/status") {
         const status = await getSetupStatusImpl();
-        return json({ ok: true, ...status, installing: ffmpegInstall?.running || false, installProgress: ffmpegInstall?.progress ?? null, paths: { input: PATHS.input, projects: PATHS.projects } });
+        return json({
+          ok: true,
+          ...status,
+          installing: ffmpegInstall?.running || false,
+          installProgress: ffmpegInstall?.progress ?? null,
+          whisperInstalling: whisperInstall?.running || false,
+          whisperProgress: whisperInstall?.progress ?? null,
+          whisperMessage: whisperInstall?.message ?? null,
+          whisperError: whisperInstall?.error ?? null,
+          paths: { input: PATHS.input, projects: PATHS.projects },
+        });
       }
 
       if (method === "POST" && pathname === "/api/setup/ffmpeg") {
@@ -411,6 +423,29 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           ffmpegInstall = { running: false, progress: 100, message: "ติดตั้ง FFmpeg แล้ว", result };
         }).catch((error) => {
           ffmpegInstall = { running: false, progress: ffmpegInstall?.progress ?? 0, error: error.message, message: "โหลด FFmpeg ไม่สำเร็จ (เน็ตหลุด?) กดลองใหม่ หรือดาวน์โหลดเองแล้ววางไว้ที่ data/bin/" };
+        });
+        return json({ ok: true, status: "installing", progress: 0 }, { status: 202 });
+      }
+
+      // ติดตั้ง whisper.cpp — ไม่บังคับ แต่ถ้ามีจะประหยัดโควตา Gemini ราว 15 เท่า
+      // เพราะยิงเสียงทั้งคลิปในคำขอเดียวแล้วใช้มันหาว่าแต่ละท่อนอยู่ช่วงไหน
+      if (method === "POST" && pathname === "/api/setup/whisper") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "ติดตั้งโปรแกรมได้จากเครื่องที่รันระบบเท่านั้น");
+        if (whisperInstall?.running) return json({ ok: true, status: "installing", progress: whisperInstall.progress }, { status: 202 });
+        whisperInstall = { running: true, progress: 0, message: "กำลังเตรียมดาวน์โหลด whisper.cpp" };
+        installWhisper({
+          onProgress(event) {
+            whisperInstall = {
+              ...whisperInstall,
+              ...event,
+              running: true,
+              progress: Number.isFinite(event?.percent) ? event.percent : whisperInstall.progress,
+            };
+          },
+        }).then((result) => {
+          whisperInstall = { running: false, progress: 100, message: "ติดตั้ง whisper.cpp แล้ว", result };
+        }).catch((error) => {
+          whisperInstall = { running: false, progress: whisperInstall?.progress ?? 0, error: error.message, message: "ติดตั้ง whisper.cpp ไม่สำเร็จ" };
         });
         return json({ ok: true, status: "installing", progress: 0 }, { status: 202 });
       }

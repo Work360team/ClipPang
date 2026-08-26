@@ -22,6 +22,7 @@ import { prepareSources } from "./sources.mjs";
 import { createStore } from "./store/index.mjs";
 import { RenderQueue } from "./queue.mjs";
 import { getSetupStatus } from "./setup.mjs";
+import { discoverWhisper } from "./whisper-setup.mjs";
 import { configureQuotaStore } from "../pipeline/tts-quota.mjs";
 import { runPipeline } from "../pipeline/index.mjs";
 
@@ -208,6 +209,10 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
   if (!providedStore) migrateLegacyDatabase(PATHS.database);
   // จำไว้ว่าคีย์ไหนโควตาหมด เพื่อไม่ให้เปิดโปรแกรมใหม่แล้วไปยิงคีย์ที่เต็มซ้ำ
   configureQuotaStore(path.join(PATHS.data, "tts-quota.json"));
+  // บอก pipeline ว่า whisper.cpp อยู่ที่ไหน (ตั้ง WHISPER_CLI_PATH ให้)
+  // ทำตรงนี้ให้ชัดเจน ไม่ฝากไว้กับ getSetupStatus ซึ่งเรียกเพื่อดูสถานะหน้าเว็บ —
+  // ถ้าวันหนึ่งมันเลิกถูกเรียก การรวมคำขอจะเงียบไปเฉย ๆ โดยไม่มีใครรู้
+  await discoverWhisper().catch(() => {});
   const store = providedStore ?? createStore({
     rootDir: PATHS.root,
     dataDir: PATHS.data,

@@ -253,7 +253,7 @@ const RENDER_STAGES: { id: string; label: string; detail: string }[] = [
   { id: "ingest", label: "อ่านคลิปต้นฉบับ", detail: "อ่านความยาวและสเปกไฟล์" },
   { id: "analyze", label: "วิเคราะห์ภาพ", detail: "หาจุดตัดฉากและตรวจซับเดิม" },
   { id: "script", label: "เตรียมสคริปต์", detail: "แบ่งท่อนให้พอดีจังหวะพูด" },
-  { id: "voice", label: "สร้างเสียงพากย์", detail: "ยิง TTS ทีละท่อนแล้ววัดความยาวจริง" },
+  { id: "voice", label: "สร้างเสียงพากย์", detail: "ยิงทั้งคลิปในคำขอเดียวแล้วแบ่งกลับเป็นท่อน" },
   { id: "timeline", label: "จัด timeline", detail: "จับคู่เสียงกับช่วงภาพ" },
   { id: "caption", label: "ทำซับ", detail: "คอมไพล์ซับให้ตรงกับเสียง" },
   { id: "compose", label: "ประกอบภาพ", detail: "ตัดต่อคลิปด้วย FFmpeg" },
