@@ -5988,5 +5988,99 @@ a.notification-link:hover { background: #fafbf8; }
   .timeline-mode .timeline-inspector-body { gap: 7px; }
   .timeline-mode .trim-duration-readout { padding: 6px 11px; }
   .timeline-mode .wizard-card-footer { padding-block: 8px; }
-}  .render-checklist { grid-template-columns: 1fr; }
+}
 
+/* ============================================================
+   โหมดแอพบนมือถือ
+
+   รวมทุกอย่างที่ทำให้ "รู้สึกเป็นแอพ" ไว้ที่เดียว จะได้ไม่กระจายอยู่ตาม
+   media query อื่นจนหาไม่เจอ และไม่มีทางรั่วไปจอใหญ่ เพราะอยู่ในนี้ทั้งก้อน
+   วางไว้ท้ายไฟล์เพื่อให้ทับกฎก่อนหน้าได้โดยไม่ต้องเพิ่มความจำเพาะ
+   ============================================================ */
+@media (max-width: 720px) {
+  :root {
+    --app-nav-h: 58px;
+    --app-safe-b: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* iOS ซูมหน้าจอเองทุกครั้งที่แตะช่องที่ตัวอักษรเล็กกว่า 16px
+     เป็นอาการที่บอกทันทีว่านี่คือเว็บไม่ใช่แอพ และหลังพิมพ์เสร็จหน้าค้างซูมอยู่
+
+     ใช้ !important เพราะแต่ละหน้ามี <style> ของตัวเองที่ตั้งขนาดด้วยตัวเลือกระดับ
+     คลาส (เช่น .settings-input-wrap input) ซึ่งจำเพาะกว่าเสมอไม่ว่าจะเรียงลำดับ
+     อย่างไร และ 16px ตรงนี้เป็นข้อกำหนดเชิงพฤติกรรมของเบราว์เซอร์ ไม่ใช่รสนิยม
+     การออกแบบที่หน้าใดควรมีสิทธิ์ทับ */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* นิ้วต้องแตะโดนจริง — 44px คือขนาดต่ำสุดที่ทั้ง Apple และ Google แนะนำ
+     ยกเว้นการ์ดและแท็บที่มีความสูงของตัวเองอยู่แล้ว */
+  button,
+  .button,
+  a.button,
+  .style-filter-row button,
+  .filter-row button,
+  .tone-options button,
+  .position-control button {
+    min-height: 44px;
+  }
+
+  /* ปุ่มไอคอนล้วนต้องเป็นสี่เหลี่ยมจัตุรัส ไม่งั้นสูงพอแต่แคบจนแตะพลาด */
+  .chunk button,
+  .voice-row button,
+  .icon-button {
+    min-width: 44px;
+  }
+
+  /* ตอบสนองตอนกดทันที — แอพเนทีฟยุบปุ่มลงเล็กน้อย ส่วนเว็บมักนิ่งจนเหมือนไม่ติด
+     ใช้ transform อย่างเดียวเพราะไม่ทำให้ layout คำนวณใหม่ จึงลื่นบนเครื่องช้า */
+  button:active,
+  .button:active,
+  a.button:active,
+  .mobile-nav a:active {
+    transform: scale(0.97);
+  }
+
+  button,
+  .button,
+  a.button,
+  .mobile-nav a {
+    transition: transform 0.08s ease;
+  }
+
+  /* ลากสุดขอบแล้วต้องไม่เด้งทั้งหน้าแบบเว็บ และไม่เผลอสั่ง pull-to-refresh */
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
+
+  /* แถบล่างต้องหลบแถบ home ของ iPhone ไม่งั้นนิ้วไปโดนแถบระบบแทน */
+  .mobile-nav {
+    bottom: calc(8px + var(--app-safe-b));
+  }
+
+  /* เนื้อหาท้ายหน้าต้องพ้นแถบล่างที่ลอยอยู่ ไม่งั้นอ่านบรรทัดสุดท้ายไม่ได้
+     ใส่ที่ตัวครอบร่วมของทุกหน้า ไม่ไล่ทีละหน้า เพราะแต่ละหน้ามี <style> ของตัวเอง
+     ที่ตั้ง padding ไว้และจะทับกฎที่นี่ */
+  main.page-content {
+    padding-bottom: calc(var(--app-nav-h) + 22px + var(--app-safe-b));
+  }
+
+  /* แถบปุ่มท้าย wizard ลอยอยู่เหนือแถบล่าง ต้องขยับตาม safe area ด้วย */
+  .wizard-card-footer {
+    bottom: calc(var(--app-nav-h) + 8px + var(--app-safe-b));
+  }
+
+  /* ข้อความที่ยาวเกินจอต้องตัดคำ ไม่ใช่ดันให้เลื่อนแนวนอน */
+  h1, h2, h3, p, b, small, span {
+    overflow-wrap: anywhere;
+  }
+
+  /* จอแคบ สามคอลัมน์อ่านไม่ออก */
+  .render-checklist {
+    grid-template-columns: 1fr;
+  }
+}
