@@ -18,7 +18,13 @@ Clip360 เปลี่ยนคลิปสินค้าดิบหลาย
 
 ต้องมี [Node.js](https://nodejs.org/) 22.13 ขึ้นไปอย่างเดียวก่อนเริ่ม ส่วน FFmpeg ติดตั้งจากหน้า Setup ของ Clip360 ได้
 
-โหลดตัวโปรแกรมจาก [Work360team/Clip360](https://github.com/Work360team/Clip360) — กด **Code → Download ZIP** แล้วแตกไฟล์ หรือ `git clone https://github.com/Work360team/Clip360.git` ถ้าอยากอัปเดตด้วย `git pull` ทีหลัง
+โหลดตัวโปรแกรมจาก [Work360team/ClipPang](https://github.com/Work360team/ClipPang) — กด **Code → Download ZIP** แล้วแตกไฟล์ หรือ `git clone https://github.com/Work360team/ClipPang.git`
+
+แนะนำวิธี `git clone` เพราะ **ตัวเปิดโปรแกรมจะดึงเวอร์ชันล่าสุดให้เองทุกครั้งที่เปิด** ส่วนวิธี ZIP ต้องโหลดใหม่เองเมื่ออยากอัปเดต
+
+การอัปเดตอัตโนมัติจะข้ามให้เองเมื่อ: ไม่ได้ติดตั้งผ่าน git · ไม่มี git ในเครื่อง · มีไฟล์ที่คุณแก้ไว้ค้างอยู่ · หรือดึงไม่สำเร็จ (เน็ตไม่ต่อ, ประวัติแยกกัน) ทุกกรณีโปรแกรมจะเปิดด้วยเวอร์ชันที่มีอยู่ต่อ ไม่ค้าง
+
+ปิดการอัปเดตถาวรได้ด้วยการตั้ง `CLIP360_SKIP_UPDATE=1`
 
 ### Windows
 

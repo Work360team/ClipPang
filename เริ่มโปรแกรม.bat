@@ -9,6 +9,40 @@ echo   Clip360 Local
 echo ========================================
 echo.
 
+rem ---- อัปเดตโปรเจกต์จาก Git ----
+rem หลักการ: การอัปเดตห้ามทำให้เปิดโปรแกรมไม่ได้เด็ดขาด ทุกทางที่ผิดพลาดให้ข้ามไป
+rem แล้วใช้เวอร์ชันที่มีอยู่ต่อ เพราะคนใช้ต้องการทำคลิป ไม่ได้ต้องการเวอร์ชันล่าสุด
+rem GIT_TERMINAL_PROMPT=0 สำคัญมาก ไม่งั้น git จะค้างรอถามรหัสผ่านจนโปรแกรมไม่เปิด
+set "GIT_TERMINAL_PROMPT=0"
+if "%CLIP360_SKIP_UPDATE%"=="1" (echo [1/4] ข้ามการอัปเดตตามที่ตั้งไว้ ^& goto after_update)
+if not exist ".git" goto update_nogit
+where git >nul 2>nul
+if errorlevel 1 goto update_nogit
+
+rem แก้ไฟล์ค้างไว้ = ของผู้ใช้สำคัญกว่าเวอร์ชันล่าสุด อย่าไปทับ
+git diff --quiet HEAD >nul 2>nul
+if errorlevel 1 goto update_dirty
+
+echo [1/4] กำลังตรวจอัปเดตจาก Git...
+rem --ff-only กันไม่ให้เกิด merge commit ในเครื่องผู้ใช้ ถ้าประวัติแยกกันให้ข้ามไป
+git pull --ff-only >nul 2>nul
+if errorlevel 1 goto update_failed
+for /f "delims=" %%V in ('git log -1 --format^=%%h 2^>nul') do set "GITREV=%%V"
+echo    อัปเดตแล้ว (เวอร์ชัน %GITREV%)
+goto after_update
+
+:update_nogit
+echo [1/4] ข้ามการอัปเดต - ไม่ได้ติดตั้งผ่าน Git
+goto after_update
+
+:update_dirty
+echo [1/4] ข้ามการอัปเดต - มีไฟล์ที่แก้ไว้ในเครื่อง
+goto after_update
+
+:update_failed
+echo [1/4] อัปเดตไม่สำเร็จ - ใช้เวอร์ชันที่มีอยู่ต่อ
+
+:after_update
 where node >nul 2>nul
 if errorlevel 1 goto node_missing
 
@@ -22,11 +56,11 @@ if not exist "node_modules\.package-lock.json" goto install
 if not exist "node_modules\hyperframes\package.json" goto install
 node -e "const fs=require('fs');let ok=false;try{ok=Math.sign(fs.statSync('node_modules/.package-lock.json').mtimeMs-fs.statSync('package-lock.json').mtimeMs)!==-1}catch{}process.exit(ok?0:1)" >nul 2>nul
 if errorlevel 1 goto install
-echo [1/3] แพ็กเกจพร้อมแล้ว
+echo [2/4] แพ็กเกจพร้อมแล้ว
 goto after_install
 
 :install
-echo [1/3] กำลังติดตั้งแพ็กเกจที่จำเป็น...
+echo [2/4] กำลังติดตั้งแพ็กเกจที่จำเป็น...
 call npm.cmd install --no-audit --no-fund
 if errorlevel 1 goto install_failed
 
@@ -34,17 +68,17 @@ if errorlevel 1 goto install_failed
 if not exist "dist\server\index.js" goto build
 node -e "const fs=require('fs'),p=require('path'),out='dist/server/index.js',built=fs.statSync(out).mtimeMs;let newer=false;for(const f of ['package.json','package-lock.json','vite.config.ts','next.config.ts']){if(fs.existsSync(f)){if(Math.sign(fs.statSync(f).mtimeMs-built)===1)newer=true}}function walk(d){if(newer)return;if(!fs.existsSync(d))return;for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory())walk(f);else if(Math.sign(fs.statSync(f).mtimeMs-built)===1){newer=true;break}}}for(const d of ['app','public','worker'])walk(d);process.exit(newer?1:0)" >nul 2>nul
 if errorlevel 1 goto build
-echo [2/3] หน้าเว็บพร้อมแล้ว
+echo [3/4] หน้าเว็บพร้อมแล้ว
 goto after_build
 
 :build
-echo [2/3] กำลัง build หน้าเว็บ...
+echo [3/4] กำลัง build หน้าเว็บ...
 call npm.cmd run build
 if errorlevel 1 goto build_failed
 
 :after_build
 if "%CLIP360_LAUNCHER_CHECK_ONLY%"=="1" goto check_ok
-echo [3/3] กำลังเปิด Clip360 ที่ http://127.0.0.1:4321
+echo [4/4] กำลังเปิด Clip360 ที่ http://127.0.0.1:4321
 echo กด Ctrl+C เมื่อต้องการปิด Clip360
 echo.
 set "RESTARTS=0"
@@ -72,7 +106,7 @@ pause
 exit /b %EXIT_CODE%
 
 :check_ok
-echo [3/3] ตรวจ Launcher ผ่านแล้ว
+echo [4/4] ตรวจ Launcher ผ่านแล้ว
 exit /b 0
 
 :node_missing

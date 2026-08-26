@@ -10,6 +10,27 @@ echo "  Clip360 Local"
 echo "========================================"
 echo ""
 
+# ---- อัปเดตโปรเจกต์จาก Git ----
+# การอัปเดตห้ามทำให้เปิดโปรแกรมไม่ได้ ทุกทางที่ผิดพลาดให้ข้ามแล้วใช้ของเดิมต่อ
+# GIT_TERMINAL_PROMPT=0 กัน git ค้างรอถามรหัสผ่านจนโปรแกรมไม่เปิด
+export GIT_TERMINAL_PROMPT=0
+if [ "${CLIP360_SKIP_UPDATE:-0}" = "1" ]; then
+  echo "[1/4] ข้ามการอัปเดตตามที่ตั้งไว้"
+elif [ ! -d ".git" ] || ! command -v git >/dev/null 2>&1; then
+  echo "[1/4] ข้ามการอัปเดต - ไม่ได้ติดตั้งผ่าน Git"
+elif ! git diff --quiet HEAD >/dev/null 2>&1; then
+  # แก้ไฟล์ค้างไว้ = ของผู้ใช้สำคัญกว่าเวอร์ชันล่าสุด อย่าไปทับ
+  echo "[1/4] ข้ามการอัปเดต - มีไฟล์ที่แก้ไว้ในเครื่อง"
+else
+  echo "[1/4] กำลังตรวจอัปเดตจาก Git..."
+  # --ff-only กันไม่ให้เกิด merge commit ในเครื่องผู้ใช้
+  if git pull --ff-only >/dev/null 2>&1; then
+    echo "   อัปเดตแล้ว (เวอร์ชัน $(git log -1 --format=%h 2>/dev/null))"
+  else
+    echo "[1/4] อัปเดตไม่สำเร็จ - ใช้เวอร์ชันที่มีอยู่ต่อ"
+  fi
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "ไม่พบ Node.js กรุณาติดตั้ง Node.js 22.13 ขึ้นไปจาก https://nodejs.org/" >&2
   exit 1
@@ -33,13 +54,13 @@ elif [ "package-lock.json" -nt "node_modules/.package-lock.json" ]; then
 fi
 
 if [ "$NEED_INSTALL" -eq 1 ]; then
-  echo "[1/3] กำลังติดตั้งแพ็กเกจที่จำเป็น..."
+  echo "[2/4] กำลังติดตั้งแพ็กเกจที่จำเป็น..."
   if ! npm install --no-audit --no-fund; then
     echo "ติดตั้งแพ็กเกจไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง" >&2
     exit 1
   fi
 else
-  echo "[1/3] แพ็กเกจพร้อมแล้ว"
+  echo "[2/4] แพ็กเกจพร้อมแล้ว"
 fi
 
 BUILD_OUTPUT="dist/server/index.js"
@@ -64,21 +85,21 @@ else
 fi
 
 if [ "$NEED_BUILD" -eq 1 ]; then
-  echo "[2/3] กำลัง build หน้าเว็บครั้งแรก..."
+  echo "[3/4] กำลัง build หน้าเว็บครั้งแรก..."
   if ! npm run build; then
     echo "Build หน้าเว็บไม่สำเร็จ กรุณาดูข้อความด้านบนแล้วลองอีกครั้ง" >&2
     exit 1
   fi
 else
-  echo "[2/3] หน้าเว็บพร้อมแล้ว"
+  echo "[3/4] หน้าเว็บพร้อมแล้ว"
 fi
 
 if [ "${CLIP360_LAUNCHER_CHECK_ONLY:-0}" = "1" ]; then
-  echo "[3/3] Launcher check passed."
+  echo "[4/4] Launcher check passed."
   exit 0
 fi
 
-echo "[3/3] กำลังเปิด Clip360 ที่ http://127.0.0.1:4321"
+echo "[4/4] กำลังเปิด Clip360 ที่ http://127.0.0.1:4321"
 echo "กด Ctrl+C เมื่อต้องการปิดโปรแกรม"
 echo ""
 
