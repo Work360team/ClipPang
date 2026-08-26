@@ -772,13 +772,17 @@ export function ProjectWizard() {
     setSelectedTimelineClipId(initialTimeline[0]?.id ?? null);
     skipNextTimelineAutosaveRef.current = true;
     projectReadyForAutosaveRef.current = true;
+    const config = (product.config ?? {}) as Record<string, unknown>;
     const savedScripts = product.scripts as LocalScript[] | undefined;
     if (savedScripts?.length) {
       setScriptVariants(savedScripts);
-      setSelectedScript(savedScripts[0].id);
+      // กลับมาต้องเห็นแบบที่เลือกไว้ ไม่ใช่เด้งไปแบบแรกเสมอ ซึ่งทำให้คนที่แก้ท่อน
+      // ในแบบอื่นไว้นึกว่างานหาย — ถ้าแบบที่เคยเลือกหายไปแล้วค่อยตกมาที่แบบแรก
+      const savedId = typeof config.scriptId === "string" ? config.scriptId : "";
+      const restored = savedScripts.find((script) => script.id === savedId) ?? savedScripts[0];
+      setSelectedScript(restored.id);
       setScriptTexts(Object.fromEntries(savedScripts.map((script) => [script.id, [...script.chunks]])));
     }
-    const config = (product.config ?? {}) as Record<string, unknown>;
     if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
@@ -796,7 +800,7 @@ export function ProjectWizard() {
     // ไม่ใช่แก้ต่อ — ยกเว้นงานที่ stale เพราะคลิปนั้นไม่ตรงกับ timeline ปัจจุบันแล้ว
     const finished = renders.some((render) => render.kind === "final" && render.state === "ready" && !render.stale);
     const savedStep = Math.max(1, Math.min(6, Number(project.wizard_step ?? 1))) as WizardStep;
-    setActiveStep(finished ? 5 : savedStep);
+    setActiveStep(finished ? 6 : savedStep);
     // ร่างไม่ถูกสร้างอีกแล้ว แต่โปรเจกต์เก่าอาจมีค้างอยู่ ถ้าหยิบมาแสดงจะกลายเป็นว่า
     // เปิดโปรเจกต์เก่าขึ้นมาแล้วเห็นร่างเป็น "คลิปที่เสร็จแล้ว" ทั้งที่ยังไม่ได้สร้างตัวจริง
     const latest = running ?? renders.find((render) => !render.stale && render.kind !== "draft");
@@ -1035,7 +1039,7 @@ export function ProjectWizard() {
       timelineClips: savedTimeline,
       ...(legacyAsset ? { asset: legacyAsset } : {}),
       scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
-      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, pace, styleId: selectedStyle, position: captionPosition, captionColor },
+      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, pace, scriptId: selectedScript, styleId: selectedStyle, position: captionPosition, captionColor },
       ...extra,
     };
   };
@@ -1095,9 +1099,16 @@ export function ProjectWizard() {
       }).catch((error) => setUploadError(error instanceof Error ? error.message : "บันทึก Timeline อัตโนมัติไม่สำเร็จ"));
     }, 450);
     return () => window.clearTimeout(timer);
-    // Autosave is intentionally scoped to edits that change clip sources, trims, splits, or ordering.
+    // เฝ้าทั้งการแก้ timeline และตัวเลือกทุกอย่างที่ประกอบเป็นคลิป
+    // เดิมเฝ้าแค่ timeline ทำให้คนที่เลือกสคริปต์ เสียง หรือสไตล์ แล้วกดแถบขั้นตอน
+    // ข้ามไป (ไม่ผ่านปุ่มถัดไปซึ่งเป็นทางเดียวที่บันทึก) เสียตัวเลือกนั้นไปเงียบ ๆ
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipAssets, timelineClips, projectId, engineState]);
+  }, [
+    clipAssets, timelineClips, projectId, engineState,
+    selectedScript, scriptTexts, scriptVariants,
+    selectedVoice, speed, tone, pace,
+    selectedStyle, captionPosition, captionColor,
+  ]);
 
   const saveProject = async (message = "บันทึกโปรเจกต์และ Timeline แล้ว") => {
     if (engineState !== "connected") {
