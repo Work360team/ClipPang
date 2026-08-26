@@ -198,7 +198,17 @@ export interface LocalTimelineClip {
   trimStartMs: number;
   trimEndMs: number;
 }
-export interface LocalScript { id: string; name?: string; tag?: string; score?: number; chunks: string[] }
+// hookType และ estDurationMs มาจากตัวสร้างสคริปต์จริง ส่วน name/tag/score เป็นรูปแบบเดิม
+// ที่ยังมีอยู่ในโปรเจกต์ที่บันทึกไว้ก่อนหน้า จึงต้องรับได้ทั้งสองแบบ
+export interface LocalScript {
+  id: string;
+  name?: string;
+  tag?: string;
+  score?: number;
+  hookType?: string;
+  estDurationMs?: number;
+  chunks: string[];
+}
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
 export interface LocalColorSet { id: string; name: string; primary: string; secondary: string; hint?: string }

@@ -140,7 +140,7 @@ export function buildChunkTimeline(takes, timing = DEFAULT_TIMING) {
  * reach it, but speech is never truncated and the user's visual trim points
  * are never stretched or reordered.
  */
-export function padNarrationTimeline(timeline, targetDurationMs) {
+export function padNarrationTimeline(timeline, targetDurationMs, attempted = []) {
   const target = Math.round(Number(targetDurationMs));
   if (!Number.isFinite(target) || target <= 0) {
     throw new Error("ความยาวไทม์ไลน์ต้องมากกว่า 0ms");
@@ -150,9 +150,14 @@ export function padNarrationTimeline(timeline, targetDurationMs) {
     throw new Error("ความยาวเสียงพากย์ไม่ถูกต้อง");
   }
   if (narrationMs > target) {
+    // บอกด้วยว่าระบบพยายามอะไรไปแล้ว ผู้ใช้จะได้ไม่ไปทำซ้ำสิ่งที่ทำไปแล้ว
+    // และรู้ว่าเหลือทางเลือกอะไรจริง ๆ
+    const tried = attempted.length ? `ระบบ${attempted.join("และ")}ให้แล้วแต่ยังไม่พอ ` : "";
+    const over = Number(((narrationMs - target) / 1000).toFixed(2));
     const error = new Error(
       `เสียงพากย์ยาว ${Number((narrationMs / 1000).toFixed(2))} วินาที แต่ไทม์ไลน์ยาว ${Number((target / 1000).toFixed(2))} วินาที ` +
-      "กรุณาลดข้อความ เพิ่มความเร็วเสียง หรือเพิ่มช่วงคลิปโดยให้รวมไม่เกิน 60 วินาที",
+      `(เกิน ${over} วินาที) ${tried}` +
+      "กรุณาลดข้อความ หรือเพิ่มช่วงคลิปโดยให้รวมไม่เกิน 60 วินาที",
     );
     error.code = "NARRATION_TOO_LONG";
     error.status = 400;

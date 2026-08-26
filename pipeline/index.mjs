@@ -40,6 +40,7 @@ import {
   synthesize,
   synthesizeAll,
 } from "./tts.mjs";
+import { fitNarrationToTimeline } from "./narration-fit.mjs";
 import { compileAss, compileSrt } from "./ass.mjs";
 import { AlphaOverlayError, renderOverlay } from "./hyperframes.mjs";
 import { buildVideoTrack, buildVoiceTrack, burnAndMux, poster } from "./render.mjs";
@@ -605,6 +606,7 @@ export async function runPipeline(options = {}) {
     let voice;
     let speed;
     let takes = [];
+    let narrationFitResult = null;
     if (reuse) {
       provider = reuse.report?.tts?.provider || requestedVoice.provider || "reused";
       voice = reuse.report?.tts?.voice || requestedVoice.id || null;
@@ -669,13 +671,24 @@ export async function runPipeline(options = {}) {
       stageMs.timeline = 0;
     } else {
       timeline = await timeStage("timeline", async () => {
+        // เสียงยาวเกินไทม์ไลน์เป็นเรื่องที่ระบบพอแก้เองได้ก่อนจะไปรบกวนผู้ใช้ —
+        // ตัดหางเงียบและเร่งจังหวะเล็กน้อยไม่ทำให้เสียคำพูดสักคำ ทำตรงนี้ก่อนจัด
+        // timeline เพราะความยาวของแต่ละท่อนเปลี่ยน ซับจึงต้องคำนวณจากค่าใหม่
+        if (sourcePlan) {
+          narrationFitResult = await fitNarrationToTimeline(takes, {
+            targetMs: sourcePlan.totalMs,
+            timing: options.timing,
+            signal,
+            timeoutMs: options.ttsTimeoutMs,
+          });
+        }
         let value = buildChunkTimeline(variant.chunks.map((chunk, index) => ({
           ...chunk,
           audioFile: takes[index].file,
           durationMs: takes[index].durationMs,
         })), options.timing);
         if (sourcePlan) {
-          value = padNarrationTimeline(value, sourcePlan.totalMs);
+          value = padNarrationTimeline(value, sourcePlan.totalMs, narrationFitResult?.applied ?? []);
           value.editPlanHash = options.editPlanHash || null;
           value.segments = sourcePlan.segments;
           value.fit = {
@@ -849,6 +862,8 @@ export async function runPipeline(options = {}) {
         // ยังไม่ได้ติดตั้ง whisper.cpp ซึ่งสามอย่างนี้ต้องแก้คนละทาง
         batchMethod: reuse ? null : (takes.batchMethod ?? null),
         batchReason: reuse ? null : (takes.batchReason ?? null),
+        // ระบบต้องย่อเสียงให้ลงไทม์ไลน์ไหม และย่อด้วยวิธีอะไร
+        narrationFit: narrationFitResult?.applied?.length ? narrationFitResult.applied : null,
         reused: Boolean(reuse),
         sourceRenderId: reuse?.renderId || null,
       },

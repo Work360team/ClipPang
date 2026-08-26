@@ -62,7 +62,7 @@ import {
   type LocalVoice,
 } from "../lib/local-api";
 
-type WizardStep = 1 | 2 | 3 | 4 | 5;
+type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 type WizardAsset = LocalProjectAsset & {
   clientId: string;
@@ -137,8 +137,9 @@ const steps: { id: WizardStep; label: string; helper: string; icon: typeof Film 
   { id: 1, label: "คลิป", helper: "เลือกวิดีโอ", icon: Film },
   { id: 2, label: "สินค้า", helper: "บอกจุดขาย", icon: PackageCheck },
   { id: 3, label: "เสียง", helper: "เลือกนักพากย์", icon: Mic2 },
-  { id: 4, label: "สคริปต์ + ซับ", helper: "ปรับสไตล์", icon: Captions },
-  { id: 5, label: "ผลลัพธ์", helper: "เรนเดอร์และโหลด", icon: Download },
+  { id: 4, label: "สคริปต์", helper: "เลือกแนวเล่า", icon: WandSparkles },
+  { id: 5, label: "ซับ", helper: "ปรับสไตล์", icon: Captions },
+  { id: 6, label: "ผลลัพธ์", helper: "เรนเดอร์และโหลด", icon: Download },
 ];
 
 /** ตัวกรองที่เทียบกับเพศของเสียง ที่เหลือในแถวเดียวกันเทียบกับคำอธิบายโทน */
@@ -154,68 +155,35 @@ const voices = [
   { id: "Leda", name: "เอม", gender: "หญิง", tone: "อ่อนเยาว์ สดใส", color: "#f2e4b8", initials: "อ", provider: "gemini" },
 ];
 
-const initialScripts = [
-  {
-    id: "hook",
-    tag: "ขายตรง เข้าใจไว",
-    name: "เปิดด้วยปัญหา",
-    score: 96,
-    chunks: [
-      "ใครที่ชอบลืมสายชาร์จ ต้องดูตัวนี้เลย",
-      "แค่แปะด้านหลังมือถือ ก็ชาร์จได้ทันที ไม่ต้องพกสายให้วุ่นวาย",
-      "ตัวเล็ก พกง่าย ติดแน่น แถมใช้เป็นห่วงจับมือถือได้ด้วย",
-      "วันนี้มีราคาพิเศษ กดที่ตะกร้าแล้วลองใช้ได้เลยค่ะ",
-    ],
-  },
-  {
-    id: "review",
-    tag: "จริงใจ เหมือนเพื่อนบอก",
-    name: "รีวิวจากประสบการณ์",
-    score: 92,
-    chunks: [
-      "ตอนแรกคิดว่าไม่จำเป็น จนได้ลองพกอันนี้ออกจากบ้าน",
-      "แบตใกล้หมดเมื่อไหร่ แปะปุ๊บชาร์จปั๊บ ไม่ต้องหาปลั๊ก",
-      "ชอบตรงที่เบามาก แล้ววงแหวนก็ช่วยให้ถือถ่ายคลิปถนัดขึ้น",
-      "ใครเดินทางบ่อย บอกเลยว่าควรมีติดกระเป๋าค่ะ",
-    ],
-  },
-  {
-    id: "wow",
-    tag: "ไวรัล จังหวะเร็ว",
-    name: "ว้าวตั้งแต่วินาทีแรก",
-    score: 89,
-    chunks: [
-      "ของชิ้นนี้ทำให้สายชาร์จในกระเป๋ากลายเป็นของเกินจำเป็น",
-      "เพราะแค่แตะ ก็เติมแบตให้มือถือได้ทันที",
-      "ทั้งบาง ทั้งเบา และล็อกแน่นแบบเดินถ่ายคลิปได้สบาย",
-      "ของมันต้องมีอยู่ในตะกร้าแล้ว รีบกดก่อนหมดโปรค่ะ",
-    ],
-  },
-  {
-    id: "story",
-    tag: "เล่าเรื่อง ดูจนจบ",
-    name: "หนึ่งวันกับสินค้า",
-    score: 86,
-    chunks: [
-      "เช้านี้ออกจากบ้านด้วยแบตแค่ยี่สิบเปอร์เซ็นต์",
-      "แต่ยังไม่ต้องห่วง เพราะมีแบตแม่เหล็กตัวจิ๋วอยู่ในกระเป๋า",
-      "แปะไว้ระหว่างเดินทาง พอถึงร้านกาแฟแบตก็พร้อมทำงานต่อ",
-      "เล็กแค่นี้แต่ช่วยชีวิตได้ทั้งวัน กดดูสีที่ตะกร้าได้เลยค่ะ",
-    ],
-  },
-  {
-    id: "deal",
-    tag: "เร่งตัดสินใจ",
-    name: "โปรแรง ต้องรีบกด",
-    score: 84,
-    chunks: [
-      "หยุดก่อน ถ้าเห็นราคานี้แล้วยังไม่กดถือว่าพลาดมาก",
-      "ได้ทั้งพาวเวอร์แบงก์แม่เหล็กและห่วงจับในชิ้นเดียว",
-      "พกง่าย ชาร์จไว สีสวยเข้ากับมือถือทุกเครื่อง",
-      "โปรนี้มีจำนวนจำกัด กดเก็บโค้ดในตะกร้าตอนนี้เลยค่ะ",
-    ],
-  },
-];
+// ไม่มีสคริปต์ตัวอย่างอีกต่อไป — เคยมีชุดพาวเวอร์แบงก์ hardcode ไว้ตรงนี้ ทำให้
+// เงื่อนไข "ถ้ายังไม่มีสคริปต์ให้สร้าง" เป็นเท็จเสมอ โปรเจกต์ใหม่จึงไม่เคยสร้าง
+// สคริปต์จริง แล้วข้อความตัวอย่างของสินค้าคนละตัวถูกบันทึกลงฐานข้อมูลไปด้วย
+const initialScripts: LocalScript[] = [];
+// อ้างอิงเดิมเสมอ — ถ้าเขียน ?? [] ตรงจุดใช้งาน จะได้ array ใหม่ทุกครั้งที่ render
+// แล้ว useMemo ที่พึ่งค่านี้จะคำนวณใหม่ทุกเฟรมโดยไม่จำเป็น
+const NO_CHUNKS: string[] = [];
+
+/**
+ * ป้ายกำกับของสคริปต์แต่ละแบบ
+ *
+ * ตัวสร้างคืน hookType มาให้อยู่แล้ว เช่น "เปิดด้วยปัญหา—ภาพลูกโดนยุงกัดกลางดึก"
+ * ซึ่งบอกได้จริงว่าแบบนี้ต่างจากแบบอื่นตรงไหน ก่อนหน้านี้ UI ทิ้งค่านี้แล้วโชว์
+ * "สคริปต์ 1..5" กับ "AI สร้างให้" ซึ่งไม่ได้บอกอะไรเลย
+ */
+function scriptLabel(script: LocalScript, index: number) {
+  const source = String(script.name || script.hookType || "").trim();
+  const [head, ...rest] = source.split(/[—–-]/);
+  return {
+    name: head?.trim() || `สคริปต์ ${index + 1}`,
+    tag: script.tag || rest.join("-").trim() || "",
+  };
+}
+
+/** ความยาวโดยประมาณของสคริปต์ — ค่าจริงจากตัวสร้าง ไม่ใช่ตัวเลขที่แต่งขึ้น */
+function scriptLengthLabel(script: LocalScript) {
+  const ms = Number(script.estDurationMs);
+  return Number.isFinite(ms) && ms > 0 ? `ราว ${Math.round(ms / 1000)} วินาที` : "";
+}
 
 /**
  * ตัวนับย่อยของแต่ละขั้น เช่น "สร้างเสียงแล้ว 3/9 ท่อน"
@@ -349,6 +317,7 @@ export function ProjectWizard() {
   const [timelinePlaying, setTimelinePlaying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [operationMessage, setOperationMessage] = useState("");
+  const [scriptBusy, setScriptBusy] = useState(false);
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [furthestStep, setFurthestStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
@@ -367,10 +336,8 @@ export function ProjectWizard() {
   const [speed, setSpeed] = useState(1);
   const [tone, setTone] = useState("เป็นกันเอง");
   const [scriptVariants, setScriptVariants] = useState<LocalScript[]>(initialScripts);
-  const [selectedScript, setSelectedScript] = useState("hook");
-  const [scriptTexts, setScriptTexts] = useState(() =>
-    Object.fromEntries(initialScripts.map((script) => [script.id, [...script.chunks]])),
-  );
+  const [selectedScript, setSelectedScript] = useState("");
+  const [scriptTexts, setScriptTexts] = useState<Record<string, string[]>>({});
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
   const [captionPosition, setCaptionPosition] = useState("ล่าง");
   // ชุดสีไฮไลต์ ค่าว่าง = ใช้สีประจำสไตล์นั้นตามเดิม
@@ -421,10 +388,11 @@ export function ProjectWizard() {
   const skipNextTimelineAutosaveRef = useRef(false);
   const projectReadyForAutosaveRef = useRef(false);
 
-  const selectedScriptData = scriptVariants.find((item) => item.id === selectedScript) ?? scriptVariants[0] ?? initialScripts[0];
+  const selectedScriptData: LocalScript | undefined =
+    scriptVariants.find((item) => item.id === selectedScript) ?? scriptVariants.at(0);
   const selectedStyleData = captionStyles.find((item) => item.id === selectedStyle) ?? captionStyles[0];
   const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
-  const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData.chunks;
+  const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData?.chunks ?? NO_CHUNKS;
 
   // เสียงไหนมีไฟล์ตัวอย่างพร้อมแล้วบ้าง — โหลดครั้งเดียวแทนการยิง 404 ทีละไฟล์
   useEffect(() => {
@@ -806,7 +774,7 @@ export function ProjectWizard() {
     // ขั้นที่เผลอกดค้างไว้ก่อนออกจากหน้า เพราะสิ่งที่คนกลับเข้ามาทำคือดาวน์โหลดคลิป
     // ไม่ใช่แก้ต่อ — ยกเว้นงานที่ stale เพราะคลิปนั้นไม่ตรงกับ timeline ปัจจุบันแล้ว
     const finished = renders.some((render) => render.kind === "final" && render.state === "ready" && !render.stale);
-    const savedStep = Math.max(1, Math.min(5, Number(project.wizard_step ?? 1))) as WizardStep;
+    const savedStep = Math.max(1, Math.min(6, Number(project.wizard_step ?? 1))) as WizardStep;
     setActiveStep(finished ? 5 : savedStep);
     // ร่างไม่ถูกสร้างอีกแล้ว แต่โปรเจกต์เก่าอาจมีค้างอยู่ ถ้าหยิบมาแสดงจะกลายเป็นว่า
     // เปิดโปรเจกต์เก่าขึ้นมาแล้วเห็นร่างเป็น "คลิปที่เสร็จแล้ว" ทั้งที่ยังไม่ได้สร้างตัวจริง
@@ -897,7 +865,7 @@ export function ProjectWizard() {
       activeRenderEditRevisionRef.current = revision;
       void completeRender(render.id, revision);
     } else if (RUNNING_RENDER_STATES.has(String(render.state))) {
-      setActiveStep(5);
+      setActiveStep(6);
       setRendering(true);
       const revision = editRevisionRef.current;
       activeRenderEditRevisionRef.current = revision;
@@ -1673,11 +1641,15 @@ export function ProjectWizard() {
       current.includes(activeStep) ? current : [...current, activeStep],
     );
     if (engineState !== "connected") {
-      if (activeStep < 5) setActiveStep((activeStep + 1) as WizardStep);
+      if (activeStep < 6) setActiveStep((activeStep + 1) as WizardStep);
       return;
     }
     try {
       const id = await ensureProject();
+      if (activeStep === 4 && !scriptVariants.length) {
+        setUploadError("ยังไม่มีสคริปต์ — กด “สร้างใหม่ทั้งหมด” ให้ AI เขียนให้ก่อน");
+        return;
+      }
       if (activeStep === 2) {
         if (!brief.name.trim() || !brief.features.trim()) {
           setUploadError("กรุณากรอกชื่อสินค้าและจุดขายหลักก่อนสร้างสคริปต์");
@@ -1691,11 +1663,11 @@ export function ProjectWizard() {
           await regenerateAllScripts(id);
         }
       } else {
-        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: Math.min(5, activeStep + 1) });
+        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: Math.min(6, activeStep + 1) });
       }
-      if (activeStep < 4) setActiveStep((activeStep + 1) as WizardStep);
-      else if (activeStep === 4) {
-        setActiveStep(5);
+      if (activeStep < 5) setActiveStep((activeStep + 1) as WizardStep);
+      else if (activeStep === 5) {
+        setActiveStep(6);
         await beginRender(id);
       }
     } catch (error) {
@@ -1794,14 +1766,38 @@ export function ProjectWizard() {
   };
 
   /** เขียนสคริปต์ใหม่ทั้งชุด — ทับของเดิม จึงต้องมาจากการกดปุ่มโดยตั้งใจเท่านั้น */
+  /**
+   * ปุ่มเขียนสคริปต์ใหม่ทุกปุ่มต้องเรียกตัวนี้
+   *
+   * เดิมปุ่ม "สร้างใหม่ทั้งหมด" ด้านบนไม่มี onClick เลย กดแล้วเงียบสนิท ส่วนปุ่มที่
+   * ทำงานได้ซ่อนอยู่ในกล่องแก้ไขซึ่งจะโผล่ก็ต่อเมื่อมีสคริปต์อยู่แล้ว — ตอนยังไม่มี
+   * สคริปต์จึงไม่มีทางสร้างได้เลย รวมไว้ที่เดียวเพื่อไม่ให้หลุดกันได้อีก
+   */
+  const runScriptRegeneration = () => {
+    if (scriptBusy) return;
+    setScriptBusy(true);
+    setUploadError("");
+    setOperationMessage("กำลังเขียนสคริปต์ใหม่ทั้งชุด…");
+    void regenerateAllScripts()
+      .then((count) => setToast(`เขียนสคริปต์ใหม่ ${count} แบบแล้ว`))
+      .catch((error) => setUploadError(error instanceof Error ? error.message : "เขียนสคริปต์ใหม่ไม่สำเร็จ"))
+      .finally(() => {
+        setScriptBusy(false);
+        setOperationMessage("");
+      });
+  };
+
   const regenerateAllScripts = async (knownProjectId?: string) => {
     const id = knownProjectId ?? projectId ?? await ensureProject();
     const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: selectedTotalSec });
-    if (result.scripts.length) {
-      setScriptVariants(result.scripts);
-      setSelectedScript(result.scripts[0].id);
-      setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
+    // ได้ศูนย์ชุดต้องดังขึ้นมา ไม่ใช่เงียบแล้วปล่อยให้หน้าจอค้างของเดิมไว้
+    // ซึ่งเคยทำให้ผู้ใช้เห็นสคริปต์ของสินค้าคนละตัวโดยไม่รู้ตัว
+    if (!result.scripts.length) {
+      throw new Error("สร้างสคริปต์ไม่สำเร็จ — ยังไม่ได้ชุดไหนกลับมา กรุณาลองอีกครั้ง");
     }
+    setScriptVariants(result.scripts);
+    setSelectedScript(result.scripts[0].id);
+    setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
     return result.scripts.length;
   };
 
@@ -1810,7 +1806,7 @@ export function ProjectWizard() {
     const renderEditRevision = editRevisionRef.current;
     activeRenderEditRevisionRef.current = renderEditRevision;
     setRenderError("");
-    setActiveStep(5);
+    setActiveStep(6);
     setRenderDone(false);
     setRenderProgress(4);
     setRendering(true);
@@ -1820,7 +1816,7 @@ export function ProjectWizard() {
       // ชุดเดียวกับที่เห็นบนจอ ไม่ใช่ชุดก่อนหน้าที่ยังค้างอยู่ในคิวบันทึก
       await queueProjectUpdate(id, {
         title: projectTitle(),
-        wizardStep: 5,
+        wizardStep: 6,
         product: projectProduct(),
       });
       const position = captionPosition === "บน" ? "top" : captionPosition === "กลาง" ? "middle" : "bottom";
@@ -1866,7 +1862,7 @@ export function ProjectWizard() {
       void beginRender();
       return;
     }
-    setActiveStep(5);
+    setActiveStep(6);
     setRenderDone(false);
     setRenderProgress(4);
     setRendering(true);
@@ -1961,7 +1957,7 @@ export function ProjectWizard() {
                   <>
                     <div className="step-panel-heading inline-heading clip-step-heading">
                       <div>
-                        <span className="step-kicker">ขั้นที่ 1 จาก 5</span>
+                        <span className="step-kicker">ขั้นที่ 1 จาก 6</span>
                         <h2>{hasChosenClip ? "คลิปและ Timeline ของคุณ" : "อัปโหลดคลิปสินค้าของคุณ"}</h2>
                         <p>เลือกพร้อมกันได้หลายคลิป แล้วเรียง ตัด และต่อให้เป็นวิดีโอเดียว ความยาวรวม 1–60 วินาที</p>
                       </div>
@@ -2166,7 +2162,7 @@ export function ProjectWizard() {
             {activeStep === 2 && (
               <div className="step-panel">
                 <div className="step-panel-heading">
-                  <span className="step-kicker">ขั้นที่ 2 จาก 5</span>
+                  <span className="step-kicker">ขั้นที่ 2 จาก 6</span>
                   <h2>บอกเราเกี่ยวกับสินค้าชิ้นนี้</h2>
                   <p>ยิ่งบอกชัด สคริปต์ยิ่งพูดเหมือนคุณขายเอง ไม่ต้องเขียนเป็นประโยคสวย ๆ</p>
                 </div>
@@ -2185,7 +2181,7 @@ export function ProjectWizard() {
             {activeStep === 3 && (
               <div className="step-panel">
                 <div className="step-panel-heading inline-heading">
-                  <div><span className="step-kicker">ขั้นที่ 3 จาก 5</span><h2>เลือกเสียงที่เป็นตัวคุณ</h2><p>กดฟังตัวอย่างได้ทันที แล้วปรับความเร็วให้เข้ากับจังหวะคลิป</p></div>
+                  <div><span className="step-kicker">ขั้นที่ 3 จาก 6</span><h2>เลือกเสียงที่เป็นตัวคุณ</h2><p>กดฟังตัวอย่างได้ทันที แล้วปรับความเร็วให้เข้ากับจังหวะคลิป</p></div>
                   <span className="library-count">{voiceLibrary.length} เสียง</span>
                 </div>
                 <div className="filter-row">
@@ -2237,35 +2233,61 @@ export function ProjectWizard() {
             {activeStep === 4 && (
               <div className="step-panel">
                 <div className="step-panel-heading inline-heading">
-                  <div><span className="step-kicker">ขั้นที่ 4 จาก 5</span><h2>เลือกสคริปต์และหน้าตาซับ</h2><p>เราสร้างมาให้ 5 แนว เลือกแนวที่ชอบแล้วแก้เฉพาะท่อนได้เลย</p></div>
-                  <button type="button" className="button button-quiet"><WandSparkles size={16} /> สร้างใหม่ทั้งหมด</button>
+                  <div><span className="step-kicker">ขั้นที่ 4 จาก 6</span><h2>เลือกสคริปต์</h2><p>เราสร้างมาให้ 5 แนว เลือกแนวที่ชอบแล้วแก้เฉพาะท่อนได้เลย</p></div>
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    onClick={runScriptRegeneration}
+                    disabled={scriptBusy || engineState !== "connected"}
+                    title="เขียนใหม่ทั้ง 5 แบบจากข้อมูลสินค้าปัจจุบัน — สคริปต์ที่แก้ไว้จะถูกแทนที่"
+                  >
+                    {scriptBusy ? <LoaderCircle size={16} className="spin" /> : <WandSparkles size={16} />}
+                    {scriptBusy ? "กำลังเขียน…" : "สร้างใหม่ทั้งหมด"}
+                  </button>
                 </div>
                 <div className="script-tabs" role="tablist" aria-label="สคริปต์ 5 เวอร์ชัน">
                   {scriptVariants.map((script, index) => (
                     <button type="button" role="tab" aria-selected={selectedScript === script.id} className={selectedScript === script.id ? "active" : ""} onClick={() => setSelectedScript(script.id)} key={script.id}>
-                      <span>แบบ {index + 1}</span><b>{script.name || `สคริปต์ ${index + 1}`}</b><small>{script.tag || "AI สร้างให้"}</small><em>{script.score ?? Math.max(78, 96 - index * 3)}% เข้ากับคลิป</em>
+                      <span>แบบ {index + 1}</span><b>{scriptLabel(script, index).name}</b><small>{scriptLabel(script, index).tag}</small><em>{scriptLengthLabel(script)}</em>
                     </button>
                   ))}
                 </div>
+                {!selectedScriptData && (
+                  <div className="script-editor">
+                    {scriptBusy ? (
+                      <div className="analysis-box">
+                        <LoaderCircle size={18} className="spin" />
+                        <div>
+                          <b>{operationMessage || "กำลังเขียนสคริปต์…"}</b>
+                          <span>AI กำลังอ่านข้อมูลสินค้าแล้วเขียนให้ 5 แนว ใช้เวลาราวครึ่งนาที</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="analysis-box">
+                        <WandSparkles size={18} />
+                        <div>
+                          <b>ยังไม่มีสคริปต์สำหรับสินค้านี้</b>
+                          <span>กดปุ่ม “สร้างใหม่ทั้งหมด” ด้านบน เพื่อให้ AI เขียนให้ 5 แนว</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {selectedScriptData && (
                 <div className="script-editor">
                   <div className="editor-head">
-                    <div><span className="script-rank"><Sparkles size={14} /> AI แนะนำ</span><h3>{selectedScriptData.name}</h3></div>
+                    <div><span className="script-rank"><Sparkles size={14} /> AI แนะนำ</span><h3>{scriptLabel(selectedScriptData, scriptVariants.indexOf(selectedScriptData)).name}</h3></div>
                     <span>เป้าหมาย {formatDuration(selectedTotalSec)}</span>
                     {/* ทับสคริปต์ทั้งชุด จึงต้องกดเองเท่านั้น ไม่ผูกกับปุ่มถัดไป */}
                     <button
                       type="button"
                       className="text-button"
-                      disabled={Boolean(operationMessage)}
+                      disabled={scriptBusy || engineState !== "connected"}
                       title="เขียนใหม่ทั้ง 5 แบบจากข้อมูลสินค้าปัจจุบัน — สคริปต์ที่แก้ไว้จะถูกแทนที่"
-                      onClick={() => {
-                        setOperationMessage("กำลังเขียนสคริปต์ใหม่ทั้งชุด…");
-                        regenerateAllScripts()
-                          .then((count) => setToast(count ? `เขียนสคริปต์ใหม่ ${count} แบบแล้ว` : "ยังเขียนใหม่ไม่สำเร็จ"))
-                          .catch((error) => setUploadError(error instanceof Error ? error.message : "เขียนสคริปต์ใหม่ไม่สำเร็จ"))
-                          .finally(() => setOperationMessage(""));
-                      }}
+                      onClick={runScriptRegeneration}
                     >
-                      <RotateCcw size={14} /> เขียนใหม่ทั้งชุด
+                      {scriptBusy ? <LoaderCircle size={14} className="spin" /> : <RotateCcw size={14} />}
+                      {scriptBusy ? "กำลังเขียน…" : "เขียนใหม่ทั้งชุด"}
                     </button>
                   </div>
                   <div className="chunk-list">
@@ -2283,6 +2305,15 @@ export function ProjectWizard() {
                       </div>
                     ))}
                   </div>
+                </div>
+                )}
+              </div>
+            )}
+
+            {activeStep === 5 && (
+              <div className="step-panel">
+                <div className="step-panel-heading inline-heading">
+                  <div><span className="step-kicker">ขั้นที่ 5 จาก 6</span><h2>หน้าตาซับ</h2><p>เลือกสไตล์และตำแหน่งให้เข้ากับคลิป ดูตัวอย่างจากคลิปจริงของคุณได้เลย</p></div>
                 </div>
 
                 <div className="subsection-heading"><div><h3>สไตล์ซับ</h3><p>พรีวิวจากคลิปจริงของคุณ</p></div><Link href="/styles" className="text-link">ดูแกลเลอรี <ArrowRight size={15} /></Link></div>
@@ -2349,10 +2380,10 @@ export function ProjectWizard() {
               </div>
             )}
 
-            {activeStep === 5 && (
+            {activeStep === 6 && (
               <div className="step-panel results-panel">
                 <div className="step-panel-heading inline-heading">
-                  <div><span className="step-kicker">ขั้นที่ 5 จาก 5</span><h2>{renderDone ? "คลิปของคุณพร้อมแล้ว 🎉" : "ตรวจดูก่อนสร้างคลิป"}</h2><p>{renderDone ? "ตรวจดูแล้ว ดาวน์โหลดไฟล์ได้ทันที หรือเปิดโฟลเดอร์ผลงานบนเครื่อง" : "ทุกอย่างพร้อมแล้ว กดสร้างได้เลย ย้อนกลับไปแก้ขั้นก่อนหน้าได้ตลอด"}</p></div>
+                  <div><span className="step-kicker">ขั้นที่ 6 จาก 6</span><h2>{renderDone ? "คลิปของคุณพร้อมแล้ว 🎉" : "ตรวจดูก่อนสร้างคลิป"}</h2><p>{renderDone ? "ตรวจดูแล้ว ดาวน์โหลดไฟล์ได้ทันที หรือเปิดโฟลเดอร์ผลงานบนเครื่อง" : "ทุกอย่างพร้อมแล้ว กดสร้างได้เลย ย้อนกลับไปแก้ขั้นก่อนหน้าได้ตลอด"}</p></div>
                   {renderDone && <span className="ready-large"><CheckCircle2 size={17} /> พร้อมดาวน์โหลด</span>}
                 </div>
 
@@ -2417,7 +2448,7 @@ export function ProjectWizard() {
                 <button type="button" className="button button-primary" disabled={clipSelectionInvalid || analyzing || Boolean(operationMessage)} onClick={() => void finishTimelineEdit()}><Check size={17} /> เสร็จสิ้นการตัดต่อ</button>
               </> : <>
                 <button type="button" className="button button-quiet" disabled={activeStep === 1} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
-                {activeStep < 5 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || (activeStep === 1 && clipSelectionInvalid)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : "สร้างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
+                {activeStep < 6 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || scriptBusy || (activeStep === 1 && clipSelectionInvalid) || (activeStep === 4 && !selectedScriptData)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : activeStep === 4 ? "ใช้สคริปต์นี้" : "สร้างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
               </>}
             </footer>
           </section>
@@ -2425,7 +2456,7 @@ export function ProjectWizard() {
           {/* เรนเดอร์เสร็จแล้ว รางขวาเปลี่ยนจากพรีวิวสดเป็นกล่องดาวน์โหลด
               เหลือแค่ MP4 อย่างเดียว: .srt/.ass/.wav/.json เป็นไฟล์สำหรับดีบัก ไม่ใช่ของที่
               คนโพสต์คลิปต้องใช้ ใครอยากได้กดเปิดโฟลเดอร์เอา */}
-          {renderDone && activeStep === 5 && (
+          {renderDone && activeStep === 6 && (
             <aside className="final-download">
               <span className="final-download-icon"><Film size={26} /></span>
               {/* ชื่อโปรเจกต์บอกได้ว่านี่คือคลิปของสินค้าอะไร ต่างจาก "final.mp4" ที่ทุกโปรเจกต์
@@ -2461,7 +2492,7 @@ export function ProjectWizard() {
           )}
 
           {/* ยังไม่เสร็จค่อยโชว์พรีวิวสด */}
-          {!(renderDone && activeStep === 5) && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
+          {!(renderDone && activeStep === 6) && !(timelineEditorOpen && activeStep === 1) && <aside className="live-preview-panel">
             <div className="preview-panel-head">
               <div>
                 <span className={`live-dot${hasChosenClip ? "" : " is-idle"}`}><i /> {hasChosenClip ? "พรีวิวสด" : "ยังไม่มีอะไรให้พรีวิว"}</span>
