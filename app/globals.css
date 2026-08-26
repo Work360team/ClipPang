@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  /* ความสูงแถบปุ่มท้าย wizard บนมือถือ — ใช้เผื่อพื้นที่ให้เนื้อหาไม่ถูกแถบ sticky บัง
+     แก้ที่นี่ที่เดียวเวลาปรับความสูงแถบ ไม่ต้องไล่หาตัวเลขตามกฎอื่น */
+  --wizard-footer-h: 66px;
   --ink: #181b18;
   --ink-soft: #5f675f;
   --ink-faint: #8b9289;
@@ -5008,7 +5011,9 @@ img.mini-project-thumb::after { content: none; }
   .title-line h1 { max-width: 55vw; font-size: 18px; }
   .wizard-stepper { margin: 18px 0 12px; padding: 11px 8px; border-radius: 14px; grid-auto-columns: minmax(125px, 1fr); }
   .wizard-stepper button { padding: 0 8px; }
-  .step-panel { min-height: 0; padding: 22px 17px; }
+  /* แถบปุ่มท้ายหน้าเป็น sticky ลอยขึ้นมาทับท้ายเนื้อหาระหว่างเลื่อน
+     ต้องเผื่อพื้นที่เท่าความสูงของมันไว้ ไม่งั้นตัวควบคุมอันสุดท้ายจะถูกบังครึ่งหนึ่ง */
+  .step-panel { min-height: 0; padding: 22px 17px calc(22px + var(--wizard-footer-h)); }
   .timeline-editor-panel { padding: 16px 12px; }
   .timeline-editor-heading, .timeline-summary-head { align-items: flex-start; flex-direction: column; }
   .timeline-total, .timeline-total-editor { width: 100%; }
