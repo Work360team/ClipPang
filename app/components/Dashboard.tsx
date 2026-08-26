@@ -20,7 +20,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "./AppShell";
 import { HardLink as Link } from "./HardLink";
 import { detectLocalEngine, localApi, type LocalEngineState, type LocalProject } from "../lib/local-api";
-import { projectPoster, refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
+import { refreshProjects, releaseProjectMedia, removeProjectLocally, subscribeProjects } from "../lib/project-store";
+import { toProjectCard } from "../lib/project-view";
 
 export function Dashboard() {
   const [engineState, setEngineState] = useState<LocalEngineState>("checking");
@@ -47,26 +48,10 @@ export function Dashboard() {
   // ซึ่งรวมถึงเสี้ยววินาทีแรกของทุกการโหลดหน้า ผู้ใช้ที่เพิ่งล็อกอินจึงเห็นโปรเจกต์
   // ชื่อแปลก ๆ ที่ไม่ใช่ของตัวเอง แยกไม่ออกว่าเป็นข้อมูลจริงของคนอื่นหรือของปลอม
   // ไม่มีรายการปลอมแล้ว ต่อไม่ติดก็แสดงว่างไว้ตรง ๆ
-  const projects = useMemo(() => engineState === "connected"
-    ? localProjects.map((project) => {
-      const latest = project.renders?.[0];
-      const ready = latest?.state === "ready";
-      const running = latest && ["queued", "running", "ingesting", "processing", "retrying"].includes(latest.state);
-      return {
-        id: project.id,
-        running: Boolean(running),
-        title: project.title,
-        meta: ready ? (latest.kind === "final" ? "คลิปตัวจริงพร้อมแล้ว" : "ร่างพร้อมให้เลือก") : running ? latest.message || "กำลังประมวลผล" : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`,
-        status: ready ? "พร้อมดาวน์โหลด" : running ? `กำลังทำ ${latest.progress ?? 0}%` : "บันทึกแล้ว",
-        statusClass: ready ? "ready" : running ? "running" : "draft",
-        // เฟรมจริงจากคลิปที่เรนเดอร์แล้ว ถ้ายังไม่เคยเรนเดอร์ค่อยใช้ภาพตัวอย่าง
-        image: projectPoster(project) ?? "/clip360-sample-poster.jpg",
-        href: `/p/${encodeURIComponent(project.id)}`,
-        updated: project.updated_at ? new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short" }).format(new Date(project.updated_at)) : "เมื่อสักครู่",
-        progress: latest?.progress ?? 0,
-      };
-    })
-    : [], [engineState, localProjects]);
+  const projects = useMemo(
+    () => (engineState === "connected" ? localProjects.map(toProjectCard) : []),
+    [engineState, localProjects],
+  );
 
   const runningProject = projects.find((project) => project.statusClass === "running");
 
@@ -196,7 +181,7 @@ export function Dashboard() {
                 <h2>โปรเจกต์ล่าสุด</h2>
                 <p>กลับมาทำต่อหรือดาวน์โหลดไฟล์ที่พร้อมแล้ว</p>
               </div>
-              <Link href="/" className="text-link">ดูทั้งหมด <ChevronRight size={15} /></Link>
+              <Link href="/projects" className="text-link">ดูทั้งหมด <ChevronRight size={15} /></Link>
             </div>
 
             <div className="project-list">

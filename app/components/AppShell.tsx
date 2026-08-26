@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CircleHelp,
   FolderKanban,
+  Film,
   LayoutDashboard,
   Menu,
   MoreVertical,
@@ -27,6 +28,7 @@ import { NotificationBell } from "./NotificationBell";
 
 const navItems = [
   { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
+  { href: "/projects", label: "โปรเจกต์", icon: Film },
   { href: "/p/new", label: "สร้างคลิป", icon: Sparkles },
   { href: "/styles", label: "สไตล์ซับ", icon: Captions },
   { href: "/settings", label: "ตั้งค่า", icon: Settings },
@@ -34,6 +36,7 @@ const navItems = [
 
 const pageTitles: Record<string, string> = {
   "/": "ภาพรวม",
+  "/projects": "โปรเจกต์ของฉัน",
   "/styles": "คลังสไตล์ซับ",
   "/settings": "ตั้งค่า",
 };
@@ -215,7 +218,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="sidebar-projects">
           <div className="sidebar-section-title">
             <span>โปรเจกต์ล่าสุด</span>
-            <Link href="/" aria-label="ดูโปรเจกต์ทั้งหมด">
+            <Link href="/projects" aria-label="ดูโปรเจกต์ทั้งหมด">
               <ChevronRight size={15} />
             </Link>
           </div>
