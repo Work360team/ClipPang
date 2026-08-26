@@ -6083,4 +6083,35 @@ a.notification-link:hover { background: #fafbf8; }
   .render-checklist {
     grid-template-columns: 1fr;
   }
+
+  /* เมนูเต็มจอ — บนจอเล็ก drawer แคบ ๆ ที่เหลือขอบเบลอไว้ข้างหลังเป็นภาษาของเว็บ
+     แอพบนมือถือเปิดเมนูแล้วยึดทั้งจอ ทำให้กดเป้าง่ายขึ้นและไม่มีขอบให้เผลอแตะพลาด */
+  .sidebar {
+    width: 100%;
+    border-right: 0;
+    box-shadow: none;
+    /* 100dvh ไม่ใช่ 100vh — แถบ URL ของเบราว์เซอร์มือถือยุบขยายได้ ถ้าใช้ vh
+       เนื้อหาท้ายเมนูจะถูกดันตกขอบจอจนกดไม่ถึง */
+    min-height: 100dvh;
+    padding-top: calc(22px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(18px + var(--app-safe-b));
+  }
+
+  /* เต็มจอแล้วฉากหลังไม่มีใครเห็น เก็บไว้ก็เปลืองการเบลอเปล่า ๆ */
+  .sidebar-scrim {
+    backdrop-filter: none;
+  }
+
+  /* เมนูเต็มจอมีที่ว่างเหลือ ใช้แถวสูงแบบเมนูแอพ กดง่ายและอ่านสบายกว่าแถวแน่น ๆ
+     ของ drawer แคบ — พวกนี้เป็น <a> จึงไม่เข้ากฎปุ่ม 44px ด้านบน */
+  .sidebar-link,
+  .mini-project {
+    min-height: 52px;
+  }
+
+  /* ลิงก์รองในเมนูก็ต้องแตะโดน — "ดูโปรเจกต์ทั้งหมด" สูงแค่ 15px แตะแทบไม่ติด */
+  .sidebar-section-title a,
+  .help-link {
+    min-height: 44px;
+  }
 }
