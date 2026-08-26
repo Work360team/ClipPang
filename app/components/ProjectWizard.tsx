@@ -808,7 +808,13 @@ export function ProjectWizard() {
   ) {
     try {
       const result = await localApi.getRender(id);
-      if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
+      // ผู้ใช้แก้อะไรระหว่างงานกำลังจบ = ผลลัพธ์นี้เก่าแล้ว ไม่ต้องเอามาแสดง
+      // แต่ต้องปลดล็อกหน้าจอด้วย ไม่งั้นเขาจะกดอะไรไม่ได้จนกว่าจะรีเฟรช
+      if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) {
+        setRendering(false);
+        setOperationMessage("");
+        return;
+      }
       const record = result.render;
       setRenderOutputs(record.outputs ?? {});
       const outputUrl = chooseVideoOutput(record.outputs);
@@ -816,11 +822,16 @@ export function ProjectWizard() {
       setRendering(false);
       setRenderProgress(100);
       setRenderDone(true);
+      // ต้องล้างข้อความความคืบหน้าด้วย ไม่ใช่แค่ธง rendering — ปุ่มทั้งหน้าปิดตัวเอง
+      // เมื่อ operationMessage ไม่ว่าง ถ้าปล่อยข้อความของงานที่จบแล้วค้างไว้ ผู้ใช้จะ
+      // กลับมาแก้อะไรไม่ได้เลยจนกว่าจะรีเฟรชหน้า
+      setOperationMessage("");
       void refreshProjects();
       setToast("คลิปพร้อมดาวน์โหลดแล้ว");
     } catch (error) {
       setRenderError(error instanceof Error ? error.message : "อ่านผลลัพธ์ไม่สำเร็จ");
       setRendering(false);
+      setOperationMessage("");
     }
   }
 
@@ -831,14 +842,20 @@ export function ProjectWizard() {
     stopWatchingRenderRef.current?.();
     stopWatchingRenderRef.current = watchRender(id, (event) => {
       if (expectedEditRevision != null && expectedEditRevision !== editRevisionRef.current) return;
-      setRenderProgress(Number(event.progress ?? 0));
-      setOperationMessage(event.message || "กำลังประมวลผล");
       // เก็บ stage และตัวนับย่อยไว้วาดรายการขั้นตอน ไม่ใช่ทิ้งแล้วโชว์แค่ %
       if (typeof event.stage === "string" && event.stage) setRenderStageId(event.stage);
       setRenderCounter(readCounter(event));
+      const finished = ["ready", "failed", "canceled"].includes(String(event.state));
+      // ข้อความความคืบหน้าตั้งได้เฉพาะตอนงานยังวิ่งอยู่ เพราะปุ่มทั้งหน้าปิดตัวเองเมื่อ
+      // ข้อความไม่ว่าง ถ้า event สุดท้ายตั้งข้อความทิ้งไว้ ผู้ใช้จะกลับมาแก้ไม่ได้เลย
+      if (!finished) {
+        setRenderProgress(Number(event.progress ?? 0));
+        setOperationMessage(event.message || "กำลังประมวลผล");
+      }
       if (event.state === "ready") void completeRender(id, expectedEditRevision);
       else if (event.state === "failed") {
         setRendering(false);
+        setOperationMessage("");
         setRenderError(event.error?.message || "สร้างคลิปไม่สำเร็จ กรุณาตรวจ FFmpeg และ API key แล้วลองใหม่");
       } else if (event.state === "canceled") {
         setRendering(false);
@@ -853,6 +870,7 @@ export function ProjectWizard() {
           if (result.render.state === "ready") await completeRender(id, expectedEditRevision);
           else if (result.render.state === "failed") {
             setRendering(false);
+            setOperationMessage("");
             setRenderError(result.render.error?.message || "สร้างคลิปไม่สำเร็จ");
           }
         } catch {
@@ -2523,7 +2541,7 @@ export function ProjectWizard() {
                   <FolderOpen size={16} />
                   <span>เปิดโฟลเดอร์ผลงาน</span>
                 </button>
-                <button type="button" className="final-download-secondary" onClick={() => { setRenderDone(false); setRenderProgress(0); }}>
+                <button type="button" className="final-download-secondary" onClick={() => { setRenderDone(false); setRenderProgress(0); setRendering(false); setOperationMessage(""); setRenderError(""); }}>
                   <RotateCcw size={16} />
                   <span>กลับไปแก้แล้วสร้างใหม่</span>
                 </button>
