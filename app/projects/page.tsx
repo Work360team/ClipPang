@@ -59,12 +59,17 @@ export default function ProjectsPage() {
 
   return (
     <AppShell>
-      <div className="style-page">
-        <header className="style-heading">
+      <div className="projects-page">
+        <header className="projects-head">
           <div>
-            <div className="style-kicker"><Film size={15} strokeWidth={2.3} /> โปรเจกต์ของฉัน</div>
-            <h1>รวมทุกคลิปที่ทำไว้</h1>
-            <p>ค้นหา กลับไปทำต่อ หรือดาวน์โหลดไฟล์ที่เสร็จแล้ว ทุกอย่างอยู่บนเครื่องนี้</p>
+            <h1>โปรเจกต์ของฉัน</h1>
+            <p>
+              {engineState === "checking"
+                ? "กำลังโหลด…"
+                : counts.all > 0
+                  ? `${counts.all} คลิป เก็บอยู่บนเครื่องนี้`
+                  : "ยังไม่มีคลิปที่ทำไว้"}
+            </p>
           </div>
           <Link href="/p/new" className="button button-primary"><Plus size={16} /> สร้างคลิปใหม่</Link>
         </header>
@@ -107,7 +112,7 @@ export default function ProjectsPage() {
               </div>
             </div>
 
-            <div className="project-list">
+            <div className="projects-list">
               {visible.length === 0 ? (
                 <div className="projects-empty">
                   <Film size={22} />
@@ -136,9 +141,11 @@ export default function ProjectsPage() {
                     <div className="project-main">
                       <h3>{project.title}</h3>
                       <p>{project.meta}</p>
-                      <span className={`project-status ${project.statusClass}`}><i /> {project.status}</span>
+                      <span className="project-foot">
+                        <span className={`project-status ${project.statusClass}`}><i /> {project.status}</span>
+                        <time>{project.updated}</time>
+                      </span>
                     </div>
-                    <time>{project.updated}</time>
                   </Link>
                   <button
                     type="button"

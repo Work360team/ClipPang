@@ -252,7 +252,7 @@ export interface LocalNotification {
 }
 export interface LocalCaptionIdea { angle: string; label: string; hint: string; text: string; hashtags: string[] }
 export interface LocalCaptionSet { provider: string; fallbackFrom: string | null; captions: LocalCaptionIdea[] }
-export interface LocalOutput { filename: string; url: string; size?: number; durationMs?: number }
+export interface LocalOutput { filename: string; url: string; size?: number; sizeBytes?: number; durationMs?: number }
 export interface LocalRender {
   id: string; project_id: string; kind: "draft" | "final"; state: string; progress: number;
   stage?: string | null; message?: string | null; queue_position?: number | null;

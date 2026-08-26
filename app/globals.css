@@ -708,14 +708,50 @@ img.mini-project-thumb::after { content: none; }
 .local-mode-banner small { margin-top: 2px; color: #796d3e; font-size: 12.5px; }
 .local-mode-banner a { display: inline-flex; align-items: center; gap: 5px; color: #5b4d16; font-size: 12.5px; font-weight: 600; }
 
-/* แถบเครื่องมือของหน้ารวมโปรเจกต์ — ช่องค้นหาคู่กับตัวกรองสถานะ
-   ตัวกรองใช้ .style-filter-row ร่วมกับหน้าคลังสไตล์ ไม่ต้องมีชุดใหม่ */
+/* ---------- หน้ารวมโปรเจกต์ ---------- */
+
+.projects-page {
+  /* รายการเดียวเรียงลง ถ้าปล่อยเต็มความกว้างจอใหญ่ การ์ดจะยาวข้ามจอโดยมีข้อความ
+     กระจุกอยู่ซ้ายสุด อ่านยากและดูโล่ง */
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 26px 30px 44px;
+}
+
+.projects-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+.projects-head h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.projects-head p {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* ค้นหากับตัวกรองติดอยู่ใต้แถบบนตอนเลื่อน — พอรายการยาวจะได้สลับตัวกรองได้
+   โดยไม่ต้องเลื่อนกลับขึ้นไปสุดก่อน */
 .projects-toolbar {
+  position: sticky;
+  z-index: 6;
+  top: 66px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+  padding: 12px 0;
+  background: var(--paper);
 }
 
 .projects-toolbar .style-filter-row {
@@ -729,10 +765,10 @@ img.mini-project-thumb::after { content: none; }
   gap: 8px;
   flex: 1 1 240px;
   min-width: 0;
-  height: 40px;
-  padding: 0 12px;
+  height: 42px;
+  padding: 0 13px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 12px;
   background: #fff;
   color: var(--ink-faint);
 }
@@ -765,10 +801,94 @@ img.mini-project-thumb::after { content: none; }
   cursor: pointer;
 }
 
-@media (max-width: 720px) {
-  /* จอแคบ ค้นหากับตัวกรองอยู่บรรทัดเดียวกันแล้วเบียดกันจนกดยาก */
-  .projects-search { flex-basis: 100%; }
-  .projects-toolbar .style-filter-row { width: 100%; }
+/* รายการเป็นการ์ดแยกใบ ไม่ใช่แถวคั่นเส้น — แตะง่ายกว่าและบอกขอบเขตของแต่ละอัน
+   ได้ชัดกว่าบนจอเล็ก ส่วนหน้าภาพรวมยังใช้แบบแถวคั่นเส้นเหมือนเดิม */
+.projects-list {
+  display: grid;
+  gap: 10px;
+}
+
+.projects-list .project-row-wrap {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  transition: border-color .14s ease, box-shadow .14s ease;
+}
+
+.projects-list .project-row-wrap:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.projects-list .project-row {
+  min-height: 0;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 13px;
+  /* เว้นทางขวาให้ปุ่มลบที่ลอยอยู่ ไม่ให้ทับข้อความ */
+  padding: 12px 58px 12px 12px;
+  border-bottom: 0;
+  border-radius: inherit;
+}
+
+/* การ์ดมีพื้นหลังของตัวเองแล้ว พื้นหลัง hover ของแถวจะกลายเป็นกล่องซ้อนกล่อง */
+.projects-list .project-row:hover {
+  margin: 0;
+  padding: 12px 58px 12px 12px;
+  background: none;
+}
+
+.projects-list .project-thumb {
+  width: 52px;
+  height: 68px;
+  border-radius: 12px;
+}
+
+.projects-list .project-main h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.projects-list .project-main p {
+  margin: 4px 0 8px;
+  font-size: 12.5px;
+}
+
+.projects-list .project-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.projects-list .project-status {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+}
+
+.projects-list .project-status.ready { background: #e7f3ec; }
+.projects-list .project-status.draft { background: #efecfb; }
+.projects-list .project-status.running { background: #fbf1d3; }
+
+.projects-list .project-foot time {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.projects-list .project-delete {
+  top: 50%;
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  transform: translateY(-50%);
+}
+
+/* กำลังเรนเดอร์อยู่จึงลบไม่ได้ แสดงจาง ๆ ไว้พร้อมคำอธิบายใน title
+   ดีกว่าซ่อนหายไปเฉย ๆ แล้วผู้ใช้หาปุ่มไม่เจอ */
+.projects-list .project-delete:disabled {
+  opacity: .3;
 }
 
 .projects-empty {
@@ -777,14 +897,17 @@ img.mini-project-thumb::after { content: none; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: 40px 26px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
   color: #777e76;
   text-align: center;
 }
 
 .projects-empty > svg { margin-bottom: 10px; color: #5a625a; }
-.projects-empty b { color: #303731; font-size: 13px; }
-.projects-empty p { margin: 4px 0 15px; font-size: 12.5px; }
+.projects-empty b { color: #303731; font-size: 14px; }
+.projects-empty p { margin: 5px 0 15px; font-size: 12.5px; }
 
 .wizard-global-alert {
   margin: 16px 18px 0;
@@ -3654,6 +3777,18 @@ img.mini-project-thumb::after { content: none; }
   opacity: 0;
 }
 
+/* จอสัมผัสไม่มี hover ปุ่มลบที่รออยู่จึงไม่มีทางโผล่มาให้กดเลย
+   เว้นที่ทางขวาของแถวไว้ด้วย ไม่งั้นปุ่มที่โผล่ตลอดจะไปทับชื่อโปรเจกต์ */
+@media (hover: none) {
+  .project-delete { width: 44px; height: 44px; opacity: 1; }
+  .project-delete:disabled { opacity: .3; }
+  .project-row { padding-right: 58px; }
+
+  /* ปุ่มเมนูของโปรเจกต์ในเมนูข้างก็รอ hover เหมือนกัน บนมือถือจึงไม่เคยโผล่ */
+  .mini-project-more { width: 40px; height: 40px; opacity: 1; }
+  .mini-project-row .mini-project { padding-right: 48px; }
+}
+
 /* กล่องยืนยันก่อนลบ */
 
 .confirm-backdrop {
@@ -6183,4 +6318,31 @@ a.notification-link:hover { background: #fafbf8; }
   .help-link {
     min-height: 44px;
   }
+
+  /* ---- หน้ารวมโปรเจกต์ ---- */
+  .projects-page { padding: 18px 14px 26px; }
+  .projects-head { align-items: flex-start; }
+  .projects-head h1 { font-size: 22px; }
+  .projects-toolbar { top: 58px; padding: 10px 0 12px; }
+  .projects-search { flex-basis: 100%; height: 46px; }
+
+  /* ชิปตัวกรองเลื่อนแนวนอนแถวเดียว ถ้าปล่อยให้ตัดบรรทัดชิปสุดท้ายจะโดนขอบจอตัดครึ่ง
+     ยื่นออกไปชนขอบทั้งสองด้านเพื่อให้เลื่อนได้สุดโดยที่ชิปแรกยังตรงกับเนื้อหาอื่น */
+  .projects-toolbar .style-filter-row {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -14px;
+    padding-inline: 14px;
+  }
+
+  .projects-toolbar .style-filter-row::-webkit-scrollbar { display: none; }
+  .projects-toolbar .style-filter-row button { flex: 0 0 auto; }
+
+  .projects-list .project-row,
+  .projects-list .project-row:hover { padding: 13px 62px 13px 13px; }
+  .projects-list .project-thumb { width: 56px; height: 74px; }
+  .projects-list .project-main h3 { font-size: 15px; }
+  .projects-list .project-delete { width: 44px; height: 44px; }
 }

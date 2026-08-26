@@ -1,6 +1,6 @@
 "use client";
 
-import { type LocalProject } from "./local-api";
+import { type LocalProject, type LocalRender } from "./local-api";
 import { projectPoster } from "./project-store";
 
 /**
@@ -27,9 +27,29 @@ export type ProjectCard = {
   progress: number;
 };
 
+/**
+ * บรรทัดรองของคลิปที่เสร็จแล้ว — ความยาวกับขนาดไฟล์
+ *
+ * เดิมเขียนว่า "คลิปตัวจริงพร้อมแล้ว" ซึ่งซ้ำกับป้ายสถานะข้าง ๆ ที่บอกว่าพร้อม
+ * ดาวน์โหลดอยู่แล้ว สองบรรทัดจึงไม่ได้บอกอะไรเพิ่ม ส่วนความยาวกับขนาดไฟล์คือ
+ * สิ่งที่ต้องรู้ก่อนเอาไปลง ไม่ต้องเปิดคลิปดูเอง
+ *
+ * selectedTotalMs ตรงกับความยาวไฟล์ .mp4 ที่ ffprobe อ่านได้ (19700 กับ 19.70 วิ)
+ */
+function outputSummary(latest: LocalRender | undefined) {
+  const config = (latest?.config ?? {}) as { selectedTotalMs?: number };
+  const durationMs = Number(latest?.outputs?.video?.durationMs ?? config.selectedTotalMs ?? 0);
+  const bytes = Number(latest?.outputs?.video?.sizeBytes ?? 0);
+  const parts: string[] = [];
+  if (durationMs > 0) parts.push(`${Math.round(durationMs / 1000)} วินาที`);
+  if (bytes > 0) parts.push(`${(bytes / 1048576).toFixed(1)} MB`);
+  return parts.join(" · ");
+}
+
 export function toProjectCard(project: LocalProject): ProjectCard {
   const latest = project.renders?.[0];
   const ready = latest?.state === "ready";
+  const final = latest?.kind === "final";
   const running = Boolean(latest && RUNNING_STATES.includes(String(latest.state)));
   const updatedAt = project.updated_at ? new Date(project.updated_at).getTime() : 0;
 
@@ -38,11 +58,14 @@ export function toProjectCard(project: LocalProject): ProjectCard {
     title: project.title,
     running,
     meta: ready
-      ? (latest?.kind === "final" ? "คลิปตัวจริงพร้อมแล้ว" : "ร่างพร้อมให้เลือก")
+      // งานเก่าที่ไม่มีขนาดหรือความยาวเก็บไว้ ยังต้องมีอะไรให้อ่านอยู่ดี
+      ? outputSummary(latest) || (final ? "คลิปตัวจริงพร้อมแล้ว" : "ร่างพร้อมให้เลือก")
       : running
         ? latest?.message || "กำลังประมวลผล"
         : `ทำต่อจากขั้นที่ ${project.wizard_step ?? 1}`,
-    status: ready ? "พร้อมดาวน์โหลด" : running ? `กำลังทำ ${latest?.progress ?? 0}%` : "บันทึกแล้ว",
+    status: ready
+      ? (final ? "พร้อมดาวน์โหลด" : "ร่างพร้อมดู")
+      : running ? `กำลังทำ ${latest?.progress ?? 0}%` : "บันทึกแล้ว",
     statusClass: ready ? "ready" : running ? "running" : "draft",
     // เฟรมจริงจากคลิปที่เรนเดอร์แล้ว ถ้ายังไม่เคยเรนเดอร์ค่อยใช้ภาพตัวอย่าง
     image: projectPoster(project) ?? "/clip360-sample-poster.jpg",
