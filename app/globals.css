@@ -1674,7 +1674,10 @@ img.mini-project-thumb::after { content: none; }
 
 .wizard-stepper {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* ไหลเป็นคอลัมน์ตามจำนวนขั้นที่มีจริง ไม่ตรึงตัวเลขไว้ — ตอนแยกสคริปต์กับซับ
+     เป็นคนละขั้น ขั้นที่หกเคยตกไปอยู่บรรทัดใหม่เพราะตรงนี้ล็อกไว้ที่ 5 */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   margin: 24px 0 17px;
   padding: 14px 18px;
   border: 1px solid var(--line);
@@ -4933,7 +4936,7 @@ img.mini-project-thumb::after { content: none; }
   .activity-column { grid-template-columns: 1fr 1fr; }
   .stats-strip { grid-template-columns: repeat(3, 1fr); }
   .stats-message { grid-column: 1 / -1; border-top: 1px solid #ebebe6; }
-  .wizard-stepper { overflow-x: auto; grid-template-columns: repeat(5, minmax(155px, 1fr)); }
+  .wizard-stepper { overflow-x: auto; grid-auto-columns: minmax(155px, 1fr); }
   .wizard-workspace { grid-template-columns: 1fr; }
   .live-preview-panel { position: relative; top: auto; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
   .preview-panel-head { grid-column: 1 / -1; }
@@ -5003,7 +5006,7 @@ img.mini-project-thumb::after { content: none; }
   .wizard-page { padding: 18px 12px 35px; }
   .wizard-heading > .button { display: none; }
   .title-line h1 { max-width: 55vw; font-size: 18px; }
-  .wizard-stepper { margin: 18px 0 12px; padding: 11px 8px; border-radius: 14px; grid-template-columns: repeat(5, minmax(125px, 1fr)); }
+  .wizard-stepper { margin: 18px 0 12px; padding: 11px 8px; border-radius: 14px; grid-auto-columns: minmax(125px, 1fr); }
   .wizard-stepper button { padding: 0 8px; }
   .step-panel { min-height: 0; padding: 22px 17px; }
   .timeline-editor-panel { padding: 16px 12px; }
