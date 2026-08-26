@@ -1464,10 +1464,13 @@ function normalizeProduct(value) {
   return cloneJsonObject(value, "product");
 }
 
+/** จำนวนขั้นของ wizard — คลิป, สินค้า, เสียง, สคริปต์, ซับ, ผลลัพธ์ */
+export const MAX_WIZARD_STEP = 6;
+
 function normalizeWizardStep(value) {
   const number = Number(value);
-  if (!Number.isInteger(number) || number < 1 || number > 5) {
-    throw new StoreValidationError("wizardStep ต้องเป็นเลข 1 ถึง 5");
+  if (!Number.isInteger(number) || number < 1 || number > MAX_WIZARD_STEP) {
+    throw new StoreValidationError(`wizardStep ต้องเป็นเลข 1 ถึง ${MAX_WIZARD_STEP}`);
   }
   return number;
 }

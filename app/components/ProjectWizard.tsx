@@ -230,17 +230,18 @@ const RENDER_STAGES: { id: string; label: string; detail: string }[] = [
   { id: "deliver", label: "ส่งมอบ", detail: "เขียนไฟล์ผลลัพธ์" },
 ];
 
-type WizardStyle = { id: string; name: string; note: string; label: string; className: string; speed: string; params?: StylePreviewParams };
+type WizardStyle = { id: string; name: string; note: string; label: string; className: string; speed: string; lane?: string; params?: StylePreviewParams };
+type StyleLaneFilter = "all" | "hyperframes" | "ass";
 
 /**
  * ใช้เป็นค่าตั้งต้นตอนยังไม่ต่อ Local เท่านั้น — พอต่อได้จะแทนที่ด้วยคลังจริงจาก
  * /api/styles ไม่งั้นวางไฟล์สไตล์ใหม่ใน pipeline/styles แล้ว wizard จะไม่เห็น
  */
 const fallbackCaptionStyles: WizardStyle[] = [
-  { id: "karaoke-pop", name: "คาราโอเกะ ป๊อป", note: "ขาวขอบดำหนา คำที่พูดเด้งเป็นสีเหลือง", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว" },
-  { id: "reveal-clean", name: "เผยทีละคำ มินิมอล", note: "คำที่ยังไม่พูดจางไว้ก่อน", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว" },
-  { id: "box-bold", name: "กล่องทึบ อ่านง่าย", note: "พื้นกล่องทึบ อ่านชัดแม้ฉากสว่างจ้า", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว" },
-  { id: "kanit-hf", name: "Kanit เด้ง (HyperFrames)", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด" },
+  { id: "karaoke-pop", name: "คาราโอเกะ ป๊อป", note: "ขาวขอบดำหนา คำที่พูดเด้งเป็นสีเหลือง", label: "ติดแน่นทุกที่", className: "caption-pop", speed: "เร็ว", lane: "ass" },
+  { id: "reveal-clean", name: "เผยทีละคำ มินิมอล", note: "คำที่ยังไม่พูดจางไว้ก่อน", label: "ชาร์จได้ทันที", className: "caption-clean", speed: "เร็ว", lane: "ass" },
+  { id: "box-bold", name: "กล่องทึบ อ่านง่าย", note: "พื้นกล่องทึบ อ่านชัดแม้ฉากสว่างจ้า", label: "พกง่ายมาก", className: "caption-boxed", speed: "เร็ว", lane: "ass" },
+  { id: "kanit-hf", name: "Kanit เด้ง (HyperFrames)", note: "ไฮไลต์ตามคำพูด", label: "ไม่ต้องพกสาย", className: "caption-karaoke", speed: "ละเอียด", lane: "hyperframes" },
 ];
 
 /** หน้าตาของซับในพรีวิวยังอิง class เดิม — จับคู่จาก id ที่รู้จัก ที่เหลือใช้ค่ากลาง */
@@ -339,6 +340,7 @@ export function ProjectWizard() {
   const [selectedScript, setSelectedScript] = useState("");
   const [scriptTexts, setScriptTexts] = useState<Record<string, string[]>>({});
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
+  const [styleLaneFilter, setStyleLaneFilter] = useState<StyleLaneFilter>("all");
   const [captionPosition, setCaptionPosition] = useState("ล่าง");
   // ชุดสีไฮไลต์ ค่าว่าง = ใช้สีประจำสไตล์นั้นตามเดิม
   const [captionColor, setCaptionColor] = useState("");
@@ -391,6 +393,18 @@ export function ProjectWizard() {
   const selectedScriptData: LocalScript | undefined =
     scriptVariants.find((item) => item.id === selectedScript) ?? scriptVariants.at(0);
   const selectedStyleData = captionStyles.find((item) => item.id === selectedStyle) ?? captionStyles[0];
+  // กรองตามเลนที่ใช้เรนเดอร์จริง เหมือนหน้าคลังสไตล์ — สองเลนต่างกันทั้งลูกเล่น
+  // และเวลาที่ใช้ จึงเป็นสิ่งแรกที่คนเลือกสไตล์อยากแยก
+  const styleLaneCounts = {
+    all: captionStyles.length,
+    hyperframes: captionStyles.filter((style) => style.lane === "hyperframes").length,
+    ass: captionStyles.filter((style) => style.lane && style.lane !== "hyperframes").length,
+  };
+  const visibleCaptionStyles = styleLaneFilter === "all"
+    ? captionStyles
+    : captionStyles.filter((style) => (
+      styleLaneFilter === "hyperframes" ? style.lane === "hyperframes" : style.lane !== "hyperframes"
+    ));
   const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData?.chunks ?? NO_CHUNKS;
 
@@ -926,6 +940,7 @@ export function ProjectWizard() {
                 label: fallback?.label || "ตัวอย่างซับ",
                 className: STYLE_CLASSNAMES[style.id] || "caption-pop",
                 speed: style.lane === "hyperframes" ? "ละเอียด" : "เร็ว",
+                lane: style.lane,
                 params: style.params,
               };
             }));
@@ -2317,8 +2332,33 @@ export function ProjectWizard() {
                 </div>
 
                 <div className="subsection-heading"><div><h3>สไตล์ซับ</h3><p>พรีวิวจากคลิปจริงของคุณ</p></div><Link href="/styles" className="text-link">ดูแกลเลอรี <ArrowRight size={15} /></Link></div>
+                <div className="style-filter-row" role="group" aria-label="กรองตามวิธีเรนเดอร์">
+                  {([
+                    ["all", "ทั้งหมด", styleLaneCounts.all],
+                    ["hyperframes", "HyperFrames", styleLaneCounts.hyperframes],
+                    ["ass", "เรนเดอร์เร็ว", styleLaneCounts.ass],
+                  ] as const).map(([value, label, count]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      className={styleLaneFilter === value ? "active" : ""}
+                      disabled={count === 0}
+                      aria-pressed={styleLaneFilter === value}
+                      onClick={() => setStyleLaneFilter(value)}
+                    >
+                      {label} <em>{count}</em>
+                    </button>
+                  ))}
+                  <span className="style-filter-note">
+                    {styleLaneFilter === "hyperframes"
+                      ? "เลเยอร์ซับเรนเดอร์แยกแล้ววางทับ ลูกเล่นเยอะกว่า แต่ใช้เวลานานกว่า"
+                      : styleLaneFilter === "ass"
+                        ? "เผาซับลงภาพตรง ๆ เสร็จไวที่สุด เหมาะกับงานร่าง"
+                        : "สองวิธีเรนเดอร์ ต่างกันทั้งลูกเล่นและเวลาที่ใช้"}
+                  </span>
+                </div>
                 <div className="caption-style-grid">
-                  {captionStyles.map((style) => (
+                  {visibleCaptionStyles.map((style) => (
                     <button type="button" className={`caption-style-card ${selectedStyle === style.id ? "selected" : ""}`} onClick={() => setSelectedStyle(style.id)} key={style.id}>
                       {/* ตัวอย่างเดียวกับหน้าแกลเลอรี — ขยับตามพารามิเตอร์ของสไตล์นั้นจริง ๆ
                           ของเดิมเป็นข้อความนิ่งทับรูปนิ่ง เลือกยากเพราะความต่างอยู่ที่การเคลื่อนไหว */}
