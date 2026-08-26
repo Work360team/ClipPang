@@ -318,10 +318,21 @@ async function mockTts({ text, signal, timeoutMs }, rawFile) {
  * ทำให้ไฟล์เสียงเป็นรูปแบบเดียวกันทุก provider + เร่ง/ลดความเร็ว
  * แยกออกมาเพราะทางที่รวมหลายท่อนเป็นคำขอเดียวก็ต้องผ่านขั้นตอนนี้เหมือนกัน
  */
+/**
+ * ตัดความเงียบหัวและท้ายท่อน แล้วปรับความเร็วถ้าจำเป็น
+ *
+ * ต้องตัด "ท้าย" ด้วย ไม่ใช่แค่หัว: เสียงที่ตัดมาจากไฟล์ยาวมีรอยตัดอยู่กลางช่วงเงียบ
+ * (ตั้งใจ ไม่ให้คำขาด) แต่ละท่อนจึงติดหางเงียบมาราว 0.4 วินาที ซึ่งถูกนับเป็นความยาว
+ * ของท่อนนั้น ผลคือช่องว่างระหว่างท่อนที่ผู้ใช้ตั้งไว้ถูกกลบจนปรับแล้วไม่รู้สึกอะไรเลย
+ *
+ * ตัดหางออกแล้ว ช่องว่างที่ได้ยินจะเท่ากับค่าที่ผู้ใช้เลือกจริง ๆ
+ */
 async function normalizeAudio(rawFile, outFile, { provider, speed, signal, timeoutMs }) {
+  const trimSilence = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05";
   const filters = provider === "silence" || provider === "mock"
     ? []
-    : ["silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05"];
+    // ตัดหางด้วยการกลับด้าน ตัดหัว แล้วกลับคืน — ffmpeg ไม่มีตัวตัดท้ายตรง ๆ
+    : [trimSilence, "areverse", trimSilence, "areverse"];
   if (provider !== "edge" && Math.abs(speed - 1) > 0.01) filters.push(`atempo=${speed.toFixed(3)}`);
   await ffmpeg([
     "-i", rawFile,
@@ -421,8 +432,18 @@ export function concurrencyFor(provider) {
  * ใช้ NUL เป็นตัวคั่นเพราะข้อความมีช่องว่างได้ ถ้าคั่นด้วยช่องว่างจะมีโอกาสที่
  * ค่าคนละชุดรวมกันแล้วได้สตริงเดียวกัน
  */
+/**
+ * เลขรุ่นของการประมวลผลเสียง — บวกหนึ่งทุกครั้งที่เปลี่ยนวิธีแปลงไฟล์
+ *
+ * แคชเก็บผลลัพธ์หลังประมวลผลแล้ว ไม่ใช่เสียงดิบ ถ้าเปลี่ยนวิธีแปลงแต่ไม่เปลี่ยนกุญแจ
+ * ผู้ใช้จะได้ไฟล์เก่าคืนมาตลอดแล้วนึกว่าการแก้ไม่ทำงาน
+ *
+ * รุ่น 2: เริ่มตัดความเงียบท้ายท่อน ให้ช่องว่างระหว่างท่อนเท่ากับที่ผู้ใช้ตั้งไว้จริง
+ */
+const AUDIO_PIPELINE_VERSION = 2;
+
 export function cacheKeyFor({ provider, voice, speed, styleHint = "", text }) {
-  return sha256([provider, voice, speed, styleHint, text].join("\u0000")).slice(0, 32);
+  return sha256([AUDIO_PIPELINE_VERSION, provider, voice, speed, styleHint, text].join("\u0000")).slice(0, 32);
 }
 
 function cachePathFor({ provider, voice, speed, styleHint, text }, cacheDir) {

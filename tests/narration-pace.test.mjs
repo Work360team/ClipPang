@@ -37,9 +37,12 @@ test("จังหวะกระชับต้องไม่มีช่อ�
   for (let index = 1; index < tight.chunks.length; index += 1) {
     assert.equal(tight.chunks[index].startMs, tight.chunks[index - 1].endMs, "ท่อนต้องต่อกันสนิท");
   }
+  // อ่านจากค่าจริงแทนการฮาร์ดโค้ด เทสต์จะได้ไม่พังทุกครั้งที่จูนตัวเลข
+  const relaxedPad = NARRATION_PACES.find((item) => item.id === "relaxed").padMs;
   const gap = relaxed.chunks[1].startMs - relaxed.chunks[0].endMs;
-  assert.equal(gap, 280);
-  assert.equal(relaxed.durationMs - tight.durationMs, 8 * 280);
+  assert.equal(gap, relaxedPad);
+  assert.equal(relaxed.durationMs - tight.durationMs, 8 * relaxedPad);
+  assert.ok(relaxedPad >= 500, "ต้องเว้นมากพอให้ได้ยินต่างจากปกติจริง");
 });
 
 test("ตัวเลือกจังหวะต้องเรียงจากกระชับไปเว้นมาก และไม่มี id ซ้ำ", () => {
