@@ -8,10 +8,12 @@ import { Readable } from "node:stream";
 import { pipeline as streamPipeline } from "node:stream/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createApiHandler } from "./api.mjs";
-import { HOST, DEFAULT_PORT, PATHS, ensureDirectories } from "./config.mjs";
 import {
-  SESSION_COOKIE, createSession, loginPage, noteFailure, noteSuccess,
-  readCookie, readSession, sessionCookie, sessionSecret, throttle, verifyPassword,
+  HOST, DEFAULT_PORT, PATHS, applyLegacyEnvAliases, ensureDirectories, migrateLegacyDatabase,
+} from "./config.mjs";
+import {
+  clearLegacySessionCookie, createSession, loginPage, noteFailure, noteSuccess,
+  readSession, readSessionCookie, sessionCookie, sessionSecret, throttle, verifyPassword,
 } from "./auth.mjs";
 import { remoteHelpText as buildRemoteHelp } from "./remote-help.mjs";
 import { safeProjectPath } from "./security.mjs";
@@ -46,25 +48,28 @@ const VERSION = "0.3.0";
 // อ่าน .env ก่อนคำนวณค่าคงที่ด้านล่าง — ค่าพวกนี้ถูกอ่านตอน import ครั้งเดียว
 // ถ้าปล่อยให้ pipeline ไปโหลด .env ทีหลัง โหมดระยะไกลจะไม่มีวันเปิดเลย
 loadDotEnv(path.join(ROOT, ".env"));
+// .env ที่ตั้งไว้ก่อนเปลี่ยนแบรนด์ยังใช้ชื่อ CLIPPANG_ อยู่ ต้องเทียบชื่อให้ก่อน
+// อ่านค่าคงที่ด้านล่าง ไม่งั้นโหมดเข้าจากเครื่องอื่นจะปิดเงียบ ๆ หลังอัปเดต
+applyLegacyEnvAliases();
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /**
  * เปิดให้เข้าจากเครื่องอื่น (เช่นมือถือ) แบบต้องตั้งใจเปิดเองเท่านั้น
  *
- * ClipPang Local ไม่มีระบบล็อกอิน และทำสิ่งที่ย้อนกลับไม่ได้บนเครื่องผู้ใช้ได้จริง
+ * Clip360 Local ไม่มีระบบล็อกอิน และทำสิ่งที่ย้อนกลับไม่ได้บนเครื่องผู้ใช้ได้จริง
  * (ใช้โควตา Gemini ของเจ้าของเครื่อง อ่าน/ลบโปรเจกต์ เปิดโฟลเดอร์) ค่าเริ่มต้นจึงรับ
  * เฉพาะคำขอจากเครื่องตัวเอง ใครจะเปิดออกไปต้องระบุโฮสต์ที่อนุญาต "และ" ตั้งรหัสผ่าน
  * ไม่มีทางเปิดออกไปโดยไม่ตั้งรหัส เพราะนั่นคือการยกเครื่องให้คนทั้งอินเทอร์เน็ต
  */
 const REMOTE_HOSTS = new Set(
-  String(process.env.CLIPPANG_ALLOWED_HOSTS || "")
+  String(process.env.CLIP360_ALLOWED_HOSTS || "")
     .split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean),
 );
-const AUTH_USER = String(process.env.CLIPPANG_USER || "").trim();
-const AUTH_HASH = String(process.env.CLIPPANG_PASSWORD_HASH || "").trim();
+const AUTH_USER = String(process.env.CLIP360_USER || "").trim();
+const AUTH_HASH = String(process.env.CLIP360_PASSWORD_HASH || "").trim();
 const REMOTE_READY = REMOTE_HOSTS.size > 0 && Boolean(AUTH_USER) && AUTH_HASH.startsWith("scrypt$");
 const SECRET = sessionSecret(PATHS.data);
 
@@ -87,7 +92,7 @@ function parseJson(value, fallback = {}) {
 /**
  * ตรวจชื่อผู้ใช้และรหัสผ่านจากตาราง users แล้วออกคุกกี้เซสชันให้
  *
- * บัญชีใน .env (CLIPPANG_USER) ยังใช้ได้ในฐานะบัญชีตั้งต้น — ตอนเริ่มระบบจะถูก
+ * บัญชีใน .env (CLIP360_USER) ยังใช้ได้ในฐานะบัญชีตั้งต้น — ตอนเริ่มระบบจะถูก
  * ย้ายเข้าตาราง users ให้อัตโนมัติ (ดู ensureBootstrapUser) จากนั้นทุกอย่างอ่านจากตาราง
  */
 async function handleLogin(request, ip, store) {
@@ -160,7 +165,7 @@ function localRequestAllowed(request) {
   }
   // โฮสต์ระยะไกลต้องมีรหัสเสมอ ส่วนเครื่องตัวเองไม่ต้อง จะได้ไม่เพิ่มขั้นตอนให้คนใช้ปกติ
   if (LOCAL_HOSTS.has(url.hostname)) return true;
-  return Boolean(readSession(readCookie(request.headers.get("cookie"), SESSION_COOKIE), SECRET));
+  return Boolean(readSession(readSessionCookie(request.headers.get("cookie")), SECRET));
 }
 
 function normalizeScriptChunks(chunks) {
@@ -197,6 +202,10 @@ export function pickScript(config, product) {
 
 export async function createLocalRuntime({ store: providedStore, processor } = {}) {
   ensureDirectories();
+  // ฐานข้อมูลเดิมชื่อ clippang.db — ย้ายให้ก่อนเปิด ไม่งั้นจะสร้างไฟล์ว่างใหม่
+  // แล้วโปรเจกต์กับผู้ใช้ทั้งหมดจะหายไปทั้งที่ข้อมูลยังอยู่ในไฟล์ชื่อเดิม
+  // ทำเฉพาะตอนที่จะเปิด DB ตัวหลักเอง ถ้าผู้เรียกส่ง store มาให้ก็ไม่ต้องไปยุ่งกับไฟล์นั้น
+  if (!providedStore) migrateLegacyDatabase(PATHS.database);
   // จำไว้ว่าคีย์ไหนโควตาหมด เพื่อไม่ให้เปิดโปรแกรมใหม่แล้วไปยิงคีย์ที่เต็มซ้ำ
   configureQuotaStore(path.join(PATHS.data, "tts-quota.json"));
   const store = providedStore ?? createStore({
@@ -247,7 +256,7 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
         selectedTotalMs: prepared.selectedTotalMs,
       } : {}),
       reuseFrom: config.reuseRenderId ? { renderId: config.reuseRenderId, timeline: config.timeline, outputs: config.draftOutputs } : null,
-      mockTts: config.mockTts === true || process.env.CLIPPANG_MOCK_TTS === "1",
+      mockTts: config.mockTts === true || process.env.CLIP360_MOCK_TTS === "1",
       geminiEnv: keySource.environment,
       onTtsRequest: ownerId ? () => store.recordUsage?.(ownerId, 1) : undefined,
       signal: render.signal,
@@ -275,7 +284,7 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
 
 async function webWorkerBuildSignature(entry) {
   const stat = await fsp.stat(entry).catch(() => {
-    const error = new Error("ยังไม่พบหน้าเว็บที่ build แล้ว กรุณารัน `npm run build` ก่อนเปิด ClipPang Local");
+    const error = new Error("ยังไม่พบหน้าเว็บที่ build แล้ว กรุณารัน `npm run build` ก่อนเปิด Clip360 Local");
     error.code = "WEB_BUILD_MISSING";
     throw error;
   });
@@ -462,7 +471,7 @@ async function availablePort(start = DEFAULT_PORT) {
 }
 
 function openBrowser(url) {
-  if (process.env.CLIPPANG_NO_OPEN === "1" || process.env.NODE_ENV === "test") return;
+  if (process.env.CLIP360_NO_OPEN === "1" || process.env.NODE_ENV === "test") return;
   const command = process.platform === "win32" ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
   const child = spawn(command, [url], { detached: true, stdio: "ignore", windowsHide: true, shell: false });
   child.unref();
@@ -486,20 +495,21 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       // รับเฉพาะ POST — ถ้าเป็นลิงก์ GET ตัว prefetch ของเบราว์เซอร์หรือรูปที่ฝัง
       // ในหน้าอื่นกดแทนผู้ใช้ได้ กลายเป็นเตะคนออกจากระบบโดยที่เขาไม่ได้สั่ง
       if (requestUrl.pathname === "/api/auth/logout" && request.method === "POST") {
-        return sendWebResponse(res, new Response(null, {
-          status: 303,
-          headers: { location: "/", "set-cookie": sessionCookie("", { clear: true }) },
-        }), request.method);
+        // ล้างทั้งชื่อใหม่และชื่อเดิม ไม่งั้นคุกกี้เก่าที่ค้างอยู่จะพาเข้าระบบต่อได้
+        const goodbye = new Headers({ location: "/" });
+        goodbye.append("set-cookie", sessionCookie("", { clear: true }));
+        goodbye.append("set-cookie", clearLegacySessionCookie());
+        return sendWebResponse(res, new Response(null, { status: 303, headers: goodbye }), request.method);
       }
 
       // โลโก้กับ favicon ต้องโหลดได้ก่อนล็อกอิน ไม่งั้นหน้าล็อกอินจะไม่มีรูปให้ดู
       // เป็นไฟล์ภาพสาธารณะ ไม่มีข้อมูลของผู้ใช้อยู่ในนั้น
-      const publicAsset = /^\/(favicon\.ico|clippang-logo(-\d+)?\.png)$/.test(requestUrl.pathname);
+      const publicAsset = /^\/(favicon\.ico|clip360-logo(-\d+)?\.png)$/.test(requestUrl.pathname);
 
       // ใครเป็นคนขอ: เครื่องตัวเองถือเป็นเจ้าของเครื่อง ส่วนเครื่องอื่นมาจากคุกกี้เซสชัน
       const session = LOCAL_HOSTS.has(requestUrl.hostname)
         ? null
-        : readSession(readCookie(request.headers.get("cookie"), SESSION_COOKIE), SECRET);
+        : readSession(readSessionCookie(request.headers.get("cookie")), SECRET);
       let viewer = session?.id ? runtime.store.getUser?.(session.id) ?? null : bootstrapOwner;
       // เซสชันที่ออกก่อนการเปลี่ยนรหัสครั้งล่าสุดถือว่าใช้ไม่ได้แล้ว
       // และบัญชีที่ถูกปิดใช้งานต้องหลุดทันที ไม่ใช่รอคุกกี้หมดอายุ
@@ -528,7 +538,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       const url = requestUrl;
       let response;
       if (url.pathname.startsWith("/api/")) {
-        // local = คำขอมาจากเครื่องที่รัน ClipPang เอง ไม่ใช่ผู้ใช้ที่ล็อกอินจากที่อื่น
+        // local = คำขอมาจากเครื่องที่รัน Clip360 เอง ไม่ใช่ผู้ใช้ที่ล็อกอินจากที่อื่น
         // ใช้แยกสิทธิ์ระดับเครื่อง (เช่นคีย์ใน .env) ออกจากสิทธิ์ระดับบัญชี
         const apiContext = { viewer, local: LOCAL_HOSTS.has(url.hostname) };
         response = await runtime.api(request, apiContext);
@@ -556,7 +566,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       }
       await sendWebResponse(res, response, request.method);
     } catch (error) {
-      console.error("[ClipPang Local]", error);
+      console.error("[Clip360 Local]", error);
       if (!res.headersSent) {
         res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ ok: false, error: { code: error.code || "INTERNAL_ERROR", message: error.message || "เกิดข้อผิดพลาด" } }));
@@ -574,10 +584,10 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   try {
     setupReady = Boolean((await getSetupStatus()).ready);
   } catch (error) {
-    console.warn(`[ClipPang Local] ตรวจสถานะก่อนเปิดหน้าเว็บไม่สำเร็จ: ${error.message}`);
+    console.warn(`[Clip360 Local] ตรวจสถานะก่อนเปิดหน้าเว็บไม่สำเร็จ: ${error.message}`);
   }
   const launchUrl = setupReady ? url : `${url}/setup`;
-  console.log(`\nClipPang Local พร้อมใช้งาน: ${url}`);
+  console.log(`\nClip360 Local พร้อมใช้งาน: ${url}`);
   console.log(`ข้อมูลทั้งหมดอยู่ที่: ${PATHS.projects}\n`);
   openBrowser(launchUrl);
 
@@ -596,7 +606,7 @@ if (invokedDirectly) {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
-    console.log("กำลังปิด ClipPang Local…");
+    console.log("กำลังปิด Clip360 Local…");
     await running.close();
     process.exit(0);
   };
@@ -611,8 +621,8 @@ if (invokedDirectly) {
   // ระหว่างสตรีม) ซึ่งไม่ได้ทำให้เซิร์ฟเวอร์เสียหาย — บันทึกไว้แล้วให้บริการต่อ
   process.on("unhandledRejection", (reason) => {
     const error = reason instanceof Error ? reason : new Error(String(reason));
-    console.error(`[ClipPang Local] มี Promise ที่ไม่ได้จัดการ: ${error.message}`);
-    if (process.env.CLIPPANG_VERBOSE) console.error(error.stack);
+    console.error(`[Clip360 Local] มี Promise ที่ไม่ได้จัดการ: ${error.message}`);
+    if (process.env.CLIP360_VERBOSE) console.error(error.stack);
   });
 
   // ข้อผิดพลาดระดับนี้แปลว่าสถานะในหน่วยความจำอาจเพี้ยนไปแล้ว ยกเว้นกลุ่มที่รู้แน่ว่า
@@ -621,12 +631,12 @@ if (invokedDirectly) {
   const SOCKET_NOISE = new Set(["EPIPE", "ECONNRESET", "ECONNABORTED", "ERR_STREAM_PREMATURE_CLOSE"]);
   process.on("uncaughtException", (error) => {
     if (SOCKET_NOISE.has(error?.code)) {
-      console.error(`[ClipPang Local] การเชื่อมต่อถูกตัดกลางคัน (${error.code}) — ทำงานต่อ`);
+      console.error(`[Clip360 Local] การเชื่อมต่อถูกตัดกลางคัน (${error.code}) — ทำงานต่อ`);
       return;
     }
-    console.error(`[ClipPang Local] เกิดข้อผิดพลาดที่ไม่ได้จัดการ: ${error?.message}`);
+    console.error(`[Clip360 Local] เกิดข้อผิดพลาดที่ไม่ได้จัดการ: ${error?.message}`);
     console.error(error?.stack || error);
-    console.error("[ClipPang Local] กำลังปิดเพื่อให้ตัวเปิดโปรแกรมสตาร์ตใหม่");
+    console.error("[Clip360 Local] กำลังปิดเพื่อให้ตัวเปิดโปรแกรมสตาร์ตใหม่");
     running.close().catch(() => undefined).finally(() => process.exit(1));
   });
 }

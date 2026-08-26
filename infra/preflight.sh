@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ClipPang — preflight: วัดว่า VPS เครื่องนี้รันงานเรนเดอร์ไหวไหม
+# Clip360 — preflight: วัดว่า VPS เครื่องนี้รันงานเรนเดอร์ไหวไหม
 #
 # รันบน VPS ที่เพิ่งเปิดเครื่อง ก่อนติดตั้งอะไรทั้งสิ้น (อ่านอย่างเดียว + stress test)
 # ใช้เวลา ~5 นาที · ไม่ลงแพ็กเกจอะไรเลยนอกจาก curl ถ้ายังไม่มี
@@ -19,7 +19,7 @@ warn() { printf '  \033[33m!\033[0m %s\n' "$1"; WARN=$((WARN+1)); }
 bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; FAIL=$((FAIL+1)); }
 head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
-printf '\n\033[1mClipPang preflight\033[0m — %s\n' "$(date '+%Y-%m-%d %H:%M')"
+printf '\n\033[1mClip360 preflight\033[0m — %s\n' "$(date '+%Y-%m-%d %H:%M')"
 
 # ---------- 1. virtualization ----------
 head_ "1. ชนิดของเครื่อง"

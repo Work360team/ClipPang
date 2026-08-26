@@ -49,7 +49,7 @@ export const SCRIPT_PROVIDERS = [
     id: "gemini",
     kind: "api",
     label: "Google Gemini",
-    note: "ใช้คีย์ตัวเดียวกับที่ ClipPang ใช้พากย์เสียงอยู่แล้ว",
+    note: "ใช้คีย์ตัวเดียวกับที่ Clip360 ใช้พากย์เสียงอยู่แล้ว",
     envKeys: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
     keyName: "GEMINI_API_KEY",
     modelEnv: "GEMINI_SCRIPT_MODEL",
@@ -254,8 +254,8 @@ export async function callOpenAICompatible(provider, { system, user, signal, tim
   const headers = { "content-type": "application/json", authorization: `Bearer ${key}` };
   if (provider.id === "openrouter") {
     // OpenRouter ขอให้ระบุแอปที่เรียก เพื่อให้เห็นในหน้า usage ของผู้ใช้เอง
-    headers["http-referer"] = "https://github.com/clippang";
-    headers["x-title"] = "ClipPang";
+    headers["http-referer"] = "https://github.com/clip360";
+    headers["x-title"] = "Clip360";
   }
   const response = await fetch(`${provider.baseUrl}/chat/completions`, {
     method: "POST",

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { HOST, createPaths } from "../server/config.mjs";
+import { HOST, applyLegacyEnvAliases, createPaths, migrateLegacyDatabase } from "../server/config.mjs";
 import {
   MAX_VIDEO_BYTES,
   assertVideoUpload,
@@ -19,9 +19,10 @@ import {
   getNodeStatus,
   testGeminiApiKey,
 } from "../server/setup.mjs";
+import { LEGACY_SESSION_COOKIE, SESSION_COOKIE, readSessionCookie } from "../server/auth.mjs";
 
 function temporaryDirectory(t) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-test-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-test-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
@@ -31,7 +32,7 @@ test("local-only host and runtime paths are fixed beneath the app root", () => {
   const appPaths = createPaths(root);
   assert.equal(HOST, "127.0.0.1");
   assert.equal(appPaths.data, path.join(root, "data"));
-  assert.equal(appPaths.database, path.join(root, "data", "clippang.db"));
+  assert.equal(appPaths.database, path.join(root, "data", "clip360.db"));
   assert.equal(appPaths.input, path.join(root, "input"));
   assert.equal(appPaths.projects, path.join(root, "projects"));
 });
@@ -125,4 +126,64 @@ test("Gemini key test throws an actionable safe error when Google rejects it", a
       return true;
     },
   );
+});
+
+// เปลี่ยนแบรนด์จาก ClipPang เป็น Clip360 แล้วชื่อ env, ไฟล์ฐานข้อมูล และคุกกี้เปลี่ยนตาม
+// เครื่องที่ติดตั้งไว้ก่อนหน้ายังใช้ชื่อเดิม ถ้าไม่รับของเดิมด้วยจะกลายเป็นอัปเดตแล้ว
+// ล็อกอินไม่ได้และเห็นโปรเจกต์ว่างเปล่า — เทสต์ชุดนี้กันไม่ให้ compat หลุดไปเงียบ ๆ
+test("legacy CLIPPANG_ env names still work but never override the new ones", () => {
+  const env = {
+    CLIPPANG_USER: "เจ้าของเดิม",
+    CLIPPANG_ALLOWED_HOSTS: "old.example.com",
+    CLIP360_ALLOWED_HOSTS: "new.example.com",
+    CLIP360_USER: "",
+    UNRELATED: "ไม่ยุ่ง",
+  };
+  applyLegacyEnvAliases(env);
+
+  assert.equal(env.CLIP360_USER, "เจ้าของเดิม", "ช่องที่ยังว่างต้องรับค่าจากชื่อเดิม");
+  assert.equal(env.CLIP360_ALLOWED_HOSTS, "new.example.com", "ชื่อใหม่ที่ตั้งไว้แล้วต้องชนะ");
+  assert.equal(env.CLIPPANG_USER, "เจ้าของเดิม", "ไม่ลบชื่อเดิมทิ้ง");
+  assert.equal(Object.hasOwn(env, "CLIP360_UNRELATED"), false);
+});
+
+test("an existing clippang.db is moved to clip360.db together with its WAL files", (t) => {
+  const dataDir = temporaryDirectory(t);
+  const target = path.join(dataDir, "clip360.db");
+  for (const suffix of ["", "-wal", "-shm"]) {
+    fs.writeFileSync(path.join(dataDir, `clippang.db${suffix}`), `ข้อมูลเดิม${suffix}`);
+  }
+
+  assert.equal(migrateLegacyDatabase(target), true);
+  for (const suffix of ["", "-wal", "-shm"]) {
+    assert.equal(fs.readFileSync(target + suffix, "utf8"), `ข้อมูลเดิม${suffix}`);
+    assert.equal(fs.existsSync(path.join(dataDir, `clippang.db${suffix}`)), false);
+  }
+
+  // เรียกซ้ำต้องไม่ทำอะไร ไม่งั้นรีสตาร์ตทีข้อมูลโดนทับที
+  assert.equal(migrateLegacyDatabase(target), false);
+});
+
+test("database migration leaves a newer clip360.db untouched", (t) => {
+  const dataDir = temporaryDirectory(t);
+  const target = path.join(dataDir, "clip360.db");
+  fs.writeFileSync(path.join(dataDir, "clippang.db"), "ของเก่า");
+  fs.writeFileSync(target, "ของที่ใช้อยู่");
+
+  assert.equal(migrateLegacyDatabase(target), false);
+  assert.equal(fs.readFileSync(target, "utf8"), "ของที่ใช้อยู่");
+});
+
+test("session cookies issued under the old brand name are still accepted", () => {
+  assert.equal(SESSION_COOKIE, "clip360_session");
+  assert.equal(LEGACY_SESSION_COOKIE, "clippang_session");
+
+  assert.equal(readSessionCookie("clippang_session=เซสชันเก่า"), "เซสชันเก่า");
+  assert.equal(readSessionCookie("clip360_session=เซสชันใหม่"), "เซสชันใหม่");
+  assert.equal(
+    readSessionCookie("clippang_session=เซสชันเก่า; clip360_session=เซสชันใหม่"),
+    "เซสชันใหม่",
+    "ถ้ามีทั้งคู่ต้องใช้ของใหม่",
+  );
+  assert.equal(readSessionCookie(""), "");
 });

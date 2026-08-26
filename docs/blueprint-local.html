@@ -1,4 +1,4 @@
-<title>ClipPang Local — Blueprint &amp; Technical Spec</title>
+<title>Clip360 Local — Blueprint &amp; Technical Spec</title>
 
 <style>
   :root {
@@ -132,7 +132,7 @@
 
   <header class="masthead">
     <div class="eyebrow">Technical Blueprint · Local Edition v1.0 · สิงหาคม 2026</div>
-    <h1>ClipPang Local — โปรแกรมใส่ Subtitle + AI Voiceover ที่รันบนเครื่องตัวเอง</h1>
+    <h1>Clip360 Local — โปรแกรมใส่ Subtitle + AI Voiceover ที่รันบนเครื่องตัวเอง</h1>
     <p class="lede">
       ผู้ใช้ clone จาก GitHub มารันบนคอมตัวเอง ใส่ Gemini API key ของตัวเอง แล้วเปลี่ยนคลิปสินค้าดิบ
       เป็นคลิปพร้อมโพสต์ที่มีเสียงพากย์ไทยและซับคาราโอเกะ ไม่มีเซิร์ฟเวอร์ ไม่มีบัญชี ไม่มีค่าบริการ
@@ -281,7 +281,7 @@
 
             <rect class="box" x="560" y="120" width="140" height="56" rx="3"/>
             <text class="ttl" x="630" y="145" text-anchor="middle">SQLite</text>
-            <text class="sml" x="630" y="162" text-anchor="middle">clippang.db</text>
+            <text class="sml" x="630" y="162" text-anchor="middle">clip360.db</text>
 
             <rect class="box" x="790" y="72" width="196" height="68" rx="3"/>
             <text class="ttl" x="888" y="97" text-anchor="middle">Gemini · Claude</text>
@@ -395,11 +395,11 @@
         — สำคัญมากสำหรับซอฟต์แวร์ที่รันบนเครื่องคนอื่นซึ่งเราไปกู้ให้ไม่ได้
       </p>
 
-      <pre><code>ClipPang/
+      <pre><code>Clip360/
 ├── เริ่มโปรแกรม.bat / .command   ดับเบิลคลิกเพื่อเปิด
 ├── .env                          GEMINI_API_KEY ของผู้ใช้ (อยู่ใน .gitignore)
 ├── data/
-│   ├── clippang.db               SQLite — ดัชนีและสถานะงาน
+│   ├── clip360.db               SQLite — ดัชนีและสถานะงาน
 │   ├── bin/ffmpeg(.exe)          โหลดอัตโนมัติถ้าเครื่องไม่มี
 │   └── cache/tts/&lt;sha256&gt;.wav    เสียงที่เคยสร้าง ใช้ซ้ำข้ามโปรเจกต์
 ├── input/                        หย่อนคลิปไว้ตรงนี้ก็ได้ ไม่ต้องลากขึ้นเว็บ
@@ -620,7 +620,7 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);  -- ffmpeg path, เ�
     <!-- 11 -->
     <section id="s11">
       <h2><span class="num">§11</span>โครงสร้าง repo</h2>
-      <pre><code>clippang/
+      <pre><code>clip360/
 ├── เริ่มโปรแกรม.bat            Windows — ตรวจ Node แล้วรัน
 ├── start.command               macOS
 ├── start.sh                    Linux
@@ -694,7 +694,7 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);  -- ffmpeg path, เ�
   </main>
 
   <footer class="foot">
-    ClipPang Local Blueprint v1.0 · 11 สิงหาคม 2026 · แทนที่ <code>blueprint.html</code> ซึ่งเป็นเวอร์ชัน SaaS ที่พักไว้
+    Clip360 Local Blueprint v1.0 · 11 สิงหาคม 2026 · แทนที่ <code>blueprint.html</code> ซึ่งเป็นเวอร์ชัน SaaS ที่พักไว้
     — ตัวเลขเวลาและต้นทุนทั้งหมดมาจากการวัดจริงในสัปดาห์แรก ไม่ใช่การประมาณ
   </footer>
 </div>

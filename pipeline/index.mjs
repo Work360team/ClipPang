@@ -172,7 +172,7 @@ export async function generateScripts(input, options = {}) {
   const result = await generateScript(args.brief, {
     targetSec: Number(args.targetSec ?? 28),
     variants: Number(args.variants ?? 5),
-    provider: process.env.CLIPPANG_MOCK_TTS === "1" ? "template" : args.provider ?? "auto",
+    provider: process.env.CLIP360_MOCK_TTS === "1" ? "template" : args.provider ?? "auto",
     charsPerSec: args.charsPerSec,
     timeoutMs: args.timeoutMs,
     signal: args.signal,
@@ -219,7 +219,7 @@ export async function regenerateChunk({
   const generated = await generateScript(adjustedBrief, {
     targetSec: Math.max(8, Math.round((estimateMs(current.text) / 1000) * 4)),
     variants: 1,
-    provider: process.env.CLIPPANG_MOCK_TTS === "1" ? "template" : provider,
+    provider: process.env.CLIP360_MOCK_TTS === "1" ? "template" : provider,
     signal,
   });
   const candidates = generated.variants[0]?.chunks || [];
@@ -242,7 +242,7 @@ export async function synthesizePreview({
   provider,
   geminiEnv,
   onRequest,
-  text = "สวัสดีค่ะ ClipPang พร้อมช่วยให้คลิปสินค้าของคุณน่าฟังขึ้น",
+  text = "สวัสดีค่ะ Clip360 พร้อมช่วยให้คลิปสินค้าของคุณน่าฟังขึ้น",
   speed = 1,
   tone = "เป็นกันเอง",
   signal,
@@ -250,11 +250,11 @@ export async function synthesizePreview({
   mock = false,
 } = {}) {
   hydrateEnvironment();
-  const forceMock = mock || process.env.CLIPPANG_MOCK_TTS === "1";
+  const forceMock = mock || process.env.CLIP360_MOCK_TTS === "1";
   const selectedProvider = forceMock ? "mock" : provider || inferVoiceProvider(voiceId) || resolveProvider("auto");
   const selectedVoice = selectedProvider === "mock" ? DEFAULT_VOICE.mock : voiceId || DEFAULT_VOICE[selectedProvider];
   resolveProvider(selectedProvider);
-  const root = ensureDir(path.resolve(outDir || path.join(os.tmpdir(), "clippang", "voice-previews")));
+  const root = ensureDir(path.resolve(outDir || path.join(os.tmpdir(), "clip360", "voice-previews")));
   const key = sha256([selectedProvider, selectedVoice, speed, tone, text].join("\0")).slice(0, 24);
   const file = path.join(root, `preview-${key}.wav`);
   return synthesize({
@@ -459,7 +459,7 @@ export async function runPipeline(options = {}) {
     if (!isVideo(file)) throw new Error(`ไฟล์นี้ไม่ใช่นามสกุลวิดีโอที่รองรับ: ${path.basename(file)}`);
   }
 
-  const brief = options.brief || { name: "ClipPang" };
+  const brief = options.brief || { name: "Clip360" };
   const kind = options.kind === "draft" ? "draft" : "final";
   const style = resolveStyle(options.styleId || "karaoke-pop", options.position, options.captionColor);
   const width = Number(options.width || 1080);

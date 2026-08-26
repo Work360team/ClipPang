@@ -352,7 +352,7 @@ export function ProjectWizard() {
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [furthestStep, setFurthestStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
-  const [videoUrl, setVideoUrl] = useState("/clippang-sample.mp4");
+  const [videoUrl, setVideoUrl] = useState("/clip360-sample.mp4");
   const [fileName, setFileName] = useState("คลิปตัวอย่าง.mp4");
   const [uploadError, setUploadError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -469,8 +469,8 @@ export function ProjectWizard() {
   const voiceChosen = furthestStep > 3;
   const styleChosen = furthestStep > 4;
   const previewVideoUrl = activeClip?.previewUrl || activeClip?.url || videoUrl;
-  const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clippang-sample.mp4";
-  const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clippang-sample.mp4");
+  const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clip360-sample.mp4";
+  const renderedVideoUrl = chooseVideoOutput(renderOutputs) || (engineState === "connected" ? null : "/clip360-sample.mp4");
   // ชื่อไฟล์จริงที่เซิร์ฟเวอร์ตั้งให้ ใช้เป็นชื่อตอนบันทึกและบอกไว้ที่ tooltip ของปุ่ม
   const finalVideoName = Object.values(renderOutputs ?? {})
     .find((output) => output?.filename?.toLowerCase().endsWith(".mp4"))?.filename ?? "";
@@ -691,8 +691,8 @@ export function ProjectWizard() {
   // ภาพนิ่งที่ใช้ทั่วหน้า — ของผู้ใช้ถ้ามี ไม่งั้นค่อยใช้ภาพตัวอย่าง
   // ภาพสำรองต้องเป็นเฟรมที่ "ไม่มีซับติดมา" เพราะการ์ดนี้มีไว้ดูสไตล์ซับ
   // ถ้าพื้นหลังมีซับของคลิปเดิมเผาติดอยู่ จะเห็นซับสองชุดซ้อนกันจนแยกไม่ออกว่าอันไหน
-  // คือสไตล์ที่กำลังเลือก (clippang-sample-poster.jpg มีคำว่า "ค่ะเจ้าตัวนี้" ติดมา)
-  const stillPoster = projectPosterUrl ?? "/clippang-style-preview-poster.jpg";
+  // คือสไตล์ที่กำลังเลือก (clip360-sample-poster.jpg มีคำว่า "ค่ะเจ้าตัวนี้" ติดมา)
+  const stillPoster = projectPosterUrl ?? "/clip360-style-preview-poster.jpg";
 
   const renderStage = useMemo(() => {
     // ข้อความจริงมาจากเซิร์ฟเวอร์ผ่าน SSE — ข้างล่างเป็นข้อความสำรองตอนยังไม่ต่อ Local เท่านั้น
@@ -1150,7 +1150,7 @@ export function ProjectWizard() {
         ))
       ));
       pendingUploadFilesRef.current = queuedFiles;
-      setUploadError(`รับคลิป ${queuedFiles.length} ไฟล์แล้ว กำลังตรวจการเชื่อมต่อ ClipPang Local และจะเริ่มเพิ่มคลิปให้อัตโนมัติ`);
+      setUploadError(`รับคลิป ${queuedFiles.length} ไฟล์แล้ว กำลังตรวจการเชื่อมต่อ Clip360 Local และจะเริ่มเพิ่มคลิปให้อัตโนมัติ`);
       return;
     }
     if (resolvedEngineState !== "connected" && resolvedEngineState !== "unavailable") {
@@ -2018,7 +2018,7 @@ export function ProjectWizard() {
                 ) : (
                   <>
                     <div className="timeline-editor-heading">
-                      <div><span className="step-kicker">CLIPPANG VIDEO EDITOR</span><h2>ตัดต่อและจัดลำดับคลิป</h2><p>เลือกคลิปเพื่อปรับเวลา ลากเพื่อสลับลำดับ หรือกดปุ่มบนคลิปเพื่อย้ายและลบได้ทันที</p></div>
+                      <div><span className="step-kicker">CLIP360 VIDEO EDITOR</span><h2>ตัดต่อและจัดลำดับคลิป</h2><p>เลือกคลิปเพื่อปรับเวลา ลากเพื่อสลับลำดับ หรือกดปุ่มบนคลิปเพื่อย้ายและลบได้ทันที</p></div>
                       <div className={`timeline-total timeline-total-editor ${clipSelectionInvalid ? "invalid" : "valid"}`}><small>ความยาวรวม</small><b>{formatDuration(selectedTotalSec)}</b><span>กำหนด 00:01–01:00</span></div>
                     </div>
 
@@ -2172,13 +2172,13 @@ export function ProjectWizard() {
                 </div>
                 <div className="brief-grid">
                   <label className="field field-span-2"><span>ชื่อสินค้า <b>*</b></span><input value={brief.name} placeholder="เช่น ที่หนีบมือถือติดกระเป๋าเดินทาง" onChange={(event) => setBrief((current) => ({ ...current, name: event.target.value }))} /></label>
-                  <label className="field field-span-2"><span>หมวดหมู่</span><input list="clippang-categories" value={brief.category} placeholder="พิมพ์เองหรือเลือกจากรายการ" onChange={(event) => setBrief((current) => ({ ...current, category: event.target.value }))} /><datalist id="clippang-categories">{CATEGORY_PRESETS.map((item) => <option value={item} key={item} />)}</datalist></label>
+                  <label className="field field-span-2"><span>หมวดหมู่</span><input list="clip360-categories" value={brief.category} placeholder="พิมพ์เองหรือเลือกจากรายการ" onChange={(event) => setBrief((current) => ({ ...current, category: event.target.value }))} /><datalist id="clip360-categories">{CATEGORY_PRESETS.map((item) => <option value={item} key={item} />)}</datalist></label>
                   <label className="field field-span-2"><span>จุดขายหลัก <b>*</b></span><textarea rows={4} value={brief.features} placeholder="เช่น หนีบติดคันชักได้เลย, พับเก็บได้ ไม่เกะกะ, หมุนได้ 360 องศา" onChange={(event) => setBrief((current) => ({ ...current, features: event.target.value }))} /><small>แยกแต่ละข้อด้วยเครื่องหมายจุลภาคได้</small></label>
                   <label className="field"><span>กลุ่มลูกค้า</span><input value={brief.audience} placeholder="เช่น คนชอบเที่ยว เดินทางบ่อย" onChange={(event) => setBrief((current) => ({ ...current, audience: event.target.value }))} /></label>
                   <label className="field"><span>โทนที่อยากได้</span><select value={brief.tone} onChange={(event) => setBrief((current) => ({ ...current, tone: event.target.value }))}><option>เหมือนเพื่อนแนะนำ</option><option>ขายเก่ง จังหวะไว</option><option>รีวิวจริงใจ</option><option>พรีเมียม ดูแพง</option></select><ChevronDown size={15} /></label>
                   <label className="field field-span-2"><span>คำที่อยากให้พูดปิดท้าย</span><input value={brief.cta} placeholder="เช่น กดตะกร้าส้มด้านล่างเลย" onChange={(event) => setBrief((current) => ({ ...current, cta: event.target.value }))} /></label>
                 </div>
-                <div className="ai-tip"><span><Sparkles size={18} /></span><p><b>ไม่ต้องคิดให้ครบทุกคำ</b> ClipPang จะสร้างสคริปต์ให้เลือก 5 แนว และคุณแก้ทีละท่อนได้ในขั้นถัดไป</p></div>
+                <div className="ai-tip"><span><Sparkles size={18} /></span><p><b>ไม่ต้องคิดให้ครบทุกคำ</b> Clip360 จะสร้างสคริปต์ให้เลือก 5 แนว และคุณแก้ทีละท่อนได้ในขั้นถัดไป</p></div>
               </div>
             )}
 
@@ -2441,14 +2441,14 @@ export function ProjectWizard() {
               </ul>
               <a
                 className="button button-primary final-download-button"
-                href={renderedVideoUrl || "/clippang-sample.mp4"}
+                href={renderedVideoUrl || "/clip360-sample.mp4"}
                 download={finalVideoName || undefined}
                 title={finalVideoName ? `บันทึกเป็น ${finalVideoName}` : undefined}
               >
                 <Download size={17} /> ดาวน์โหลดคลิป MP4
               </a>
               <div className="final-download-more">
-                <button type="button" className="final-download-secondary" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้")}>
+                <button type="button" className="final-download-secondary" onClick={() => projectId && engineState === "connected" ? void localApi.openProject(projectId).then(() => setToast("เปิดโฟลเดอร์ผลงานแล้ว")).catch((error) => setToast(error instanceof Error ? error.message : "เปิดโฟลเดอร์ไม่สำเร็จ")) : setToast("เปิด Clip360 ผ่าน เริ่มโปรแกรม.bat เพื่อใช้ปุ่มนี้")}>
                   <FolderOpen size={16} />
                   <span>เปิดโฟลเดอร์ผลงาน</span>
                 </button>

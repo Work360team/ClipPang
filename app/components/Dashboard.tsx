@@ -60,7 +60,7 @@ export function Dashboard() {
         status: ready ? "พร้อมดาวน์โหลด" : running ? `กำลังทำ ${latest.progress ?? 0}%` : "บันทึกแล้ว",
         statusClass: ready ? "ready" : running ? "running" : "draft",
         // เฟรมจริงจากคลิปที่เรนเดอร์แล้ว ถ้ายังไม่เคยเรนเดอร์ค่อยใช้ภาพตัวอย่าง
-        image: projectPoster(project) ?? "/clippang-sample-poster.jpg",
+        image: projectPoster(project) ?? "/clip360-sample-poster.jpg",
         href: `/p/${encodeURIComponent(project.id)}`,
         updated: project.updated_at ? new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short" }).format(new Date(project.updated_at)) : "เมื่อสักครู่",
         progress: latest?.progress ?? 0,
@@ -120,7 +120,7 @@ export function Dashboard() {
         {engineState === "unavailable" && (
           <section className="local-mode-banner" role="status">
             <span><WifiOff size={17} /></span>
-            <div><b>ตอนนี้กำลังดูเว็บตัวอย่าง</b><small>หากต้องการอัปโหลดและเรนเดอร์จริง ให้เปิด <strong>เริ่มโปรแกรม.bat</strong> จากโฟลเดอร์ ClipPang</small></div>
+            <div><b>ตอนนี้กำลังดูเว็บตัวอย่าง</b><small>หากต้องการอัปโหลดและเรนเดอร์จริง ให้เปิด <strong>เริ่มโปรแกรม.bat</strong> จากโฟลเดอร์ Clip360</small></div>
             <Link href="/setup">ดูวิธีเปิดใช้งาน <ArrowRight size={15} /></Link>
           </section>
         )}
@@ -141,7 +141,7 @@ export function Dashboard() {
             <span className="hero-pill"><Sparkles size={14} /> AI ช่วยคิดให้ครบทุกท่อน</span>
             <h2>คลิปพร้อมขาย<br /><mark>ในไม่กี่นาที</mark></h2>
             <p>
-              วางคลิป กรอกจุดขาย แล้วเลือกเสียงที่ใช่ ClipPang จะสร้างสคริปต์ 5 แบบ
+              วางคลิป กรอกจุดขาย แล้วเลือกเสียงที่ใช่ Clip360 จะสร้างสคริปต์ 5 แบบ
               พร้อมซับคาราโอเกะให้คุณเลือกก่อนเรนเดอร์จริง
             </p>
             <div className="hero-actions">
@@ -159,12 +159,12 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="hero-studio" aria-label="ตัวอย่างก่อนและหลังใช้ ClipPang">
+          <div className="hero-studio" aria-label="ตัวอย่างก่อนและหลังใช้ Clip360">
             <div className="hero-grid-lines" aria-hidden="true" />
             <div className="phone-preview hero-phone">
               <video
-                src="/clippang-hero.mp4"
-                poster="/clippang-hero-poster.jpg"
+                src="/clip360-hero.mp4"
+                poster="/clip360-hero-poster.jpg"
                 muted
                 playsInline
                 loop

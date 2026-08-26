@@ -11,7 +11,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export const SESSION_COOKIE = "clippang_session";
+export const SESSION_COOKIE = "clip360_session";
+// ชื่อคุกกี้ก่อนเปลี่ยนแบรนด์ ยังอ่านอยู่เพื่อไม่ให้คนที่ล็อกอินค้างไว้หลุดตอนอัปเดต
+export const LEGACY_SESSION_COOKIE = "clippang_session";
 const SESSION_DAYS = 30;
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 
@@ -90,6 +92,26 @@ export function readCookie(header, name) {
 }
 
 /**
+ * อ่านคุกกี้เซสชัน โดยยอมรับชื่อเดิมด้วย
+ *
+ * เซสชันถูกเซ็นด้วย HMAC ตัวเดียวกันทั้งสองชื่อ การยอมรับชื่อเก่าจึงไม่ได้ลดความ
+ * ปลอดภัยลง — คุกกี้ปลอมยังผ่าน readSession ไม่ได้อยู่ดี ที่ได้คือคนไม่ต้องล็อกอินใหม่
+ */
+export function readSessionCookie(header) {
+  return readCookie(header, SESSION_COOKIE) || readCookie(header, LEGACY_SESSION_COOKIE);
+}
+
+/**
+ * ค่า set-cookie สำหรับลบคุกกี้ชื่อเดิมทิ้ง
+ *
+ * ตอนออกจากระบบต้องส่งคู่กับ sessionCookie("", { clear: true }) เสมอ ถ้าลบแต่ชื่อใหม่
+ * คุกกี้ชื่อเก่าจะยังอยู่และ readSessionCookie จะรับมันต่อ กลายเป็นกดออกแล้วไม่ออกจริง
+ */
+export function clearLegacySessionCookie() {
+  return `${LEGACY_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+}
+
+/**
  * หน่วงเวลาเมื่อเดารหัสผิดซ้ำ ๆ จาก IP เดิม
  * เก็บในหน่วยความจำพอ เพราะโปรแกรมนี้รันบนเครื่องคนเดียวไม่ได้กระจายหลายเครื่อง
  */
@@ -116,7 +138,7 @@ export function loginPage({ error = "", nextPath = "/" } = {}) {
   return `<!doctype html>
 <html lang="th"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>เข้าสู่ระบบ · ClipPang</title>
+<title>เข้าสู่ระบบ · Clip360</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -141,8 +163,8 @@ export function loginPage({ error = "", nextPath = "/" } = {}) {
 </style></head>
 <body>
   <form method="post" action="/api/auth/login">
-    <img class="mark" src="/clippang-logo-192.png" alt="ClipPang" />
-    <h1>ClipPang</h1>
+    <img class="mark" src="/clip360-logo-192.png" alt="Clip360" />
+    <h1>Clip360</h1>
     <p class="sub">เข้าสู่ระบบเพื่อใช้งานจากเครื่องนี้</p>
     ${error ? `<p class="error">${error}</p>` : ""}
     <input type="hidden" name="next" value="${safeNext}" />
@@ -153,7 +175,7 @@ export function loginPage({ error = "", nextPath = "/" } = {}) {
       <input name="password" type="password" autocomplete="current-password" required />
     </label>
     <button type="submit">เข้าสู่ระบบ</button>
-    <p class="note">เครื่องที่รัน ClipPang อยู่เข้าได้เลยโดยไม่ต้องล็อกอิน หน้านี้มีไว้สำหรับเครื่องอื่น</p>
+    <p class="note">เครื่องที่รัน Clip360 อยู่เข้าได้เลยโดยไม่ต้องล็อกอิน หน้านี้มีไว้สำหรับเครื่องอื่น</p>
   </form>
 </body></html>`;
 }

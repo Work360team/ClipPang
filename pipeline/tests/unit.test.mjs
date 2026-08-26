@@ -103,7 +103,7 @@ function pcmTone(samples) {
 }
 
 test("Gemini repeats the request verbatim when it answers with text instead of audio", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-tts-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   const prompts = [];
@@ -144,7 +144,7 @@ test("Gemini repeats the request verbatim when it answers with text instead of a
 });
 
 test("finishReason=OTHER is retried rather than failing the render", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-tts-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   let calls = 0;
@@ -177,7 +177,7 @@ test("finishReason=OTHER is retried rather than failing the render", async (t) =
 });
 
 test("a no-audio reply reports the reason Gemini actually gave", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-tts-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   const realFetch = globalThis.fetch;
@@ -266,7 +266,7 @@ test("batched audio is split back into one file per chunk, and a bad split is re
   // เสียงที่รวมมาในคำขอเดียวต้องตัดกลับให้ตรงจำนวนท่อน ถ้าตัดไม่ลงตัวต้องปฏิเสธ
   // ไม่ใช่เดา เพราะตัดผิดตำแหน่งแปลว่าซับเลื่อนไม่ตรงเสียงทั้งคลิป
   const { splitOnSilence, cutSpans, buildBatchPrompt } = await import("../tts-batch.mjs");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-batch-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-batch-test-"));
   try {
     const joined = path.join(dir, "joined.wav");
     await run("ffmpeg", [
@@ -303,7 +303,7 @@ test("batched audio is split back into one file per chunk, and a bad split is re
 test("quota state survives a restart, but an expired per-minute block does not", async () => {
   // ก่อนหน้านี้สถานะอยู่ในหน่วยความจำล้วน เปิดโปรแกรมใหม่แล้วระบบลืมว่าคีย์ไหนเต็ม
   // แล้วไปยิงซ้ำจนผู้ใช้ต้องรอ timeout ทีละใบ
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-quota-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-quota-test-"));
   const file = path.join(dir, "tts-quota.json");
   try {
     const first = await import(`../tts-quota.mjs?restart=1`);
@@ -333,7 +333,7 @@ test("12-bit ProRes overlay passes alpha validation, opaque and empty ones do no
   // เลเยอร์ซับจริงเป็น ProRes 4444 ซึ่งถอดรหัสมาเป็น 12 บิตและบีบช่วงค่า
   // (โปร่งสุด=256 ทึบสุด=3750 บนสเกล 4095) เคยทำให้ตัวตรวจเทียบกับ 0–255 แล้ว
   // ตัดสินว่าซับปกติ "ไม่มีความโปร่งใส" จนถอยไปใช้ ASS แทบทุกครั้ง
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-alpha-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-alpha-test-"));
   const make = async (alphaExpr, name) => {
     const file = path.join(dir, name);
     await run("ffmpeg", [
@@ -367,7 +367,7 @@ test("12-bit ProRes overlay passes alpha validation, opaque and empty ones do no
 test("opaque video is rejected instead of being used as an alpha overlay", async () => {
   await assert.rejects(
     validateOverlayAlpha(
-      path.join(workspace, "public", "clippang-sample.mp4"),
+      path.join(workspace, "public", "clip360-sample.mp4"),
       { chunks: [{ startMs: 250, endMs: 900 }] },
     ),
     (error) => error instanceof AlphaOverlayError && error.code === "ALPHA_OVERLAY_INVALID",
@@ -376,7 +376,7 @@ test("opaque video is rejected instead of being used as an alpha overlay", async
 
 test("mock TTS creates a probeable WAV and removes its raw scratch file", async (t) => {
   if (!(await ffmpegAvailable())) return t.skip("FFmpeg is not installed");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-tts-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-tts-test-"));
   try {
     const file = path.join(dir, "mock.wav");
     const result = await synthesize({

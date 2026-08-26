@@ -41,7 +41,7 @@ export function compileAss(timeline, style, { width = 1080, height = 1920 } = {}
 
   const head = [
     "[Script Info]",
-    `; ${style.name} — สร้างโดย ClipPang`,
+    `; ${style.name} — สร้างโดย Clip360`,
     "ScriptType: v4.00+",
     `PlayResX: ${width}`,
     `PlayResY: ${height}`,

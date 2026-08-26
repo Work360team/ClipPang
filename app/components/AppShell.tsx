@@ -162,16 +162,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const currentTitle = pathname.startsWith("/p/")
     ? "สร้างคลิปใหม่"
-    : pageTitles[pathname] ?? "ClipPang";
+    : pageTitles[pathname] ?? "Clip360";
 
   return (
     <div className="app-frame">
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-head">
-          <Link href="/" className="brand" aria-label="ClipPang หน้าแรก">
+          <Link href="/" className="brand" aria-label="Clip360 หน้าแรก">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="brand-mark" src="/clippang-logo-192.png" alt="" width={35} height={35} aria-hidden="true" />
-            <span className="brand-word">ClipPang</span>
+            <img className="brand-mark" src="/clip360-logo-192.png" alt="" width={35} height={35} aria-hidden="true" />
+            <span className="brand-word">Clip360</span>
           </Link>
           <button
             type="button"
@@ -300,7 +300,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             // คนที่เพิ่งล็อกอินจึงเห็นชื่อโปรเจกต์ที่ไม่ใช่ของตัวเองแวบหนึ่ง เหมือนข้อมูลรั่ว
             <div className="mini-project mini-project-loading">
               <span className="mini-project-thumb thumb-mint" aria-hidden="true" />
-              <span><b>{engineState === "checking" ? "กำลังโหลด…" : "ยังไม่ได้เชื่อมต่อ"}</b><small>{engineState === "checking" ? "ดึงโปรเจกต์ของคุณอยู่" : "เปิด ClipPang Local เพื่อดูโปรเจกต์"}</small></span>
+              <span><b>{engineState === "checking" ? "กำลังโหลด…" : "ยังไม่ได้เชื่อมต่อ"}</b><small>{engineState === "checking" ? "ดึงโปรเจกต์ของคุณอยู่" : "เปิด Clip360 Local เพื่อดูโปรเจกต์"}</small></span>
             </div>
           )}
         </div>
@@ -311,7 +311,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span />
             </span>
             <div>
-              <b>{engineState === "connected" ? (setupReady ? "เครื่องนี้พร้อมใช้งาน" : "เชื่อมต่อ Local แล้ว") : engineState === "checking" ? "กำลังตรวจ ClipPang Local" : "เว็บตัวอย่าง ClipPang"}</b>
+              <b>{engineState === "connected" ? (setupReady ? "เครื่องนี้พร้อมใช้งาน" : "เชื่อมต่อ Local แล้ว") : engineState === "checking" ? "กำลังตรวจ Clip360 Local" : "เว็บตัวอย่าง Clip360"}</b>
               <small>{engineState === "connected" ? (setupReady ? "Gemini และ FFmpeg พร้อมแล้ว" : "ตั้งค่าอีกเล็กน้อยก่อนเรนเดอร์") : engineState === "checking" ? "รอสักครู่…" : "เปิดด้วย เริ่มโปรแกรม.bat เพื่อใช้งานจริง"}</small>
             </div>
           </div>
@@ -382,7 +382,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               href={engineState === "connected" && setupReady ? "/settings" : "/setup"}
               className={`engine-chip engine-${engineState}`}
-              title={engineState === "connected" && setupReady ? "เปิดการตั้งค่า ClipPang Local" : engineState === "connected" ? "ตั้งค่า ClipPang Local ให้เสร็จ" : "หน้านี้เป็นเว็บตัวอย่าง"}
+              title={engineState === "connected" && setupReady ? "เปิดการตั้งค่า Clip360 Local" : engineState === "connected" ? "ตั้งค่า Clip360 Local ให้เสร็จ" : "หน้านี้เป็นเว็บตัวอย่าง"}
             >
               <Radio size={14} />
               {engineState === "connected" ? "LOCAL เชื่อมต่อแล้ว" : engineState === "checking" ? "กำลังเชื่อมต่อ" : "WEB DEMO"}
@@ -390,9 +390,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NotificationBell engineState={engineState} />
             <div className="profile-chip">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="avatar" src="/clippang-logo-192.png" alt="" width={34} height={34} aria-hidden="true" />
+              <img className="avatar" src="/clip360-logo-192.png" alt="" width={34} height={34} aria-hidden="true" />
               <span className="profile-copy">
-                <b>ClipPang Local</b>
+                <b>Clip360 Local</b>
                 <small>ไม่ต้องมีบัญชี</small>
               </span>
             </div>

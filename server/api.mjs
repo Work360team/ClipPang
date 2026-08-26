@@ -345,7 +345,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   const probeVideoImpl = services.probeVideo ?? probe;
   const checkTtsHealthImpl = services.checkTtsHealth ?? checkTtsHealth;
   // โหมด mock ใช้เสียงปลอมอยู่แล้ว การไปเช็ค Gemini จึงไม่มีประโยชน์และทำให้เทสต์ต้องต่อเน็ต
-  const mockTtsEnabled = services.mockTts ?? process.env.CLIPPANG_MOCK_TTS === "1";
+  const mockTtsEnabled = services.mockTts ?? process.env.CLIP360_MOCK_TTS === "1";
 
   return async function handleApi(request, context = {}) {
     // ผู้ใช้ที่เป็นเจ้าของคำขอนี้ — เซิร์ฟเวอร์เป็นคนตัดสินและส่งเข้ามา
@@ -392,7 +392,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
       }
 
       if (method === "GET" && pathname === "/api/health") {
-        return json({ ok: true, local: true, product: "ClipPang Local", version, host: HOST });
+        return json({ ok: true, local: true, product: "Clip360 Local", version, host: HOST });
       }
 
       if (method === "GET" && pathname === "/api/setup/status") {
@@ -632,7 +632,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           voiceId: previewMatch[1],
           geminiEnv: userKeyEnvironment(store, viewerId) ?? undefined,
           onRequest: viewerId ? () => store.recordUsage?.(viewerId, 1) : undefined,
-          text: String(body.text || "สวัสดีค่ะ ClipPang พร้อมช่วยให้คลิปสินค้าของคุณน่าฟังขึ้น"),
+          text: String(body.text || "สวัสดีค่ะ Clip360 พร้อมช่วยให้คลิปสินค้าของคุณน่าฟังขึ้น"),
           speed: Number(body.speed ?? 1),
           tone: body.tone ?? "เป็นกันเอง",
           signal: request.signal,
@@ -872,7 +872,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         }
 
         if (!isLocal) {
-          return apiError(403, "MACHINE_KEY", "เพิ่มคีย์ของเครื่องได้จากเครื่องที่รัน ClipPang เท่านั้น");
+          return apiError(403, "MACHINE_KEY", "เพิ่มคีย์ของเครื่องได้จากเครื่องที่รัน Clip360 เท่านั้น");
         }
         const existing = listGeminiKeys();
         if (existing.some((entry) => entry.key === key)) {
@@ -901,7 +901,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         // เดิมเช็คว่า "ผู้ใช้มีคีย์ของตัวเองไหม" ซึ่งพลาด: คนที่ยังไม่มีคีย์ของตัวเอง
         // ลบคีย์ใน .env ของเจ้าของเครื่องได้ ทดสอบแล้วเจอว่าลบได้จริง
         if (!isLocal) {
-          return apiError(403, "MACHINE_KEY", "คีย์นี้เป็นของเครื่อง แก้ได้จากเครื่องที่รัน ClipPang เท่านั้น");
+          return apiError(403, "MACHINE_KEY", "คีย์นี้เป็นของเครื่อง แก้ได้จากเครื่องที่รัน Clip360 เท่านั้น");
         }
         if (!keySlots().includes(slot)) return apiError(404, "UNKNOWN_SLOT", "ไม่รู้จักช่องคีย์นี้");
         removeEnvValue(slot);
@@ -1137,9 +1137,9 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
       const status = Number(error.status || storeStatus || (error.code === "ENOENT" ? 404 : 500));
       const code = error.code || (status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR");
       const message = status >= 500
-        ? `เกิดข้อผิดพลาดใน ClipPang: ${error.message || "ไม่ทราบสาเหตุ"}`
+        ? `เกิดข้อผิดพลาดใน Clip360: ${error.message || "ไม่ทราบสาเหตุ"}`
         : error.message;
-      if (status >= 500) console.error(`[ClipPang API] ${method} ${pathname}`, error);
+      if (status >= 500) console.error(`[Clip360 API] ${method} ${pathname}`, error);
       return apiError(status, code, message);
     }
   };

@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR" || exit 1
 
 echo ""
 echo "========================================"
-echo "  ClipPang Local"
+echo "  Clip360 Local"
 echo "========================================"
 echo ""
 
@@ -73,12 +73,12 @@ else
   echo "[2/3] หน้าเว็บพร้อมแล้ว"
 fi
 
-if [ "${CLIPPANG_LAUNCHER_CHECK_ONLY:-0}" = "1" ]; then
+if [ "${CLIP360_LAUNCHER_CHECK_ONLY:-0}" = "1" ]; then
   echo "[3/3] Launcher check passed."
   exit 0
 fi
 
-echo "[3/3] กำลังเปิด ClipPang ที่ http://127.0.0.1:4321"
+echo "[3/3] กำลังเปิด Clip360 ที่ http://127.0.0.1:4321"
 echo "กด Ctrl+C เมื่อต้องการปิดโปรแกรม"
 echo ""
 
@@ -94,10 +94,10 @@ while true; do
   restarts=$((restarts + 1))
   if [ "$restarts" -ge 20 ]; then
     echo ""
-    echo "ClipPang ล้มซ้ำ $restarts ครั้งติดกัน หยุดเปิดใหม่แล้ว — ดูข้อความข้างบนเพื่อหาสาเหตุ" >&2
+    echo "Clip360 ล้มซ้ำ $restarts ครั้งติดกัน หยุดเปิดใหม่แล้ว — ดูข้อความข้างบนเพื่อหาสาเหตุ" >&2
     exit "$code"
   fi
   echo ""
-  echo "ClipPang หยุดทำงานด้วยรหัส $code — เปิดใหม่ครั้งที่ $restarts ใน 3 วินาที"
+  echo "Clip360 หยุดทำงานด้วยรหัส $code — เปิดใหม่ครั้งที่ $restarts ใน 3 วินาที"
   sleep 3
 done

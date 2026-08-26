@@ -30,7 +30,7 @@ import {
 import styles from "./setup.module.css";
 
 type Step = 1 | 2 | 3;
-const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
+const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ Clip360 พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
 
 const steps = [
   {
@@ -149,7 +149,7 @@ export default function SetupPage() {
       applySetupStatus(result, chooseStep);
     } catch (error) {
       setSystemReady(false);
-      setSystemError(messageFrom(error, "อ่านสถานะ ClipPang Local ไม่สำเร็จ กรุณาลองอีกครั้ง"));
+      setSystemError(messageFrom(error, "อ่านสถานะ Clip360 Local ไม่สำเร็จ กรุณาลองอีกครั้ง"));
     } finally {
       setChecking(false);
     }
@@ -200,7 +200,7 @@ export default function SetupPage() {
 
   const startInstall = async () => {
     if (engineState !== "connected") {
-      setInstallError("หน้านี้เป็นเว็บตัวอย่าง กรุณาเปิด ClipPang Local บนคอมก่อนติดตั้ง");
+      setInstallError("หน้านี้เป็นเว็บตัวอย่าง กรุณาเปิด Clip360 Local บนคอมก่อนติดตั้ง");
       return;
     }
     setInstallProgress(0);
@@ -218,14 +218,14 @@ export default function SetupPage() {
 
   const playVoicePreview = async () => {
     if (engineState !== "connected") {
-      setVoicePreviewError("กรุณาเปิด ClipPang Local ก่อนทดสอบเสียง");
+      setVoicePreviewError("กรุณาเปิด Clip360 Local ก่อนทดสอบเสียง");
       return false;
     }
     setPreviewingVoice(true);
     setVoicePreviewError("");
     try {
       const blob = await localApi.previewVoice("Kore", {
-        text: "สวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น",
+        text: "สวัสดีค่ะ Clip360 พร้อมช่วยทำคลิปให้ปังขึ้น",
         speed: 1,
         tone: "เป็นกันเอง",
       });
@@ -250,7 +250,7 @@ export default function SetupPage() {
     }
 
     if (engineState !== "connected") {
-      setKeyError("หน้านี้เป็นเว็บตัวอย่าง กรุณาเปิด ClipPang Local ก่อนบันทึก API key");
+      setKeyError("หน้านี้เป็นเว็บตัวอย่าง กรุณาเปิด Clip360 Local ก่อนบันทึก API key");
       return;
     }
 
@@ -302,23 +302,23 @@ export default function SetupPage() {
   return (
     <div className={styles.page}>
       <header className={styles.topbar}>
-        <button type="button" className={styles.brand} onClick={goHome} aria-label="ClipPang หน้าแรก">
+        <button type="button" className={styles.brand} onClick={goHome} aria-label="Clip360 หน้าแรก">
           <span className={styles.brandMark} aria-hidden="true">
             <Clapperboard size={20} strokeWidth={2.4} />
           </span>
-          <span>ClipPang</span>
+          <span>Clip360</span>
           <span className={styles.localBadge}>{engineState === "connected" ? "LOCAL" : "WEB DEMO"}</span>
         </button>
         <div className={styles.privacyNote}>
           {engineState === "connected" ? <ShieldCheck size={16} aria-hidden="true" /> : <CircleAlert size={16} aria-hidden="true" />}
-          {engineState === "connected" ? "เชื่อมต่อ ClipPang Local แล้ว" : engineState === "checking" ? "กำลังค้นหา ClipPang Local…" : "นี่คือเว็บตัวอย่าง"}
+          {engineState === "connected" ? "เชื่อมต่อ Clip360 Local แล้ว" : engineState === "checking" ? "กำลังค้นหา Clip360 Local…" : "นี่คือเว็บตัวอย่าง"}
         </div>
       </header>
 
       <main className={styles.main}>
         <section className={styles.intro} aria-labelledby="setup-title">
           <span className={styles.eyebrow}>ตั้งค่าครั้งแรก · ใช้เวลาประมาณ 3 นาที</span>
-          <h1 id="setup-title">เตรียม ClipPang ให้พร้อมใช้งาน</h1>
+          <h1 id="setup-title">เตรียม Clip360 ให้พร้อมใช้งาน</h1>
           <p>
             เราจะเช็กสิ่งที่จำเป็น ติดตั้งเครื่องมือทำวิดีโอ และเชื่อมต่อ Gemini
             ให้เรียบร้อยก่อนเริ่มทำคลิปแรก
@@ -332,7 +332,7 @@ export default function SetupPage() {
               <strong>ตอนนี้คุณกำลังดูเว็บตัวอย่าง</strong>
               <p>
                 การติดตั้ง FFmpeg การบันทึก API key และการเรนเดอร์จะทำงานเมื่อเปิดหน้านี้ผ่าน
-                ClipPang Local บนคอมเท่านั้น เปิดไฟล์ “เริ่มโปรแกรม.bat” แล้วกดตรวจอีกครั้ง
+                Clip360 Local บนคอมเท่านั้น เปิดไฟล์ “เริ่มโปรแกรม.bat” แล้วกดตรวจอีกครั้ง
               </p>
             </div>
             <button type="button" onClick={() => void runSystemCheck(true)}>
@@ -341,7 +341,7 @@ export default function SetupPage() {
           </section>
         )}
 
-        <section className={styles.wizard} aria-label="ขั้นตอนตั้งค่า ClipPang">
+        <section className={styles.wizard} aria-label="ขั้นตอนตั้งค่า Clip360">
           <aside className={styles.stepRail}>
             <div className={styles.railHeading}>
               <span>ความคืบหน้า</span>
@@ -405,7 +405,7 @@ export default function SetupPage() {
                   <div>
                     <span className={styles.stepKicker}>ขั้นที่ 1</span>
                     <h2>ตรวจความพร้อมของระบบ</h2>
-                    <p>ClipPang กำลังเช็กของที่ต้องใช้บนเครื่องนี้</p>
+                    <p>Clip360 กำลังเช็กของที่ต้องใช้บนเครื่องนี้</p>
                   </div>
                 </div>
 
@@ -453,7 +453,7 @@ export default function SetupPage() {
                   <div className={styles.goodMessage} role="status">
                     <CheckCircle2 size={19} aria-hidden="true" />
                     <span>
-                      <strong>เครื่องนี้พร้อมสำหรับ ClipPang</strong>
+                      <strong>เครื่องนี้พร้อมสำหรับ Clip360</strong>
                       ไปติดตั้งเครื่องมือประมวลผลวิดีโอกันต่อได้เลย
                     </span>
                   </div>
@@ -509,8 +509,8 @@ export default function SetupPage() {
                       <h3>ยังไม่พบ FFmpeg บนเครื่องนี้</h3>
                       <p>
                         {ffmpegInfo?.found && !ffmpegInfo.libass
-                          ? "FFmpeg ที่พบยังไม่มี libass สำหรับซับภาษาไทย ClipPang จะติดตั้งตัวที่รองรับให้"
-                          : "ClipPang จะดาวน์โหลดเวอร์ชันที่เหมาะกับเครื่องคุณและเก็บไว้ในโฟลเดอร์โปรแกรม"}
+                          ? "FFmpeg ที่พบยังไม่มี libass สำหรับซับภาษาไทย Clip360 จะติดตั้งตัวที่รองรับให้"
+                          : "Clip360 จะดาวน์โหลดเวอร์ชันที่เหมาะกับเครื่องคุณและเก็บไว้ในโฟลเดอร์โปรแกรม"}
                         ไม่ต้องติดตั้งเอง
                       </p>
                       <ul>
@@ -541,7 +541,7 @@ export default function SetupPage() {
                       <span style={{ width: `${installProgress}%` }} />
                     </div>
                     <div className={styles.progressMeta}>
-                      <span>{ffmpegReady ? "ตรวจสอบ libass แล้ว" : "กำลังติดตั้งใน ClipPang Local"}</span>
+                      <span>{ffmpegReady ? "ตรวจสอบ libass แล้ว" : "กำลังติดตั้งใน Clip360 Local"}</span>
                       <span>{ffmpegReady ? `FFmpeg ${ffmpegInfo?.version ?? "พร้อมใช้"}` : "ปิดหน้านี้ได้ งานยังทำต่อบนเครื่อง"}</span>
                     </div>
                   </div>
@@ -736,7 +736,7 @@ export default function SetupPage() {
                       ไปหน้าแรก
                       <ArrowRight size={19} aria-hidden="true" />
                     </button>
-                    <small>ครั้งหน้าที่เปิด ClipPang จะเข้าหน้าแรกให้ทันที</small>
+                    <small>ครั้งหน้าที่เปิด Clip360 จะเข้าหน้าแรกให้ทันที</small>
                   </div>
                 )}
 
@@ -759,8 +759,8 @@ export default function SetupPage() {
 
         <p className={styles.footerNote}>
           {engineState === "connected"
-            ? "ClipPang Local · ไม่มีบัญชี ไม่มี telemetry ข้อมูลอยู่บนเครื่องนี้"
-            : "ClipPang Web Demo · เปิดผ่าน ClipPang Local เพื่อใช้งานจริง"}
+            ? "Clip360 Local · ไม่มีบัญชี ไม่มี telemetry ข้อมูลอยู่บนเครื่องนี้"
+            : "Clip360 Web Demo · เปิดผ่าน Clip360 Local เพื่อใช้งานจริง"}
         </p>
       </main>
     </div>

@@ -236,7 +236,7 @@ export async function discoverFfmpeg(options = {}) {
   } = options;
   const candidates = [];
 
-  // Required discovery order: ClipPang-managed data/bin first, then PATH.
+  // Required discovery order: Clip360-managed data/bin first, then PATH.
   for (const candidate of localFfmpegCandidates(appPaths, platform)) {
     try {
       if (fs.statSync(candidate).isFile()) candidates.push({ path: candidate, source: "data/bin" });

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ClipPang — provision: ติดตั้งทุกอย่างที่ worker ต้องใช้บน Ubuntu 22.04/24.04
+# Clip360 — provision: ติดตั้งทุกอย่างที่ worker ต้องใช้บน Ubuntu 22.04/24.04
 #
 #   sudo bash provision.sh --plesk-ip <ไอพีของเซิร์ฟเวอร์ Plesk>
 #
@@ -9,8 +9,8 @@
 set -euo pipefail
 
 PLESK_IP=""
-APP_USER="clippang"
-APP_DIR="/opt/clippang"
+APP_USER="clip360"
+APP_DIR="/opt/clip360"
 REDIS_PASS=""
 
 while [ $# -gt 0 ]; do
@@ -72,13 +72,13 @@ apt-get -qq install -y \
 
 step "ฟอนต์ไทย (Kanit + Noto Sans Thai) — ไม่มีฟอนต์ = ซับขึ้นเป็นกล่องสี่เหลี่ยม"
 apt-get -qq install -y fonts-noto-core fontconfig
-install -d /usr/local/share/fonts/clippang
+install -d /usr/local/share/fonts/clip360
 for W in Regular SemiBold Bold ExtraBold; do
-  F="/usr/local/share/fonts/clippang/Kanit-$W.ttf"
+  F="/usr/local/share/fonts/clip360/Kanit-$W.ttf"
   [ -f "$F" ] || curl -fsSL -o "$F" \
     "https://raw.githubusercontent.com/google/fonts/main/ofl/kanit/Kanit-$W.ttf"
 done
-NOTO="/usr/local/share/fonts/clippang/NotoSansThai-Bold.ttf"
+NOTO="/usr/local/share/fonts/clip360/NotoSansThai-Bold.ttf"
 [ -f "$NOTO" ] || curl -fsSL -o "$NOTO" \
   "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf" || true
 fc-cache -f >/dev/null
@@ -112,9 +112,9 @@ id "$APP_USER" >/dev/null 2>&1 || useradd -m -s /bin/bash "$APP_USER"
 install -d -o "$APP_USER" -g "$APP_USER" "$APP_DIR" "$APP_DIR/tmp"
 
 step "systemd unit สำหรับ worker"
-cat > /etc/systemd/system/clippang-worker.service <<UNIT
+cat > /etc/systemd/system/clip360-worker.service <<UNIT
 [Unit]
-Description=ClipPang render worker
+Description=Clip360 render worker
 After=network-online.target redis-server.service
 Wants=network-online.target
 
@@ -137,15 +137,15 @@ Nice=5
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-echo "  สร้าง clippang-worker.service แล้ว (ยังไม่ start เพราะยังไม่มีโค้ด)"
+echo "  สร้าง clip360-worker.service แล้ว (ยังไม่ start เพราะยังไม่มีโค้ด)"
 
 step "cron ล้างไฟล์ชั่วคราว — ดิสก์เต็มคือสาเหตุอันดับหนึ่งที่ระบบวิดีโอล่ม"
-cat > /etc/cron.daily/clippang-cleanup <<CRON
+cat > /etc/cron.daily/clip360-cleanup <<CRON
 #!/bin/sh
 find $APP_DIR/tmp -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} +
 find /tmp -maxdepth 1 -name 'puppeteer_dev_chrome_profile-*' -mtime +1 -exec rm -rf {} +
 CRON
-chmod +x /etc/cron.daily/clippang-cleanup
+chmod +x /etc/cron.daily/clip360-cleanup
 
 cat <<SUMMARY
 
@@ -161,7 +161,7 @@ $(printf '\033[1mเสร็จแล้ว\033[0m')
 
 ขั้นต่อไป
   1. bash verify.sh          ทดสอบ Chrome + ffmpeg + เรนเดอร์จริง
-  2. เอาโค้ดขึ้น $APP_DIR แล้ว systemctl start clippang-worker
+  2. เอาโค้ดขึ้น $APP_DIR แล้ว systemctl start clip360-worker
   3. deploy probe/ ขึ้น Plesk เพื่อทดสอบ SSE และการต่อ Redis ข้ามเครื่อง
 
 หมายเหตุความปลอดภัย: Redis เปิดออกอินเทอร์เน็ตโดยมีรหัสผ่าน + ufw จำกัด IP

@@ -23,13 +23,13 @@ async function render(path = "/") {
   );
 }
 
-test("server-renders the ClipPang dashboard", async () => {
+test("server-renders the Clip360 dashboard", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>ClipPang/);
+  assert.match(html, /<title>Clip360/);
   assert.match(html, /คลิปพร้อมขาย/);
   assert.match(html, /สร้างคลิปใหม่/);
   assert.match(html, /VOICEOVER/);
@@ -52,7 +52,7 @@ test("removes starter preview artifacts and uses Thai product metadata", async (
 
   await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
   await access(new URL("../public/og.png", import.meta.url));
-  await access(new URL("../public/clippang-sample.mp4", import.meta.url));
+  await access(new URL("../public/clip360-sample.mp4", import.meta.url));
 });
 
 test("setup home action bypasses the broken RSC client transition", async () => {

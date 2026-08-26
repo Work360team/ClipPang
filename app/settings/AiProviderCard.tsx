@@ -92,7 +92,7 @@ export function AiProviderCard({ engineState }: { engineState: string }) {
           <div className="settings-section-icon settings-icon-key"><BrainCircuit size={20} /></div>
           <div>
             <h2 id="ai-title">ผู้ช่วยเขียนสคริปต์</h2>
-            <p>เปิด ClipPang ผ่าน เริ่มโปรแกรม.bat เพื่อตั้งค่าส่วนนี้</p>
+            <p>เปิด Clip360 ผ่าน เริ่มโปรแกรม.bat เพื่อตั้งค่าส่วนนี้</p>
           </div>
         </div>
       </section>

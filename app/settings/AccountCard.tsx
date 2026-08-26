@@ -127,7 +127,7 @@ export function AccountCard({ engineState }: { engineState: string }) {
         </form>
       ) : (
         <p className="key-note">
-          ตอนนี้คุณเปิดจากเครื่องที่รัน ClipPang อยู่ จึงเข้าได้โดยไม่ต้องใส่รหัสผ่าน —
+          ตอนนี้คุณเปิดจากเครื่องที่รัน Clip360 อยู่ จึงเข้าได้โดยไม่ต้องใส่รหัสผ่าน —
           การเปลี่ยนรหัสต้องทำจากการเข้าผ่านหน้าล็อกอิน หรือใช้คำสั่ง
           <code> node scripts/users.mjs password {account.username} &lt;รหัสใหม่&gt;</code>
         </p>

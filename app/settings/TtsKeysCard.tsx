@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, KeyRound, Plus, RefreshCw, Trash2, TriangleAlert, Volume2 } from "lucide-react";
 import { localApi } from "../lib/local-api";
 
-const TEST_SENTENCE = "สวัสดีค่ะ ClipPang พร้อมช่วยทำคลิปให้ปังขึ้น";
+const TEST_SENTENCE = "สวัสดีค่ะ Clip360 พร้อมช่วยทำคลิปให้ปังขึ้น";
 const TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT
 
 00:00.000 --> 00:10.000

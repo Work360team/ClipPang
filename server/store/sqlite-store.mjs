@@ -185,7 +185,7 @@ export class StoreCorruptionError extends StoreError {
 }
 
 /**
- * Create the ClipPang schema on an already-open node:sqlite DatabaseSync.
+ * Create the Clip360 schema on an already-open node:sqlite DatabaseSync.
  * This is exported for diagnostics and focused migration tests; application
  * code should normally use SqliteStore#init instead.
  */
@@ -193,7 +193,7 @@ export function initializeSchema(database) {
   const version = Number(database.prepare("PRAGMA user_version").get().user_version);
   if (version > SCHEMA_VERSION) {
     throw new StoreError(
-      `ฐานข้อมูล ClipPang รุ่น ${version} ใหม่กว่าโปรแกรมรุ่นนี้ (รองรับถึง ${SCHEMA_VERSION})`,
+      `ฐานข้อมูล Clip360 รุ่น ${version} ใหม่กว่าโปรแกรมรุ่นนี้ (รองรับถึง ${SCHEMA_VERSION})`,
       { code: "STORE_SCHEMA_TOO_NEW" },
     );
   }
@@ -274,7 +274,7 @@ export class SqliteStore {
     dataDir = path.join(rootDir, "data"),
     projectsDir = path.join(rootDir, "projects"),
     cacheDir = path.join(dataDir, "cache", "tts"),
-    dbPath = path.join(dataDir, "clippang.db"),
+    dbPath = path.join(dataDir, "clip360.db"),
     now = Date.now,
   } = {}) {
     this.rootDir = path.resolve(rootDir);

@@ -1,4 +1,4 @@
-<title>ClipPang — Blueprint &amp; Technical Spec</title>
+<title>Clip360 — Blueprint &amp; Technical Spec</title>
 
 <style>
   :root {
@@ -380,7 +380,7 @@
 
   <header class="masthead">
     <div class="eyebrow">Technical Blueprint · v1.0 · สิงหาคม 2026</div>
-    <h1>ClipPang — ระบบใส่ Subtitle + AI Voiceover อัตโนมัติ สำหรับคลิปปักตะกร้า</h1>
+    <h1>Clip360 — ระบบใส่ Subtitle + AI Voiceover อัตโนมัติ สำหรับคลิปปักตะกร้า</h1>
     <p class="lede">
       สเปกฉบับเต็มสำหรับสร้างเว็บแอปที่รับคลิปสั้นหลายไฟล์ (คลิปจีน / คลิปถ่ายเอง) + ข้อมูลสินค้า
       แล้วคืนคลิปพร้อมโพสต์ที่มีเสียงพากย์ AI ภาษาไทยและซับคาราโอเกะซิงก์ตรงเสียง ภายในเวลาไม่ถึงหนึ่งนาที
@@ -1398,7 +1398,7 @@ data: {"state":"ready","videoUrl":"https://...","durationMs":28400,"credits":1}<
     <section id="s13">
       <h2><span class="num">§13</span>โครงสร้างโปรเจกต์และ Config</h2>
 
-      <pre><code>clippang/                      # pnpm workspace
+      <pre><code>clip360/                      # pnpm workspace
 ├── apps/
 │   ├── web/          Next.js 15 — หน้าเว็บทั้งหมด      ┐ deploy ขึ้น Plesk shared
 │   ├── api/          Fastify — REST + SSE + auth       ┘ (clippang.work360.in.th)
@@ -1421,7 +1421,7 @@ MONGODB_URI=mongodb+srv://...            # Atlas cluster ที่มีอย�
 REDIS_URL=rediss://:<pass>@<vps-ip>:6379 # Redis อยู่บน VPS worker · ต้องมีรหัสผ่าน + TLS
                                          # เพราะเปิดออกอินเทอร์เน็ตให้ Plesk เรียกถึง
 
-R2_ACCOUNT_ID=...        R2_BUCKET=clippang-media
+R2_ACCOUNT_ID=...        R2_BUCKET=clip360-media
 R2_ACCESS_KEY_ID=...     R2_SECRET_ACCESS_KEY=...
 R2_PUBLIC_BASE=https://cdn.clippang.work360.in.th
 
@@ -1500,7 +1500,7 @@ MAX_UPLOAD_MB=500</code></pre>
   </main>
 
   <footer class="foot">
-    ClipPang Blueprint v1.0 · จัดทำ 11 สิงหาคม 2026 · เอกสารนี้เป็นสเปกสำหรับสั่งงานพัฒนา ไม่ใช่เอกสารการตลาด
+    Clip360 Blueprint v1.0 · จัดทำ 11 สิงหาคม 2026 · เอกสารนี้เป็นสเปกสำหรับสั่งงานพัฒนา ไม่ใช่เอกสารการตลาด
     — ตัวเลขเวลาและต้นทุนเป็นค่าประมาณจากการวัดจริงบนคลิปตัวอย่าง 720×1280 / 30 วินาที
   </footer>
 </div>

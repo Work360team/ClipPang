@@ -20,7 +20,7 @@ import {
 } from "../server/store/index.mjs";
 
 function fixture(t) {
-  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clippang-store-"));
+  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clip360-store-"));
   let now = 1_800_000_000_000;
   const options = { rootDir, now: () => now++ };
   const store = createStore(options);
@@ -67,9 +67,9 @@ test("project.json is canonical and the SQLite index can be rebuilt", (t) => {
   assert.equal(store.listProjects()[0].product.note, "disk wins");
 
   store.close();
-  rmSync(path.join(rootDir, "data", "clippang.db"), { force: true });
-  rmSync(path.join(rootDir, "data", "clippang.db-wal"), { force: true });
-  rmSync(path.join(rootDir, "data", "clippang.db-shm"), { force: true });
+  rmSync(path.join(rootDir, "data", "clip360.db"), { force: true });
+  rmSync(path.join(rootDir, "data", "clip360.db-wal"), { force: true });
+  rmSync(path.join(rootDir, "data", "clip360.db-shm"), { force: true });
   const rebuilt = new SqliteStore(options).init();
   assert.equal(rebuilt.listProjects()[0].title, "ชื่อที่แก้ในไฟล์");
   assert.equal(rebuilt.getProject(project.id).selectedScript, "script-3");
@@ -203,7 +203,7 @@ test("settings and voice cache use parameterized persistent records", (t) => {
 });
 
 test("init imports project folders that predate the database", (t) => {
-  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clippang-store-import-"));
+  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clip360-store-import-"));
   t.after(() => rmSync(rootDir, { recursive: true, force: true }));
   const directory = path.join(rootDir, "projects", "manual-project");
   mkdirSync(directory, { recursive: true });
@@ -232,7 +232,7 @@ test("user API keys are encrypted at rest and legacy plaintext rows upgrade them
 
   assert.equal(store.listUserKeys(user.id)[0].key, secret, "อ่านกลับมาต้องได้คีย์เดิม");
 
-  const dbFile = readFileSync(path.join(rootDir, "data", "clippang.db")).toString("latin1");
+  const dbFile = readFileSync(path.join(rootDir, "data", "clip360.db")).toString("latin1");
   assert.ok(!dbFile.includes(secret), "คีย์ต้องไม่โผล่เป็น plaintext ในไฟล์ฐานข้อมูล");
   assert.ok(existsSync(path.join(rootDir, "data", "secret.key")), "กุญแจต้องอยู่คนละไฟล์กับฐานข้อมูล");
 

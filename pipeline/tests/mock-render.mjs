@@ -10,7 +10,7 @@ import { prepareSources } from "../../server/sources.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workspace = path.resolve(here, "..", "..");
-const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "clippang-render-test-"));
+const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-render-test-"));
 const progress = [];
 
 try {
@@ -19,7 +19,7 @@ try {
   const serverSourceDir = path.join(serverPrepareRoot, "src");
   fs.mkdirSync(serverInput, { recursive: true });
   fs.copyFileSync(
-    path.join(workspace, "public", "clippang-sample.mp4"),
+    path.join(workspace, "public", "clip360-sample.mp4"),
     path.join(serverInput, "คลิป ทดสอบ.mp4"),
   );
   const serverPrepared = await prepareSources({ id: "mock-project" }, {}, {
@@ -33,7 +33,7 @@ try {
 
   const result = await runPipeline({
     projectDir,
-    sourceFile: path.join(workspace, "public", "clippang-sample.mp4"),
+    sourceFile: path.join(workspace, "public", "clip360-sample.mp4"),
     brief: {
       name: "หัวชาร์จพกพา",
       features: ["พับได้", "ชาร์จเร็ว"],
@@ -69,7 +69,7 @@ try {
   const reusedProgress = [];
   const reused = await runPipeline({
     projectDir,
-    sourceFile: path.join(workspace, "public", "clippang-sample.mp4"),
+    sourceFile: path.join(workspace, "public", "clip360-sample.mp4"),
     brief: { name: "หัวชาร์จพกพา" },
     voice: { provider: "provider-that-must-not-run", id: "must-not-run" },
     styleId: "reveal-clean",
@@ -98,15 +98,15 @@ try {
 
   const orderedProject = path.join(projectDir, "ordered-edit");
   fs.mkdirSync(orderedProject);
-  const source = path.join(workspace, "public", "clippang-sample.mp4");
+  const source = path.join(workspace, "public", "clip360-sample.mp4");
   const editPlanHash = "a".repeat(64);
   const ordered = await runPipeline({
     projectDir: orderedProject,
     sourceFiles: [source],
     sourceSelections: [
       // Input is deliberately not sorted. The visual track must follow order.
-      { id: "second", assetName: "clippang-sample.mp4", file: source, order: 1, trimStartMs: 4_000, trimEndMs: 5_500 },
-      { id: "first", assetName: "clippang-sample.mp4", file: source, order: 0, trimStartMs: 500, trimEndMs: 3_000 },
+      { id: "second", assetName: "clip360-sample.mp4", file: source, order: 1, trimStartMs: 4_000, trimEndMs: 5_500 },
+      { id: "first", assetName: "clip360-sample.mp4", file: source, order: 0, trimStartMs: 500, trimEndMs: 3_000 },
     ],
     selectedTotalMs: 4_000,
     editPlanHash,
@@ -139,7 +139,7 @@ try {
   await assert.rejects(
     runPipeline({
       projectDir: abortProject,
-      sourceFile: path.join(workspace, "public", "clippang-sample.mp4"),
+      sourceFile: path.join(workspace, "public", "clip360-sample.mp4"),
       brief: { name: "ทดสอบยกเลิก" },
       script: [{ text: "กำลังทดสอบ", role: "hook" }],
       styleId: "karaoke-pop",
@@ -174,7 +174,7 @@ try {
 } finally {
   const resolved = path.resolve(projectDir);
   const tempRoot = `${path.resolve(os.tmpdir())}${path.sep}`;
-  if (resolved.startsWith(tempRoot) && path.basename(resolved).startsWith("clippang-render-test-")) {
+  if (resolved.startsWith(tempRoot) && path.basename(resolved).startsWith("clip360-render-test-")) {
     fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
 }

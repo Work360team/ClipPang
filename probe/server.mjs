@@ -1,4 +1,4 @@
-// ClipPang probe — แอปจิ๋วสำหรับ deploy ขึ้น Plesk shared เพื่อตอบคำถามสองข้อของสัปดาห์ที่ 2
+// Clip360 probe — แอปจิ๋วสำหรับ deploy ขึ้น Plesk shared เพื่อตอบคำถามสองข้อของสัปดาห์ที่ 2
 //
 //   1. SSE ผ่าน Passenger ได้จริงไหม หรือโดน buffer จนไร้ประโยชน์
 //   2. Plesk ต่อ Redis บน VPS worker ได้ไหม (auth + latency)
@@ -66,7 +66,7 @@ function redisProbe(url, timeoutMs = 5000) {
     const t0 = Date.now();
     const cmds = [];
     if (cfg.password) cmds.push(["AUTH", cfg.password]);
-    cmds.push(["PING"], ["SET", "clippang:probe", String(Date.now())], ["GET", "clippang:probe"], ["INFO", "server"]);
+    cmds.push(["PING"], ["SET", "clip360:probe", String(Date.now())], ["GET", "clip360:probe"], ["INFO", "server"]);
 
     const sock = net.createConnection({ host: cfg.host, port: cfg.port });
     let buf = "";
@@ -188,5 +188,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  process.stdout.write(`ClipPang probe listening on :${PORT}\n`);
+  process.stdout.write(`Clip360 probe listening on :${PORT}\n`);
 });

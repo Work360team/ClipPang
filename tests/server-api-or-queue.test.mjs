@@ -23,7 +23,7 @@ import {
 import { createStore } from "../server/store/index.mjs";
 
 function fixture(t) {
-  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clippang-server-"));
+  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clip360-server-"));
   const store = createStore({ rootDir });
   const closeables = [];
   t.after(async () => {
@@ -47,7 +47,7 @@ function fixture(t) {
 }
 
 test("web worker loader switches to a rebuilt server bundle without restarting", async (t) => {
-  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clippang-worker-reload-"));
+  const rootDir = mkdtempSync(path.join(os.tmpdir(), "clip360-worker-reload-"));
   const sourceDir = path.join(rootDir, "source");
   fs.mkdirSync(sourceDir);
   const entry = path.join(sourceDir, "worker.mjs");
@@ -177,7 +177,7 @@ test("runtime recovers interrupted renders and graceful shutdown leaves work que
 
   await runtime.close();
 
-  const secondStoreRoot = mkdtempSync(path.join(os.tmpdir(), "clippang-shutdown-"));
+  const secondStoreRoot = mkdtempSync(path.join(os.tmpdir(), "clip360-shutdown-"));
   const secondStore = createStore({ rootDir: secondStoreRoot });
   t.after(() => {
     secondStore.close();
@@ -498,7 +498,7 @@ test("upload probes duration, preserves Unicode names, and generates collision-s
 });
 
 test("prepareSources probes unique assets once and preserves repeated split clips", async (t) => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "clippang-sources-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "clip360-sources-"));
   const inputDir = path.join(root, "input");
   const projectSourceDir = path.join(root, "project", "src");
   fs.mkdirSync(inputDir, { recursive: true });

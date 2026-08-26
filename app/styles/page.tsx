@@ -178,9 +178,9 @@ export default function StylesPage() {
                     muted
                     playsInline
                     preload={index === 0 ? "auto" : "metadata"}
-                    poster="/clippang-style-preview-poster.jpg"
+                    poster="/clip360-style-preview-poster.jpg"
                   >
-                    <source src="/clippang-style-preview.mp4" type="video/mp4" />
+                    <source src="/clip360-style-preview.mp4" type="video/mp4" />
                   </video>
                   <div className="style-video-shade" />
                   <StyleCaptionPreview params={style.params} index={index} />

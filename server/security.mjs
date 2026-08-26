@@ -47,7 +47,7 @@ function assertNoSymlinkEscape(root, candidate, allowRoot) {
   const realCandidate = path.resolve(realAncestor, remaining);
 
   if (!isInside(realRoot, realCandidate, { allowRoot })) {
-    throw new SecurityError("พาธนี้อยู่นอกโฟลเดอร์ที่ ClipPang อนุญาต", {
+    throw new SecurityError("พาธนี้อยู่นอกโฟลเดอร์ที่ Clip360 อนุญาต", {
       code: "PATH_OUTSIDE_ROOT",
       statusCode: 403,
     });
@@ -82,7 +82,7 @@ export function resolveUnderRoot(root, requestedPath = ".", options = {}) {
     : path.resolve(resolvedRoot, portablePath);
 
   if (!isInside(resolvedRoot, resolved, { allowRoot })) {
-    throw new SecurityError("พาธนี้อยู่นอกโฟลเดอร์ที่ ClipPang อนุญาต", {
+    throw new SecurityError("พาธนี้อยู่นอกโฟลเดอร์ที่ Clip360 อนุญาต", {
       code: "PATH_OUTSIDE_ROOT",
       statusCode: 403,
     });

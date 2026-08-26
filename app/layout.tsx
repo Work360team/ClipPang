@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
     requestHeaders.get("x-forwarded-proto") ??
     (host.includes("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
-  const title = "ClipPang — เปลี่ยนคลิปสินค้าให้พร้อมขาย";
+  const title = "Clip360 — เปลี่ยนคลิปสินค้าให้พร้อมขาย";
   const description =
     "สร้างเสียงพากย์ไทย สคริปต์ขาย และซับคาราโอเกะให้คลิปสินค้าในไม่กี่นาที พร้อมพรีวิวก่อนเรนเดอร์จริง";
 
@@ -25,30 +25,30 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(origin),
     title: {
       default: title,
-      template: "%s · ClipPang",
+      template: "%s · Clip360",
     },
     description,
-    applicationName: "ClipPang",
-    keywords: ["ClipPang", "ซับไตเติล", "เสียงพากย์ AI", "คลิปสินค้า", "ปักตะกร้า"],
-    authors: [{ name: "ClipPang" }],
-    creator: "ClipPang",
+    applicationName: "Clip360",
+    keywords: ["Clip360", "ซับไตเติล", "เสียงพากย์ AI", "คลิปสินค้า", "ปักตะกร้า"],
+    authors: [{ name: "Clip360" }],
+    creator: "Clip360",
     robots: { index: true, follow: true },
     // โลโก้จริงของโปรเจกต์ ใช้ทั้งแท็บเบราว์เซอร์ หน้าจอโฮมของมือถือ และ PWA
     icons: {
       icon: [
         { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
-        { url: "/clippang-logo-32.png", type: "image/png", sizes: "32x32" },
-        { url: "/clippang-logo-192.png", type: "image/png", sizes: "192x192" },
-        { url: "/clippang-logo-512.png", type: "image/png", sizes: "512x512" },
+        { url: "/clip360-logo-32.png", type: "image/png", sizes: "32x32" },
+        { url: "/clip360-logo-192.png", type: "image/png", sizes: "192x192" },
+        { url: "/clip360-logo-512.png", type: "image/png", sizes: "512x512" },
       ],
-      apple: [{ url: "/clippang-logo-180.png", sizes: "180x180", type: "image/png" }],
+      apple: [{ url: "/clip360-logo-180.png", sizes: "180x180", type: "image/png" }],
       shortcut: ["/favicon.ico"],
     },
     openGraph: {
       type: "website",
       locale: "th_TH",
       url: origin,
-      siteName: "ClipPang",
+      siteName: "Clip360",
       title,
       description,
       images: [
@@ -56,7 +56,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: `${origin}/og.png`,
           width: 1732,
           height: 909,
-          alt: "ClipPang — คลิปพร้อมขายในไม่กี่นาที",
+          alt: "Clip360 — คลิปพร้อมขายในไม่กี่นาที",
         },
       ],
     },

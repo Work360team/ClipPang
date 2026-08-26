@@ -77,7 +77,7 @@ export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
       <div className="preview-panel-head">
         <div>
           <span className="live-dot idea-dot"><Sparkles size={13} /> แคปชั่นสำหรับโพสต์</span>
-          <p>{data ? "กดคัดลอกแล้ววางตอนอัปโหลดได้เลย" : loading || checking ? "กำลังร่างให้อัตโนมัติ" : "ให้ ClipPang ร่างแคปชั่นหลายแนวให้เลือก"}</p>
+          <p>{data ? "กดคัดลอกแล้ววางตอนอัปโหลดได้เลย" : loading || checking ? "กำลังร่างให้อัตโนมัติ" : "ให้ Clip360 ร่างแคปชั่นหลายแนวให้เลือก"}</p>
         </div>
         {data && (
           <button type="button" className="text-button" onClick={() => void generate()} disabled={loading}>

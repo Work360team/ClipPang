@@ -5,7 +5,7 @@ cd /d "%~dp0"
 
 echo.
 echo ========================================
-echo   ClipPang Local
+echo   Clip360 Local
 echo ========================================
 echo.
 
@@ -43,9 +43,9 @@ call npm.cmd run build
 if errorlevel 1 goto build_failed
 
 :after_build
-if "%CLIPPANG_LAUNCHER_CHECK_ONLY%"=="1" goto check_ok
-echo [3/3] กำลังเปิด ClipPang ที่ http://127.0.0.1:4321
-echo กด Ctrl+C เมื่อต้องการปิด ClipPang
+if "%CLIP360_LAUNCHER_CHECK_ONLY%"=="1" goto check_ok
+echo [3/3] กำลังเปิด Clip360 ที่ http://127.0.0.1:4321
+echo กด Ctrl+C เมื่อต้องการปิด Clip360
 echo.
 set "RESTARTS=0"
 
@@ -59,14 +59,14 @@ rem เครื่องนี้เปิดให้คนอื่นใช�
 if %RESTARTS% GEQ 20 goto too_many_restarts
 set /a RESTARTS=%RESTARTS%+1
 echo.
-echo ClipPang หยุดทำงานด้วยรหัส %EXIT_CODE% — เปิดใหม่ครั้งที่ %RESTARTS% ใน 3 วินาที
+echo Clip360 หยุดทำงานด้วยรหัส %EXIT_CODE% — เปิดใหม่ครั้งที่ %RESTARTS% ใน 3 วินาที
 echo (กด Ctrl+C ตอนนี้ถ้าไม่ต้องการให้เปิดใหม่)
 timeout /t 3 /nobreak >nul
 goto run_server
 
 :too_many_restarts
 echo.
-echo ClipPang ล้มซ้ำ %RESTARTS% ครั้งติดกัน หยุดเปิดใหม่แล้ว
+echo Clip360 ล้มซ้ำ %RESTARTS% ครั้งติดกัน หยุดเปิดใหม่แล้ว
 echo กรุณาดูข้อความข้างบนเพื่อหาสาเหตุ
 pause
 exit /b %EXIT_CODE%

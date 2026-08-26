@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ตั้งชื่อผู้ใช้และรหัสผ่านสำหรับเข้าใช้ ClipPang จากเครื่องอื่น
+ * ตั้งชื่อผู้ใช้และรหัสผ่านสำหรับเข้าใช้ Clip360 จากเครื่องอื่น
  *
  * เขียนลง .env เป็น scrypt hash ไม่ได้เก็บรหัสผ่านตรง ๆ ถ้าไฟล์ .env หลุดออกไป
  * คนที่ได้ไปก็ยังเอารหัสกลับคืนไม่ได้
@@ -34,11 +34,11 @@ function upsert(lines, key, value) {
 
 const existing = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, "utf8") : "";
 const lines = existing.split(/\r?\n/);
-upsert(lines, "CLIPPANG_USER", username);
-upsert(lines, "CLIPPANG_PASSWORD_HASH", hashPassword(password));
+upsert(lines, "CLIP360_USER", username);
+upsert(lines, "CLIP360_PASSWORD_HASH", hashPassword(password));
 
 const output = lines.filter((line, index) => line.trim() || index < lines.length - 1).join("\n");
 fs.writeFileSync(ENV_FILE, output.endsWith("\n") ? output : `${output}\n`, { mode: 0o600 });
 
 console.log(`ตั้งบัญชี "${username}" เรียบร้อย บันทึกเป็น scrypt hash ใน .env แล้ว`);
-console.log("อย่าลืมตั้ง CLIPPANG_ALLOWED_HOSTS ให้เป็นโดเมนที่จะเข้าใช้ แล้วเปิดโปรแกรมใหม่");
+console.log("อย่าลืมตั้ง CLIP360_ALLOWED_HOSTS ให้เป็นโดเมนที่จะเข้าใช้ แล้วเปิดโปรแกรมใหม่");

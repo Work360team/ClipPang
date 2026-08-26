@@ -1,6 +1,6 @@
-# ClipPang Local
+# Clip360 Local
 
-ClipPang เปลี่ยนคลิปสินค้าดิบหลายไฟล์เป็นวิดีโอแนวตั้งพร้อมโพสต์: เรียงและตัดต่อคลิปบน Timeline ช่วยเขียนสคริปต์ขาย พากย์เสียงไทย ใส่ซับ Kanit ตามคำพูด และส่งออก MP4/SRT/ASS/ภาพปกจากเครื่องของคุณเอง
+Clip360 เปลี่ยนคลิปสินค้าดิบหลายไฟล์เป็นวิดีโอแนวตั้งพร้อมโพสต์: เรียงและตัดต่อคลิปบน Timeline ช่วยเขียนสคริปต์ขาย พากย์เสียงไทย ใส่ซับ Kanit ตามคำพูด และส่งออก MP4/SRT/ASS/ภาพปกจากเครื่องของคุณเอง
 
 เวอร์ชัน 0.3.0 ทำงานจริงแบบ local-first แล้ว มี Local API, SQLite, render queue, FFmpeg, Gemini TTS, สคริปต์ Gemini/Claude, ซับ libass และซับพรีเมียม HyperFrames ไม่ใช่เพียงหน้าจอจำลอง
 
@@ -16,9 +16,9 @@ ClipPang เปลี่ยนคลิปสินค้าดิบหลา�
 
 ## เปิดใช้งานเร็วที่สุด
 
-ต้องมี [Node.js](https://nodejs.org/) 22.13 ขึ้นไปอย่างเดียวก่อนเริ่ม ส่วน FFmpeg ติดตั้งจากหน้า Setup ของ ClipPang ได้
+ต้องมี [Node.js](https://nodejs.org/) 22.13 ขึ้นไปอย่างเดียวก่อนเริ่ม ส่วน FFmpeg ติดตั้งจากหน้า Setup ของ Clip360 ได้
 
-โหลดตัวโปรแกรมจาก [Work360team/ClipPang](https://github.com/Work360team/ClipPang) — กด **Code → Download ZIP** แล้วแตกไฟล์ หรือ `git clone https://github.com/Work360team/ClipPang.git` ถ้าอยากอัปเดตด้วย `git pull` ทีหลัง
+โหลดตัวโปรแกรมจาก [Work360team/Clip360](https://github.com/Work360team/Clip360) — กด **Code → Download ZIP** แล้วแตกไฟล์ หรือ `git clone https://github.com/Work360team/Clip360.git` ถ้าอยากอัปเดตด้วย `git pull` ทีหลัง
 
 ### Windows
 
@@ -52,7 +52,7 @@ Launcher จะตรวจ Node, ติดตั้ง dependency เมื่�
 powershell -ExecutionPolicy Bypass -File scriptsutostart-windows.ps1
 ```
 
-สร้าง Scheduled Task ในบัญชีผู้ใช้ปัจจุบัน (ไม่ต้องใช้สิทธิ์ผู้ดูแลระบบ) เปิด ClipPang ทุกครั้งที่ล็อกอิน
+สร้าง Scheduled Task ในบัญชีผู้ใช้ปัจจุบัน (ไม่ต้องใช้สิทธิ์ผู้ดูแลระบบ) เปิด Clip360 ทุกครั้งที่ล็อกอิน
 ยกเลิกด้วย `-Remove` · ตัวเปิดโปรแกรมเองจะสตาร์ตเซิร์ฟเวอร์ใหม่ให้อัตโนมัติถ้าโปรเซสล้ม
 (สูงสุด 20 ครั้งติดกันแล้วหยุด เพื่อไม่ให้วนไม่รู้จบเวลามีปัญหาที่แก้ไม่ได้เอง)
 
@@ -67,7 +67,7 @@ powershell -ExecutionPolicy Bypass -File scriptsutostart-windows.ps1
 
 ข้อมูลอยู่ในเครื่องนี้:
 
-- `data/clippang.db` — โปรเจกต์และสถานะคิว SQLite
+- `data/clip360.db` — โปรเจกต์และสถานะคิว SQLite
 - `input/` — คลิปที่นำเข้า
 - `projects/<id>/out/` — MP4, ภาพปก, เสียง, SRT, ASS, script, timeline และ report
 - `.env` — API key ที่บันทึกจากหน้า Setup (ถูก ignore จาก Git)
@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File scriptsutostart-windows.ps1
 
 - Free tier: input/output ของ Gemini 2.5 Flash Preview TTS ไม่มีค่าใช้จ่าย แต่มี rate limit
 - Paid tier: text input $0.50 ต่อ 1M tokens และ audio output $10 ต่อ 1M tokens
-- report ของ ClipPang ประมาณ audio ที่ 32 tokens/วินาที: เสียง 30 วินาทีประมาณ `$0.0096` บวก text input เล็กน้อย
+- report ของ Clip360 ประมาณ audio ที่ 32 tokens/วินาที: เสียง 30 วินาทีประมาณ `$0.0096` บวก text input เล็กน้อย
 
 ยอดจริงขึ้นกับ audio tokens ใน `usageMetadata`, รุ่นโมเดล, tier และราคาปัจจุบัน ควรดูหน้า pricing/Google AI billing ก่อนใช้งานปริมาณมาก แคช TTS ผูกกับ provider + voice + speed + tone + text จึงไม่คิดซ้ำเมื่อประโยคเดิมถูกใช้ซ้ำ
 

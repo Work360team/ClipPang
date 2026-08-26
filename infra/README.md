@@ -105,7 +105,7 @@ bash verify.sh                                      # ~3 นาที · เร�
 - [ ] ฟอนต์ไทยเรนเดอร์ถูกต้อง (ไม่ใช่ DejaVu Sans)
 - [ ] probe บน Plesk ต่อ Redis บน VPS ได้ พร้อม auth
 - [ ] รู้คำตอบแล้วว่าจะใช้ SSE หรือ polling — และบันทึกลง blueprint §08
-- [ ] `systemctl status clippang-worker` แสดง unit ที่พร้อมรอโค้ด
+- [ ] `systemctl status clip360-worker` แสดง unit ที่พร้อมรอโค้ด
 
 ครบแล้วค่อยเข้าสัปดาห์ที่ 3 (API + Mongo + คิว)
 
@@ -116,3 +116,32 @@ bash verify.sh                                      # ~3 นาที · เร�
 `provision.sh` เปิดพอร์ต Redis ออกอินเทอร์เน็ตโดยมีสองชั้นกัน: **รหัสผ่าน 40 ตัวอักษร** และ
 **ufw ที่อนุญาตเฉพาะ IP ของ Plesk** — ถ้า IP ของ Plesk เป็น dynamic หรือคุณย้าย hosting
 ให้เปลี่ยนไปใช้ WireGuard ระหว่างสองเครื่องแทนการเปิดพอร์ตตรง อย่าแก้ด้วยการเปิด ufw ให้ทุก IP
+
+---
+
+## ย้ายเครื่องที่ provision ไว้ตั้งแต่ยังชื่อ ClipPang
+
+`provision.sh` เปลี่ยนไปใช้ชื่อ `clip360` หมดแล้ว (ผู้ใช้ระบบ, `/opt/clip360`,
+`clip360-worker.service`, `/usr/local/share/fonts/clip360`, `/etc/cron.daily/clip360-cleanup`)
+เครื่องที่ติดตั้งไว้ก่อนหน้ายังเป็นชื่อเดิมอยู่ทั้งหมด
+
+**อย่ารัน `provision.sh` ทับเฉย ๆ** เพราะมันจะสร้างผู้ใช้และ unit ชุดใหม่ขึ้นมาซ้อนของเดิม
+กลายเป็น worker สองตัวแย่งคิวกัน ให้ย้ายด้วยมือแทน:
+
+```bash
+systemctl stop clippang-worker
+systemctl disable clippang-worker
+rm /etc/systemd/system/clippang-worker.service
+mv /opt/clippang /opt/clip360
+usermod -l clip360 -d /home/clip360 -m clippang
+groupmod -n clip360 clippang
+chown -R clip360:clip360 /opt/clip360
+mv /usr/local/share/fonts/clippang /usr/local/share/fonts/clip360 && fc-cache -f
+rm -f /etc/cron.daily/clippang-cleanup
+```
+
+แล้วค่อยรัน `provision.sh` ปกติเพื่อสร้าง unit กับ cron ชุดใหม่ จากนั้น
+`systemctl enable --now clip360-worker`
+
+> ชื่อโดเมนไม่ได้เปลี่ยน — ยังเป็น `clippang.work360.in.th` เหมือนเดิม
+> ถ้าจะย้ายโดเมนด้วยต้องตั้ง DNS กับ Plesk ให้เสร็จก่อน แล้วค่อยแก้ `CLIP360_ALLOWED_HOSTS`

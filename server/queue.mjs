@@ -140,7 +140,7 @@ export class RenderQueue {
   }
 
   enqueue(inputRender, { recovered = false } = {}) {
-    if (this.closed) throw new Error("คิวงานปิดอยู่ กรุณาเปิด ClipPang ใหม่อีกครั้ง");
+    if (this.closed) throw new Error("คิวงานปิดอยู่ กรุณาเปิด Clip360 ใหม่อีกครั้ง");
     if (!inputRender?.id) throw new TypeError("Render must have an id");
     if (
       this.waiting.some((job) => job.render.id === inputRender.id)
@@ -239,12 +239,12 @@ export class RenderQueue {
         state: "queued",
         progress: 0,
         stage: null,
-        message: "หยุดชั่วคราว รอทำต่อเมื่อเปิด ClipPang",
+        message: "หยุดชั่วคราว รอทำต่อเมื่อเปิด Clip360",
         queuePosition: null,
         startedAt: null,
         finishedAt: null,
       });
-      const reason = Object.assign(new Error("ClipPang กำลังปิดโปรแกรม"), {
+      const reason = Object.assign(new Error("Clip360 กำลังปิดโปรแกรม"), {
         name: "AbortError",
         code: "QUEUE_SHUTDOWN",
       });

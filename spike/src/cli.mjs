@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// clippang-spike — สัปดาห์ที่ 1: mp4 หลายไฟล์ + ข้อมูลสินค้า → คลิปพร้อมโพสต์
+// clip360-spike — สัปดาห์ที่ 1: mp4 หลายไฟล์ + ข้อมูลสินค้า → คลิปพร้อมโพสต์
 //
 // เดินครบ 10 stage เดียวกับที่ blueprint §04 วางไว้ ไม่มีเว็บ ไม่มี DB
 // โครงไฟล์ใน src/ แมปตรงกับ packages/* ในอนาคต
@@ -58,7 +58,7 @@ const { values: a } = parseArgs({
 });
 
 const HELP = `
-${C.bold("clippang-spike")} — ใส่ซับ + พากย์เสียง AI ให้คลิปสินค้า
+${C.bold("clip360-spike")} — ใส่ซับ + พากย์เสียง AI ให้คลิปสินค้า
 
 ${C.bold("ใช้งาน")}
   node src/cli.mjs --in <โฟลเดอร์คลิป> --brief brief.json [ตัวเลือก]
@@ -190,7 +190,7 @@ async function main() {
   const cacheDir = ensureDir(path.join(ROOT, ".cache", "tts"));
 
   process.stdout.write(
-    `\n${C.bold("ClipPang")} ${C.dim("spike")}  ` +
+    `\n${C.bold("Clip360")} ${C.dim("spike")}  ` +
     `${C.dim("→")} ${brief?.name || "(จากสคริปต์)"}  ` +
     `${C.dim(`${targetSec}s · ${style.name} · ซับ${anchor} · ${sources.length} คลิป`)}\n\n`,
   );

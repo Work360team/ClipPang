@@ -89,7 +89,7 @@ export default function SettingsPage() {
       setProjectFolder(typeof settings.projectFolder === "string" ? settings.projectFolder : status.paths?.projects ?? "");
       setAppVersion(typeof settings.version === "string" ? settings.version : "");
     } catch (error) {
-      setLoadError(errorMessage(error, "อ่านการตั้งค่าจาก ClipPang Local ไม่สำเร็จ"));
+      setLoadError(errorMessage(error, "อ่านการตั้งค่าจาก Clip360 Local ไม่สำเร็จ"));
     } finally {
       setLoading(false);
     }
@@ -130,7 +130,7 @@ export default function SettingsPage() {
       <div className="settings-page">
         <header className="settings-heading">
           <div>
-            <div className="settings-kicker"><Sparkles size={15} /> ตั้งค่า ClipPang</div>
+            <div className="settings-kicker"><Sparkles size={15} /> ตั้งค่า Clip360</div>
             <h1>จัดการการเชื่อมต่อและไฟล์</h1>
             <p>การตั้งค่าทั้งหมดบันทึกไว้บนเครื่องนี้เท่านั้น เปลี่ยนได้ทุกเมื่อ</p>
           </div>
@@ -145,7 +145,7 @@ export default function SettingsPage() {
             <WifiOff size={20} aria-hidden="true" />
             <div>
               <strong>หน้านี้กำลังแสดงในโหมดเว็บตัวอย่าง</strong>
-              <span>เปิด ClipPang ด้วย “เริ่มโปรแกรม.bat” เพื่อบันทึกคีย์ ดูพาธจริง และล้างแคชบนคอมเครื่องนี้</span>
+              <span>เปิด Clip360 ด้วย “เริ่มโปรแกรม.bat” เพื่อบันทึกคีย์ ดูพาธจริง และล้างแคชบนคอมเครื่องนี้</span>
             </div>
             <button type="button" onClick={() => void loadLocalSettings()}><RefreshCw size={14} /> ตรวจอีกครั้ง</button>
           </div>
@@ -169,7 +169,7 @@ export default function SettingsPage() {
                 <div className="settings-section-icon settings-icon-folder"><FolderOpen size={20} /></div>
                 <div>
                   <h2 id="folder-title">โฟลเดอร์ที่ใช้</h2>
-                  <p>ตำแหน่งจริงที่ ClipPang Local ใช้รับคลิปและเก็บโปรเจกต์</p>
+                  <p>ตำแหน่งจริงที่ Clip360 Local ใช้รับคลิปและเก็บโปรเจกต์</p>
                 </div>
               </div>
 
@@ -198,7 +198,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="settings-folder-actions">
-                <span><CircleHelp size={13} /> ตำแหน่งนี้กำหนดโดย ClipPang Local เพื่อป้องกันการเปิดพาธนอกพื้นที่งาน</span>
+                <span><CircleHelp size={13} /> ตำแหน่งนี้กำหนดโดย Clip360 Local เพื่อป้องกันการเปิดพาธนอกพื้นที่งาน</span>
               </div>
             </section>
           </div>
@@ -213,7 +213,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <dl className="settings-status-list">
-                <div><dt>ClipPang</dt><dd>{appVersion ? `v${appVersion}` : engineState === "connected" ? "Local" : "Web Demo"}</dd></div>
+                <div><dt>Clip360</dt><dd>{appVersion ? `v${appVersion}` : engineState === "connected" ? "Local" : "Web Demo"}</dd></div>
                 <div><dt>FFmpeg</dt><dd><i className="settings-status-dot" data-ready={ffmpegReady} /> {loading ? "กำลังตรวจ" : ffmpegReady ? ffmpegInfo?.version ?? "พร้อมใช้" : "ยังไม่พร้อม"}</dd></div>
                 <div><dt>Node.js</dt><dd>{nodeInfo?.version ? `v${nodeInfo.version}` : loading ? "กำลังตรวจ" : "—"}</dd></div>
               </dl>

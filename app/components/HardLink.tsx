@@ -5,7 +5,7 @@ type HardLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
 };
 
 /**
- * Native navigation for ClipPang Local.
+ * Native navigation for Clip360 Local.
  *
  * Vinext beta's RSC prefetch/client transition currently throws after pages
  * with long-running local effects. A normal anchor avoids that runtime while

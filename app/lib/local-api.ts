@@ -6,14 +6,14 @@ export interface ApiErrorShape {
   details?: unknown;
 }
 
-export class ClipPangApiError extends Error {
+export class Clip360ApiError extends Error {
   status: number;
   code?: string;
   details?: unknown;
 
   constructor(message: string, status = 500, code?: string, details?: unknown) {
     super(message);
-    this.name = "ClipPangApiError";
+    this.name = "Clip360ApiError";
     this.status = status;
     this.code = code;
     this.details = details;
@@ -26,8 +26,8 @@ async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = typeof data === "object" && data && "error" in data
       ? (data as { error: ApiErrorShape }).error
-      : { message: typeof data === "string" ? data : `ClipPang ตอบกลับ ${response.status}` };
-    throw new ClipPangApiError(error.message, response.status, error.code, error.details);
+      : { message: typeof data === "string" ? data : `Clip360 ตอบกลับ ${response.status}` };
+    throw new Clip360ApiError(error.message, response.status, error.code, error.details);
   }
   return data as T;
 }
@@ -83,11 +83,11 @@ async function uploadAssetFile(file: File, onProgress?: (progress: number) => vo
     xhr.open("PUT", `/api/assets/${encodeURIComponent(file.name)}`);
     xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
     xhr.upload.onprogress = (event) => event.lengthComputable && onProgress(Math.round((event.loaded / event.total) * 100));
-    xhr.onerror = () => reject(new ClipPangApiError("อัปโหลดไม่สำเร็จ ตรวจว่า ClipPang Local ยังเปิดอยู่แล้วลองใหม่"));
+    xhr.onerror = () => reject(new Clip360ApiError("อัปโหลดไม่สำเร็จ ตรวจว่า Clip360 Local ยังเปิดอยู่แล้วลองใหม่"));
     xhr.onload = () => {
       try {
         const body = JSON.parse(xhr.responseText || "{}");
-        if (xhr.status < 200 || xhr.status >= 300) throw new ClipPangApiError(body?.error?.message || "อัปโหลดไม่สำเร็จ", xhr.status, body?.error?.code);
+        if (xhr.status < 200 || xhr.status >= 300) throw new Clip360ApiError(body?.error?.message || "อัปโหลดไม่สำเร็จ", xhr.status, body?.error?.code);
         resolve(body);
       } catch (error) { reject(error); }
     };
