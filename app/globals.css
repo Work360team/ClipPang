@@ -3339,6 +3339,12 @@ img.mini-project-thumb::after { content: none; }
   text-shadow: -2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111, 0 5px 9px rgba(0, 0, 0, 0.4);
 }
 
+/* ตัวครอบที่ทำหน้าที่ส่งต่อตัวแปรสีของสไตล์ให้ซับในพรีวิวสด ไม่ต้องมีกล่องของตัวเอง
+   display:contents ทำให้ไม่เกิดกล่อง แต่ตัวแปร CSS ยังไหลลงลูกตามปกติ
+   ซับข้างในจึงยังวางตำแหน่งเทียบกับกรอบมือถือเหมือนเดิม */
+.live-caption-stage {
+  display: contents;
+}
 .live-caption.position-บน { top: 17%; bottom: auto; }
 .live-caption.position-กลาง { top: 50%; bottom: auto; transform: translateY(-50%); }
 .live-caption.position-ล่าง { bottom: 16%; }

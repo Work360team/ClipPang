@@ -518,6 +518,18 @@ export function ProjectWizard() {
 
   const activeCue = captionCues.find((cue) => previewTimeMs >= cue.startMs && previewTimeMs < cue.endMs) ?? null;
   const previewCaptionText = activeCue?.text ?? (isPlaying ? "" : captionCues[0]?.text ?? currentChunks[0] ?? "");
+  // แบ่งคำเพื่อให้ไฮไลต์ทีละคำได้เหมือนตอนเรนเดอร์จริง ภาษาไทยไม่มีเว้นวรรคระหว่างคำ
+  // ท่อนที่เขียนติดกันจึงกลายเป็นคำเดียว ซึ่งยังแสดงสไตล์และสีได้ถูกต้องอยู่ดี
+  const previewCaptionWords = previewCaptionText.split(/\s+/).filter(Boolean);
+  // คำที่กำลังพูดคำนวณจากตำแหน่ง playhead ในท่อนนั้น ไม่ใช่ตัวจับเวลาอิสระ
+  // ไม่งั้นไฮไลต์จะวิ่งคนละจังหวะกับวิดีโอที่กำลังเล่น
+  const previewActiveWord = activeCue && previewCaptionWords.length
+    ? Math.min(
+      previewCaptionWords.length - 1,
+      Math.floor(((previewTimeMs - activeCue.startMs) / Math.max(1, activeCue.endMs - activeCue.startMs)) * previewCaptionWords.length),
+    )
+    : null;
+  const previewAnchor = captionPosition === "บน" ? "top" : captionPosition === "กลาง" ? "middle" : "bottom";
 
   // ย้าย playhead ไปตำแหน่งที่ต้องการ แล้วปล่อยให้ effect ข้างล่างจัดการไฟล์และ currentTime
   const seekPreviewTo = useCallback(
@@ -2628,7 +2640,19 @@ export function ProjectWizard() {
                   if (!target.durationKnown || Math.abs(target.durationMs - durationMs) > 500) reconcileAssetDuration(target.name, durationMs);
                 }} onEnded={() => { if (!hasProgram) setIsPlaying(false); }} />
                 <button className="video-toggle" type="button" onClick={toggleVideo} aria-label={isPlaying ? "หยุดวิดีโอ" : "เล่นวิดีโอ"}>{isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button>
-                {previewCaptionText && <div className={`live-caption ${selectedStyleData.className} position-${captionPosition}`}>{previewCaptionText}</div>}
+                {/* ใช้พารามิเตอร์จริงของสไตล์ที่เลือกและชุดสีของผู้ใช้ ชุดเดียวกับที่การ์ด
+                    เลือกสไตล์และ pipeline ใช้ ก่อนหน้านี้พรีวิวแมปสไตล์เป็นคลาสตายตัว 4 แบบ
+                    สไตล์ที่เหลือจึงหน้าตาเหมือนกันหมด และสีที่เลือกไม่ถูกนำมาใช้เลย */}
+                {previewCaptionText && (
+                  <span className="live-caption-stage" style={stylePreviewVars(paintStyle(selectedStyleData?.params))}>
+                    <StyleCaptionPreview
+                      params={paintStyle(selectedStyleData?.params)}
+                      words={previewCaptionWords}
+                      activeWord={previewActiveWord}
+                      anchor={previewAnchor}
+                    />
+                  </span>
+                )}
                 <div className="video-safe-zone" aria-hidden="true"><span>safe area</span></div>
               </div>
             </div>

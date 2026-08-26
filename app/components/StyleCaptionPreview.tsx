@@ -60,15 +60,36 @@ const WORD_MS = 620;
  * และไม่มีอันไหนขยับเลย ที่นี่อ่าน pill / glow / gradient / animation.enter ชุดเดียว
  * กับที่ pipeline/hyperframes.mjs ใช้ตอนเรนเดอร์จริง ตัวอย่างกับผลลัพธ์จึงตรงกัน
  */
-export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePreviewParams; index?: number }) {
+export function StyleCaptionPreview({
+  params,
+  index = 0,
+  words,
+  activeWord,
+  anchor: anchorOverride,
+}: {
+  params?: StylePreviewParams;
+  index?: number;
+  /** ข้อความจริงของคลิป — ไม่ส่งมาก็ใช้ประโยคตัวอย่างเหมือนหน้าคลังสไตล์ */
+  words?: string[];
+  /** ให้ผู้เรียกคุมว่าคำไหนกำลังพูด (ซิงก์กับ playhead) แทนตัวจับเวลาในตัว */
+  activeWord?: number | null;
+  /** ตำแหน่งที่ผู้ใช้เลือก ซึ่งอาจต่างจากค่าประจำสไตล์ */
+  anchor?: "top" | "middle" | "bottom";
+}) {
+  const lines = words?.length ? words : PREVIEW_WORDS;
+  const driven = activeWord != null;
   const [active, setActive] = useState(0);
 
   useEffect(() => {
+    // ผู้เรียกคุมจังหวะเองแล้ว ตัวจับเวลาในตัวจะไปแย่งกันจนกะพริบ
+    if (driven) return undefined;
     const timer = window.setInterval(() => {
-      setActive((current) => (current + 1) % (PREVIEW_WORDS.length + 1));
+      setActive((current) => (current + 1) % (lines.length + 1));
     }, WORD_MS);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [driven, lines.length]);
+
+  const step = driven ? Math.max(0, Math.min(lines.length, (activeWord ?? 0) + 1)) : active;
 
   const enter = params?.animation?.enter ?? "blur";
   const pill = params?.pill;
@@ -78,7 +99,7 @@ export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePrevi
   const glitch = params?.glitch;
   const emphasis = params?.emphasis;
   const weightShift = params?.weightShift;
-  const anchor = params?.position?.anchor === "top" ? "top" : params?.position?.anchor === "middle" ? "middle" : "bottom";
+  const anchor = anchorOverride ?? (params?.position?.anchor === "top" ? "top" : params?.position?.anchor === "middle" ? "middle" : "bottom");
   const big = (params?.font?.size ?? 90) >= 110;
 
   const boxOpacity = box ? Math.max(0, Math.min(1, 1 - (box.alpha ?? 0x40) / 255)) : 0;
@@ -131,12 +152,12 @@ export function StyleCaptionPreview({ params, index = 0 }: { params?: StylePrevi
       } as CSSProperties : undefined}
     >
       {/* key ผูกกับรอบการเล่น เพื่อให้อนิเมชันเข้าเล่นใหม่ทุกครั้งที่วนกลับมา */}
-      <span className="style-caption-line" style={lineStyle} key={`${index}-${active === 0 ? "in" : "hold"}`}>
-        {PREVIEW_WORDS.map((word, wordIndex) => {
-          const state = active === 0 ? "todo" : wordIndex < active - 1 ? "done" : wordIndex === active - 1 ? "now" : "todo";
-          const isEmphasis = wordIndex === PREVIEW_WORDS.length - 1;
+      <span className="style-caption-line" style={lineStyle} key={`${index}-${step === 0 ? "in" : "hold"}`}>
+        {lines.map((word, wordIndex) => {
+          const state = step === 0 ? "todo" : wordIndex < step - 1 ? "done" : wordIndex === step - 1 ? "now" : "todo";
+          const isEmphasis = wordIndex === lines.length - 1;
           return (
-            <span className="style-caption-word" key={word} style={wordStyle(state, isEmphasis)}>{word}</span>
+            <span className="style-caption-word" key={`${wordIndex}-${word}`} style={wordStyle(state, isEmphasis)}>{word}</span>
           );
         })}
       </span>
