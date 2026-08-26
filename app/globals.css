@@ -4026,6 +4026,14 @@ img.mini-project-thumb::after { content: none; }
   font-size: 12px;
 }
 
+/* คำอธิบายใต้ตัวเลือก — บอกว่าค่าที่เลือกอยู่ให้ผลยังไง ผู้ใช้จะได้ไม่ต้องลองทีละอัน */
+.control-note {
+  margin-top: 8px;
+  color: #7d857c;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .range {
   width: 100%;
   height: 5px;

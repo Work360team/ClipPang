@@ -25,6 +25,7 @@ import { getSetupStatus } from "./setup.mjs";
 import { discoverWhisper } from "./whisper-setup.mjs";
 import { configureQuotaStore } from "../pipeline/tts-quota.mjs";
 import { runPipeline } from "../pipeline/index.mjs";
+import { timingForPace } from "../pipeline/core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -252,6 +253,8 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
         speed: Number(config.speed ?? config.voice?.speed ?? 1),
         tone: config.tone ?? config.voice?.tone ?? "เป็นกันเอง",
       },
+      // จังหวะเว้นวรรคระหว่างท่อนที่ผู้ใช้เลือกไว้ในขั้นเลือกเสียง
+      timing: timingForPace(config.pace ?? config.voice?.pace),
       styleId: config.styleId ?? render.styleId ?? render.style_id ?? "pop-yellow",
       position: config.position ?? config.captionPosition ?? "bottom",
       captionColor: config.captionColor ?? null,

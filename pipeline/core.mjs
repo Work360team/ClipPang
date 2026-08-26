@@ -112,6 +112,31 @@ export const DEFAULT_TIMING = {
 };
 
 /**
+ * จังหวะการเว้นวรรคระหว่างท่อนพูด
+ *
+ * คลิปขายของสั้น ๆ ต้องการความไว ท่อนติดกันหมดฟังแล้วเร่งเร้ากว่า ส่วนเนื้อหาที่
+ * ต้องให้คนย่อยตาม เว้นจังหวะแล้วฟังสบายกว่า เป็นเรื่องรสนิยมและประเภทคลิป
+ * ไม่มีค่าไหนถูกที่สุด จึงให้ผู้ใช้เลือกเอง
+ *
+ * ปรับเฉพาะช่องว่างระหว่างท่อน ไม่แตะเงียบนำหน้าและหางท้าย เพราะสองอันนั้น
+ * แก้ปัญหาคนละเรื่อง (เสียงชนเฟรมแรก และ CTA ถูกตัดจบ)
+ */
+export const NARRATION_PACES = [
+  { id: "tight", label: "กระชับ", padMs: 0, note: "ท่อนต่อกันไม่เว้นจังหวะ เร่งเร้า เหมาะกับคลิปสั้น" },
+  { id: "normal", label: "ปกติ", padMs: 90, note: "เว้นสั้น ๆ พอให้ฟังลื่น เป็นธรรมชาติที่สุด" },
+  { id: "relaxed", label: "เว้นจังหวะ", padMs: 280, note: "หายใจระหว่างท่อนชัด เหมาะกับเนื้อหาที่ต้องย่อยตาม" },
+];
+
+export const DEFAULT_PACE = "normal";
+
+/** แปลงจังหวะที่ผู้ใช้เลือกเป็นค่า timing — ค่าที่ไม่รู้จักถือว่าใช้ค่าปกติ */
+export function timingForPace(pace, timing = DEFAULT_TIMING) {
+  const chosen = NARRATION_PACES.find((item) => item.id === pace)
+    ?? NARRATION_PACES.find((item) => item.id === DEFAULT_PACE);
+  return { ...DEFAULT_TIMING, ...timing, padMs: chosen.padMs };
+}
+
+/**
  * ปักเวลาให้ทุกท่อนจาก "ความยาวไฟล์เสียงจริง" — prefix sum ล้วน ๆ ไม่มีการเดา
  * takes: [{ i, text, role, audioFile, durationMs }]
  */

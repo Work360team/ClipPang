@@ -47,6 +47,9 @@ import { refreshProjects } from "../lib/project-store";
 import { CaptionIdeas } from "./CaptionIdeas";
 import { StyleCaptionPreview, stylePreviewVars, type StylePreviewParams } from "./StyleCaptionPreview";
 import { HardLink as Link } from "./HardLink";
+// core.mjs ไม่มี import และไม่แตะ I/O จึงใช้ในเบราว์เซอร์ได้ตรง ๆ
+// ดึงมาจากที่เดียวกับที่ pipeline ใช้ จะได้ไม่มีสองชุดที่เพี้ยนจากกันได้
+import { DEFAULT_PACE, NARRATION_PACES } from "../../pipeline/core.mjs";
 import {
   detectLocalEngine,
   localApi,
@@ -336,6 +339,7 @@ export function ProjectWizard() {
   const [voicePlaying, setVoicePlaying] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [tone, setTone] = useState("เป็นกันเอง");
+  const [pace, setPace] = useState<string>(DEFAULT_PACE);
   const [scriptVariants, setScriptVariants] = useState<LocalScript[]>(initialScripts);
   const [selectedScript, setSelectedScript] = useState("");
   const [scriptTexts, setScriptTexts] = useState<Record<string, string[]>>({});
@@ -392,6 +396,7 @@ export function ProjectWizard() {
 
   const selectedScriptData: LocalScript | undefined =
     scriptVariants.find((item) => item.id === selectedScript) ?? scriptVariants.at(0);
+  const activePace = NARRATION_PACES.find((item) => item.id === pace) ?? NARRATION_PACES[1];
   const selectedStyleData = captionStyles.find((item) => item.id === selectedStyle) ?? captionStyles[0];
   // กรองตามเลนที่ใช้เรนเดอร์จริง เหมือนหน้าคลังสไตล์ — สองเลนต่างกันทั้งลูกเล่น
   // และเวลาที่ใช้ จึงเป็นสิ่งแรกที่คนเลือกสไตล์อยากแยก
@@ -778,6 +783,8 @@ export function ProjectWizard() {
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
+    // โปรเจกต์เก่าไม่มีค่านี้ ปล่อยเป็นค่าปกติซึ่งเท่ากับพฤติกรรมเดิมทุกอย่าง
+    if (typeof config.pace === "string" && NARRATION_PACES.some((item) => item.id === config.pace)) setPace(config.pace);
     if (typeof config.captionColor === "string") setCaptionColor(config.captionColor);
     // งานที่กำลังรันต้องกลับมาเห็นเสมอ แม้จะถูกมาร์กว่า stale เพราะผู้ใช้แก้ timeline
     // ต่อหลังกดสร้าง — ไม่งั้นออกไปหน้าอื่นแล้วกลับมาจะเหมือนงานหายไปเฉย ๆ
@@ -1028,7 +1035,7 @@ export function ProjectWizard() {
       timelineClips: savedTimeline,
       ...(legacyAsset ? { asset: legacyAsset } : {}),
       scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
-      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, styleId: selectedStyle, position: captionPosition, captionColor },
+      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, pace, styleId: selectedStyle, position: captionPosition, captionColor },
       ...extra,
     };
   };
@@ -1872,6 +1879,7 @@ export function ProjectWizard() {
             provider: selectedVoiceData.provider || "gemini",
             speed,
             tone,
+            pace,
             styleId: selectedStyle,
             position,
             captionColor,
@@ -2258,6 +2266,23 @@ export function ProjectWizard() {
                     <div className="control-label"><span>ความเร็ว</span><b>{speed.toFixed(1)}×</b></div>
                     <input className="range" type="range" min="0.8" max="1.2" step="0.1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="ความเร็วเสียง" />
                     <div className="range-labels"><span>ช้าชัดเจน</span><span>ธรรมชาติ</span><span>กระชับ</span></div>
+                  </div>
+                  <div className="control-block">
+                    <div className="control-label"><span>เว้นวรรคระหว่างท่อน</span><b>{activePace.label}</b></div>
+                    <div className="tone-options">
+                      {NARRATION_PACES.map((item) => (
+                        <button
+                          type="button"
+                          className={pace === item.id ? "active" : ""}
+                          onClick={() => setPace(item.id)}
+                          key={item.id}
+                          title={item.note}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="control-note">{activePace.note}</div>
                   </div>
                 </div>
               </div>

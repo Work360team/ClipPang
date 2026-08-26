@@ -13,7 +13,7 @@
     "local": "node server/index.mjs",
     "local:mock": "cross-env CLIP360_MOCK_TTS=1 node server/index.mjs",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "test:local": "node --test tests/store.test.mjs tests/local-setup-security.test.mjs tests/whisper-align.test.mjs tests/narration-fit.test.mjs tests/server-api-or-queue.test.mjs pipeline/tests/unit.test.mjs && node pipeline/tests/mock-render.mjs",
+    "test:local": "node --test tests/store.test.mjs tests/local-setup-security.test.mjs tests/whisper-align.test.mjs tests/narration-fit.test.mjs tests/narration-pace.test.mjs tests/server-api-or-queue.test.mjs pipeline/tests/unit.test.mjs && node pipeline/tests/mock-render.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
