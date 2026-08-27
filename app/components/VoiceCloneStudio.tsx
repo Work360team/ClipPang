@@ -34,6 +34,9 @@ export function VoiceCloneStudio({
   const [gender, setGender] = useState<VoiceGender | "">("");
   const [script, setScript] = useState("");
   const [scriptEdited, setScriptEdited] = useState(false);
+  // ฟอร์มอัดเสียงพับไว้เมื่อมีเสียงอยู่แล้ว คนที่แค่จะเลือกเสียงเดิมจะได้ไม่ต้อง
+  // เลื่อนผ่านฟอร์มทั้งชุดก่อนถึงรายการของตัวเอง
+  const [adding, setAdding] = useState(false);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [busy, setBusy] = useState("");
@@ -251,153 +254,187 @@ export function VoiceCloneStudio({
   const canEditScript = Boolean(gender) && Boolean(tone);
   const canRecord = canEditScript && Boolean(sample.trim());
 
+  const hasVoices = library.speakers.length > 0;
+  const showRecorder = adding || !hasVoices;
+
   return (
     <div className="clone-studio">
-      <div className="clone-recorder">
-        <label className="field">
-          <span>ชื่อเจ้าของเสียง</span>
-          <input
-            value={speaker}
-            list="clip360-speakers"
-            placeholder="เช่น เสียงของฉัน"
-            disabled={recording || locked || Boolean(busy)}
-            onChange={(event) => setSpeaker(event.target.value)}
-          />
-          <datalist id="clip360-speakers">
-            {library.speakers.map((item) => <option value={item.speaker} key={item.speaker} />)}
-          </datalist>
-        </label>
-
-        <div className="field">
-          <span>เพศของเสียง</span>
-          <div className="tone-options">
-            {(VOICE_GENDERS as VoiceGender[]).map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={gender === item ? "active" : ""}
-                disabled={recording || locked || Boolean(busy)}
-                onClick={() => { setGender(item); setScriptEdited(false); }}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-          <small>ใช้บอกคนเขียนสคริปต์ว่าให้ลงท้ายด้วย ครับ หรือ ค่ะ</small>
-        </div>
-
-        <div className="field">
-          <span>อัดไว้เป็นโทนไหน</span>
-          <div className="tone-options">
-            {library.tones.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                className={tone === item.id ? "active" : ""}
-                disabled={recording || locked || Boolean(busy)}
-                onClick={() => { setTone(item.id); setScriptEdited(false); }}
-              >
-                {item.id}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="clone-script">
-          <small>
-            {canEditScript
-              ? `อ่านประโยคนี้ด้วยโทน “${tone}” ให้เป็นธรรมชาติที่สุด — แก้เป็นประโยคของคุณเองได้`
-              : "เลือกเพศของเสียงก่อน ประโยคที่ให้อ่านจะได้ลงท้ายถูก"}
-          </small>
-          <textarea
-            value={sample}
-            rows={2}
-            disabled={recording || locked || Boolean(busy) || !canEditScript}
-            aria-label="ประโยคสำหรับอ่านตอนอัดเสียง"
-            onChange={(event) => { setScript(event.target.value); setScriptEdited(true); }}
-          />
-        </div>
-
-        <div className="clone-actions">
-          {recording ? (
-            <button type="button" className="button button-danger" onClick={stopRecording}>
-              <Square size={15} /> หยุดอัด ({seconds} วิ)
+      {hasVoices && (
+        <div className="clone-library">
+          <div className="clone-library-head">
+            <h4>เสียงที่อัดไว้แล้ว</h4>
+            <button
+              type="button"
+              className="button button-quiet"
+              disabled={locked || Boolean(busy) || recording}
+              onClick={() => setAdding((current) => !current)}
+            >
+              {adding ? "ปิดการอัด" : "+ อัดเสียงใหม่"}
             </button>
-          ) : (
-            <button type="button" className="button button-primary" disabled={locked || Boolean(busy) || !canRecord} onClick={() => void startRecording()}>
-              <Mic size={16} /> {busy ? busy : "เริ่มอัด"}
-            </button>
-          )}
-          <small>
-            {recording
-              ? seconds < MIN_SECONDS
-                ? `อัดต่ออีกอย่างน้อย ${MIN_SECONDS - seconds} วินาที`
-                : "กดหยุดได้เลยเมื่อพอใจ"
-              : `พูดต่อเนื่อง ${MIN_SECONDS}–${MAX_SECONDS} วินาที ในที่เงียบ ไม่มีเพลงคลอ`}
-          </small>
-        </div>
-
-        {!library.canTranscribe && (
-          <p className="clone-note">
-            ยังไม่ได้ติดตั้ง whisper.cpp ระบบจะถอดข้อความให้อัตโนมัติไม่ได้ — ติดตั้งในหน้าตั้งค่าก่อนจะได้ผลแม่นกว่า
-          </p>
-        )}
-        {error && <p className="clone-error">{error}</p>}
-      </div>
-
-      <div className="clone-library">
-        {library.speakers.length === 0 ? (
-          <div className="clone-empty">
-            <Mic size={20} />
-            <b>ยังไม่มีเสียงต้นแบบ</b>
-            <p>อัดสักโทนหนึ่งก่อน แล้วค่อยเพิ่มโทนอื่นทีหลังได้</p>
           </div>
-        ) : library.speakers.map((person) => (
-          <div className="clone-person" key={person.speaker}>
-            <h4>{person.speaker} <em>{person.tones.length} โทน</em></h4>
-            <div className="clone-takes">
-              {person.tones.map((clone) => (
-                <div className={`clone-take${selectedId === clone.id ? " active" : ""}`} key={clone.id}>
-                  <button type="button" className="clone-pick" disabled={locked || Boolean(busy)} onClick={() => onSelect(clone)}>
-                    <span className="clone-tone">
-                      {selectedId === clone.id && <Check size={13} strokeWidth={3} />}
-                      {clone.tone}
-                      <em className={clone.gender ? "" : "missing"}>{clone.gender ?? "ยังไม่ระบุเพศ"}</em>
-                    </span>
-                    <small>{clone.durationMs ? `${(clone.durationMs / 1000).toFixed(1)} วิ · ` : ""}{clone.text}</small>
-                  </button>
-                  {!clone.gender && (
-                    <div className="clone-gender-fix">
-                      <small>เสียงนี้อัดไว้ก่อนมีตัวเลือกเพศ กรุณาระบุก่อนนำไปสร้างสคริปต์</small>
-                      <div>
-                        {(VOICE_GENDERS as VoiceGender[]).map((item) => (
-                          <button
-                            type="button"
-                            key={item}
-                            disabled={locked || Boolean(busy)}
-                            onClick={() => void setExistingCloneGender(clone, item)}
-                          >
-                            {item}
-                          </button>
-                        ))}
+          {library.speakers.map((person) => (
+            <div className="clone-person" key={person.speaker}>
+              <h5>{person.speaker} <em>{person.tones.length} โทน</em></h5>
+              <div className="clone-takes">
+                {person.tones.map((clone) => (
+                  <div className={`clone-take${selectedId === clone.id ? " active" : ""}`} key={clone.id}>
+                    <button type="button" className="clone-pick" disabled={locked || Boolean(busy)} onClick={() => onSelect(clone)}>
+                      <span className="clone-tone">
+                        {selectedId === clone.id && <Check size={13} strokeWidth={3} />}
+                        {clone.tone}
+                        <em className={clone.gender ? "" : "missing"}>{clone.gender ?? "ยังไม่ระบุเพศ"}</em>
+                      </span>
+                      <small>{clone.durationMs ? `${(clone.durationMs / 1000).toFixed(1)} วิ · ` : ""}{clone.text}</small>
+                    </button>
+                    {!clone.gender && (
+                      <div className="clone-gender-fix">
+                        <small>เสียงนี้อัดไว้ก่อนมีตัวเลือกเพศ กรุณาระบุก่อนนำไปสร้างสคริปต์</small>
+                        <div>
+                          {(VOICE_GENDERS as VoiceGender[]).map((item) => (
+                            <button
+                              type="button"
+                              key={item}
+                              disabled={locked || Boolean(busy)}
+                              onClick={() => void setExistingCloneGender(clone, item)}
+                            >
+                              {item}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    className="clone-remove"
-                    aria-label={`ลบเสียง ${clone.label}`}
-                    disabled={locked || Boolean(busy)}
-                    onClick={() => void remove(clone)}
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                    )}
+                    <button
+                      type="button"
+                      className="clone-remove"
+                      aria-label={`ลบเสียง ${clone.label}`}
+                      disabled={locked || Boolean(busy)}
+                      onClick={() => void remove(clone)}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showRecorder && (
+        <div className="clone-recorder">
+          <div className="clone-recorder-head">
+            <b>{hasVoices ? "อัดเสียงเพิ่มอีกโทน" : "อัดเสียงต้นแบบของคุณ"}</b>
+            <small>ใช้เวลาไม่ถึงนาที อัดครั้งเดียวใช้ได้ทุกคลิป</small>
+          </div>
+
+          <div className="clone-step">
+            <span className="clone-step-no">1</span>
+            <div>
+              <b>ใครเป็นคนพูด</b>
+              <div className="clone-who">
+                <label className="field">
+                  <span>ชื่อเรียกเสียงนี้</span>
+                  <input
+                    value={speaker}
+                    list="clip360-speakers"
+                    placeholder="เช่น เสียงของฉัน"
+                    disabled={recording || locked || Boolean(busy)}
+                    onChange={(event) => setSpeaker(event.target.value)}
+                  />
+                  <datalist id="clip360-speakers">
+                    {library.speakers.map((item) => <option value={item.speaker} key={item.speaker} />)}
+                  </datalist>
+                </label>
+                <div className="field">
+                  <span>เพศของเสียง</span>
+                  <div className="tone-options">
+                    {(VOICE_GENDERS as VoiceGender[]).map((item) => (
+                      <button
+                        type="button"
+                        key={item}
+                        className={gender === item ? "active" : ""}
+                        disabled={recording || locked || Boolean(busy)}
+                        onClick={() => { setGender(item); setScriptEdited(false); }}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              </div>
+              <small>เพศใช้บอกคนเขียนสคริปต์ว่าให้ลงท้ายด้วย ครับ หรือ ค่ะ</small>
             </div>
           </div>
-        ))}
-      </div>
+
+          <div className="clone-step">
+            <span className="clone-step-no">2</span>
+            <div>
+              <b>อัดไว้เป็นโทนไหน</b>
+              <div className="tone-options">
+                {library.tones.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={tone === item.id ? "active" : ""}
+                    disabled={recording || locked || Boolean(busy)}
+                    onClick={() => { setTone(item.id); setScriptEdited(false); }}
+                  >
+                    {item.id}
+                  </button>
+                ))}
+              </div>
+              <small>โมเดลเลียนโทนที่ได้ยินในตัวอย่าง สั่งด้วยข้อความไม่ได้ — อยากได้โทนไหนต้องอัดโทนนั้น</small>
+            </div>
+          </div>
+
+          <div className="clone-step">
+            <span className="clone-step-no">3</span>
+            <div>
+              <b>อ่านประโยคนี้แล้วกดอัด</b>
+              <div className="clone-script">
+                <textarea
+                  value={sample}
+                  rows={2}
+                  disabled={recording || locked || Boolean(busy) || !canEditScript}
+                  aria-label="ประโยคสำหรับอ่านตอนอัดเสียง"
+                  onChange={(event) => { setScript(event.target.value); setScriptEdited(true); }}
+                />
+                <small>
+                  {canEditScript
+                    ? "แก้เป็นประโยคของคุณเองได้ ระบบถอดข้อความจากที่พูดจริงอยู่แล้ว"
+                    : "เลือกเพศของเสียงก่อน ประโยคที่ให้อ่านจะได้ลงท้ายถูก"}
+                </small>
+              </div>
+
+              <div className="clone-actions">
+                {recording ? (
+                  <button type="button" className="button button-danger" onClick={stopRecording}>
+                    <Square size={15} /> หยุดอัด ({seconds} วิ)
+                  </button>
+                ) : (
+                  <button type="button" className="button button-primary" disabled={locked || Boolean(busy) || !canRecord} onClick={() => void startRecording()}>
+                    <Mic size={16} /> {busy ? busy : "เริ่มอัด"}
+                  </button>
+                )}
+                <small>
+                  {recording
+                    ? seconds < MIN_SECONDS
+                      ? `อัดต่ออีกอย่างน้อย ${MIN_SECONDS - seconds} วินาที`
+                      : "กดหยุดได้เลยเมื่อพอใจ"
+                    : `พูดต่อเนื่อง ${MIN_SECONDS}–${MAX_SECONDS} วินาที ในที่เงียบ ไม่มีเพลงคลอ`}
+                </small>
+              </div>
+            </div>
+          </div>
+
+          {!library.canTranscribe && (
+            <p className="clone-note">
+              ยังไม่ได้ติดตั้ง whisper.cpp ระบบจะถอดข้อความให้อัตโนมัติไม่ได้ — ติดตั้งในหน้าตั้งค่าก่อนจะได้ผลแม่นกว่า
+            </p>
+          )}
+          {error && <p className="clone-error">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

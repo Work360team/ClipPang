@@ -2553,7 +2553,8 @@ export function ProjectWizard() {
               <div className="step-panel">
                 <div className="step-panel-heading inline-heading">
                   <div><span className="step-kicker">ขั้นที่ 3 จาก 6</span><h2>เลือกเสียงที่เป็นตัวคุณ</h2><p>กดฟังตัวอย่างได้ทันที แล้วปรับความเร็วให้เข้ากับจังหวะคลิป</p></div>
-                  <span className="library-count">{voiceEngine === "jaitts" ? "เสียงในเครื่อง" : `${voiceLibrary.length} เสียง`}</span>
+                  {/* ป้ายนับจำนวนมีความหมายเฉพาะคลังเสียงสำเร็จรูป ฝั่งเสียงที่อัดเองมีหัวข้อของตัวเองอยู่แล้ว */}
+                  {voiceEngine !== "jaitts" && <span className="library-count">{voiceLibrary.length} เสียง</span>}
                 </div>
 
                 {/* สองเครื่องยนต์ทำงานคนละแบบ — Gemini มีเสียงสำเร็จรูปให้เลือก
@@ -2623,10 +2624,14 @@ export function ProjectWizard() {
                 )}
 
                 <div className="voice-controls">
-                  <div className="control-block">
-                    <div className="control-label"><span>โทนการพูด</span><b>{tone}</b></div>
-                    <div className="tone-options">{VOICE_TONES.map((item) => <button type="button" className={tone === item.id ? "active" : ""} disabled={scriptBusy} onClick={() => setTone(item.id)} key={item.id}>{item.id}</button>)}</div>
-                  </div>
+                  {/* เสียงโคลนได้โทนมาจากตัวอย่างที่อัดไว้ ไม่ใช่จากปุ่มนี้ — โชว์ไว้จะทำให้
+                      เข้าใจผิดว่ากดแล้วเปลี่ยนโทนได้ ทั้งที่ต้องไปเลือกตัวอย่างอีกโทนแทน */}
+                  {voiceEngine !== "jaitts" && (
+                    <div className="control-block">
+                      <div className="control-label"><span>โทนการพูด</span><b>{tone}</b></div>
+                      <div className="tone-options">{VOICE_TONES.map((item) => <button type="button" className={tone === item.id ? "active" : ""} disabled={scriptBusy} onClick={() => setTone(item.id)} key={item.id}>{item.id}</button>)}</div>
+                    </div>
+                  )}
                   <div className="control-block">
                     <div className="control-label"><span>ความเร็ว</span><b>{speed.toFixed(1)}×</b></div>
                     <input className="range" type="range" min="0.8" max="1.2" step="0.1" value={speed} disabled={scriptBusy} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="ความเร็วเสียง" />

@@ -4292,6 +4292,74 @@ img.mini-project-thumb::after { content: none; }
 .clone-note { margin: 0; color: #8a7430; font-size: 12px; line-height: 1.55; }
 .clone-error { margin: 0; color: var(--red); font-size: 12.5px; }
 
+/* หัวรายการเสียงที่อัดไว้ — ปุ่มเพิ่มเสียงอยู่คู่กับหัวข้อ ไม่ต้องเลื่อนหา */
+.clone-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clone-library-head h4 { margin: 0; font-size: 14px; font-weight: 620; }
+
+.clone-recorder-head { display: grid; gap: 2px; }
+.clone-recorder-head b { font-size: 14px; font-weight: 620; }
+.clone-recorder-head small { color: var(--ink-faint); font-size: 12px; }
+
+/* ขั้นตอนในฟอร์มอัดเสียง — ตัวเลขนำสายตาว่าต้องทำอะไรก่อนหลัง
+   ของเดิมเป็นช่องกรอกเรียงกันเฉย ๆ ผู้ใช้จึงไม่รู้ว่าต้องเริ่มตรงไหน */
+.clone-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.clone-step:first-of-type { padding-top: 0; border-top: 0; }
+
+.clone-step-no {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f0f1ec;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.clone-step > div { display: grid; gap: 8px; min-width: 0; }
+.clone-step > div > b { font-size: 13.5px; font-weight: 600; }
+.clone-step > div > small { color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
+
+/* ชื่อกับเพศอยู่แถวเดียวกันบนจอกว้าง — สองอย่างนี้ตอบคำถามเดียวกันว่าใครพูด */
+.clone-who {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.clone-person h5 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.clone-person h5 em { color: var(--ink-faint); font-size: 12px; font-style: normal; font-weight: 400; }
+
+@media (max-width: 720px) {
+  /* จอแคบวางชื่อกับเพศซ้อนกัน ไม่งั้นชิปเพศเหลือที่ไม่พอจนตัดบรรทัด */
+  .clone-who { grid-template-columns: 1fr; }
+  .clone-library-head { flex-wrap: wrap; }
+}
+
 .clone-library { display: grid; gap: 12px; }
 .clone-person h4 { display: flex; align-items: center; gap: 7px; margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .clone-person h4 em { color: var(--ink-faint); font-size: 12px; font-style: normal; font-weight: 400; }
