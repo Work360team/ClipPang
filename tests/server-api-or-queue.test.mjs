@@ -328,23 +328,34 @@ test("API exposes string script chunks and converts them back for regeneration",
   const project = store.createProject({
     id: "script-project",
     title: "ทดสอบสคริปต์",
-    product: { brief: { name: "สินค้า" } },
+    product: {
+      brief: { name: "สินค้า" },
+      config: { provider: "gemini", voiceId: "Charon", speed: 1, pace: "normal" },
+    },
   });
   const queue = new RenderQueue({ store, processor: async () => ({}) });
   closeWith(() => queue.close());
+  let generationInput;
   let regenerationInput;
   const api = createApiHandler({
     store,
     queue,
     services: {
-      generateScripts: async () => [{
-        id: "v1",
-        hookType: "problem",
-        chunks: [
-          { i: 0, text: "ประโยคเปิด", role: "hook", emphasis: [] },
-          { i: 1, text: "ประโยคขาย", role: "body", emphasis: [] },
-        ],
-      }],
+      generateScripts: async (input) => {
+        generationInput = input;
+        const latest = store.getProject(project.id).product;
+        store.updateProject(project.id, {
+          product: { ...latest, brief: { name: "แก้จากอีกแท็บ", features: ["ต้องไม่หาย"] } },
+        });
+        return [{
+          id: "v1",
+          hookType: "problem",
+          chunks: [
+            { i: 0, text: "ประโยคเปิด", role: "hook", emphasis: [] },
+            { i: 1, text: "ประโยคขาย", role: "body", emphasis: [] },
+          ],
+        }];
+      },
       regenerateChunk: async (input) => {
         regenerationInput = input;
         const scripts = structuredClone(input.scripts);
@@ -356,12 +367,31 @@ test("API exposes string script chunks and converts them back for regeneration",
 
   const generated = await responseJson(await apiRequest(api, `/api/projects/${project.id}/script`, {
     method: "POST",
-    body: { brief: { name: "สินค้า", features: ["เบา"] } },
+    body: {
+      brief: { name: "สินค้า", features: ["เบา"] },
+      scriptVoiceSignature: "gemini:Charon:ชาย:1.00:normal:brief-v1",
+    },
   }));
+  assert.equal(generationInput.speakerGender, "ชาย", "เสียง Charon ต้องกำกับสคริปต์ให้ใช้คำลงท้ายผู้ชาย");
   assert.deepEqual(generated.scripts[0].chunks, ["ประโยคเปิด", "ประโยคขาย"]);
+  assert.deepEqual(generated.brief, { name: "แก้จากอีกแท็บ", features: ["ต้องไม่หาย"] });
   const saved = store.getProject(project.id);
   assert.deepEqual(saved.product.scripts[0].chunks, ["ประโยคเปิด", "ประโยคขาย"]);
+  assert.deepEqual(saved.product.brief, { name: "แก้จากอีกแท็บ", features: ["ต้องไม่หาย"] });
+  assert.equal(saved.product.config.scriptVoiceSignature, "gemini:Charon:ชาย:1.00:normal:brief-v1");
   assert.equal(saved.wizardStep, 4);
+
+  const stalePatch = await apiRequest(api, `/api/projects/${project.id}`, {
+    method: "PATCH",
+    body: {
+      expectedUpdatedAt: project.updatedAt,
+      product: { brief: { name: "snapshot เก่า" }, scripts: [] },
+    },
+  });
+  const stalePayload = await stalePatch.json();
+  assert.equal(stalePatch.status, 409);
+  assert.equal(stalePayload.error.code, "STORE_CONFLICT");
+  assert.deepEqual(store.getProject(project.id).product.scripts[0].chunks, ["ประโยคเปิด", "ประโยคขาย"]);
 
   const regenerated = await responseJson(await apiRequest(
     api,
@@ -373,12 +403,14 @@ test("API exposes string script chunks and converts them back for regeneration",
   ));
   assert.equal(regenerationInput.scripts[0].chunks[0].text, "ประโยคเปิด");
   assert.equal(regenerationInput.scripts[0].chunks[1].text, "ประโยคขาย");
+  assert.equal(regenerationInput.speakerGender, "ชาย", "เขียนใหม่ทีละท่อนต้องใช้เพศเดิมด้วย");
   assert.equal(regenerated.chunk, "ประโยคใหม่");
   assert.deepEqual(regenerated.scripts[0].chunks, ["ประโยคเปิด", "ประโยคใหม่"]);
 
   const patched = await responseJson(await apiRequest(api, `/api/projects/${project.id}`, {
     method: "PATCH",
     body: {
+      expectedUpdatedAt: saved.updatedAt,
       wizard_step: 3,
       product_json: { name: "สินค้าแก้แล้ว" },
       selectedVoice: "Kore",
@@ -392,6 +424,7 @@ test("API exposes string script chunks and converts them back for regeneration",
   const emptiedTimeline = await responseJson(await apiRequest(api, `/api/projects/${project.id}`, {
     method: "PATCH",
     body: {
+      expectedUpdatedAt: patched.project.updatedAt,
       product: {
         name: "สินค้าแก้แล้ว",
         assets: [{ name: "ต้นฉบับ.mp4" }],

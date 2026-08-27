@@ -44,7 +44,19 @@ function normalizeBrief(brief) {
   return { ...brief, features: asList(brief?.features), avoid: asList(brief?.avoid) };
 }
 
-function userPrompt(brief, targetSec, variants, budget) {
+/**
+ * บอกเพศของคนพากย์ให้คนเขียนสคริปต์รู้
+ *
+ * ภาษาไทยลงท้ายต่างกันตามเพศผู้พูด ก่อนหน้านี้พรอมต์ไม่มีข้อมูลนี้เลย สคริปต์จึง
+ * สุ่มลงท้าย ครับ/ค่ะ เอง แล้วบางทีก็สวนทางกับเสียงที่เลือกไว้
+ */
+function speakerLine(gender) {
+  if (gender === "ชาย") return "ผู้พากย์: ผู้ชาย — ใช้ ผม/ครับ ห้ามใช้ ค่ะ และห้ามใช้ ดิฉัน เป็นสรรพนามแทนผู้พูด";
+  if (gender === "หญิง") return "ผู้พากย์: ผู้หญิง — ใช้ ค่ะ/นะคะ ห้ามใช้ ครับ และห้ามใช้ ผม เป็นสรรพนามแทนผู้พูด (คำว่า ผม ที่หมายถึงเส้นผมยังใช้ได้)";
+  return "";
+}
+
+export function buildScriptPrompt(brief, targetSec, variants, budget, speakerGender) {
   return `เขียนสคริปต์พากย์เสียงขายสินค้า ${variants} เวอร์ชัน ความยาวพูดจริงประมาณ ${targetSec} วินาที (≈ ${budget} ตัวอักษรต่อเวอร์ชัน)
 
 สินค้า: ${brief.name}
@@ -52,6 +64,7 @@ function userPrompt(brief, targetSec, variants, budget) {
 จุดขาย: ${(brief.features || []).join(" / ")}
 กลุ่มเป้าหมาย: ${brief.audience || "คนทั่วไป"}
 โทน: ${brief.tone || "สนุก เป็นกันเอง"}
+${speakerLine(speakerGender)}
 CTA: ${brief.cta || "กดตะกร้าส้มด้านล่างเลย"}
 ${brief.avoid?.length ? `ห้ามใช้คำ: ${brief.avoid.join(", ")}` : ""}
 
@@ -62,7 +75,7 @@ ${brief.avoid?.length ? `ห้ามใช้คำ: ${brief.avoid.join(", ")}`
 
 /* ---------- ผู้ให้บริการ ---------- */
 
-async function withClaude(brief, targetSec, variants, { budget, signal, timeoutMs = 45_000 } = {}) {
+async function withClaude(brief, targetSec, variants, { budget, speakerGender, signal, timeoutMs = 45_000 } = {}) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model = process.env.SCRIPT_MODEL || "claude-sonnet-5";
   const signals = [signal, AbortSignal.timeout(timeoutMs)].filter(Boolean);
@@ -77,7 +90,7 @@ async function withClaude(brief, targetSec, variants, { budget, signal, timeoutM
       model,
       max_tokens: 4000,
       system: SYSTEM,
-      messages: [{ role: "user", content: userPrompt(brief, targetSec, variants, budget) }],
+      messages: [{ role: "user", content: buildScriptPrompt(brief, targetSec, variants, budget, speakerGender) }],
     }),
     signal: signals.length === 1 ? signals[0] : AbortSignal.any(signals),
   });
@@ -89,7 +102,7 @@ async function withClaude(brief, targetSec, variants, { budget, signal, timeoutM
   return { provider: `claude:${model}`, variants: parsed.variants };
 }
 
-async function withGemini(brief, targetSec, variants, { budget, signal, timeoutMs = 45_000 } = {}) {
+async function withGemini(brief, targetSec, variants, { budget, speakerGender, signal, timeoutMs = 45_000 } = {}) {
   const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const model = process.env.GEMINI_SCRIPT_MODEL || "gemini-2.5-flash";
   const signals = [signal, AbortSignal.timeout(timeoutMs)].filter(Boolean);
@@ -97,7 +110,7 @@ async function withGemini(brief, targetSec, variants, { budget, signal, timeoutM
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: `${SYSTEM}\n\n${userPrompt(brief, targetSec, variants, budget)}` }] }],
+      contents: [{ parts: [{ text: `${SYSTEM}\n\n${buildScriptPrompt(brief, targetSec, variants, budget, speakerGender)}` }] }],
       generationConfig: { responseMimeType: "application/json", temperature: 0.9 },
     }),
     signal: signals.length === 1 ? signals[0] : AbortSignal.any(signals),
@@ -114,13 +127,13 @@ async function withGemini(brief, targetSec, variants, { budget, signal, timeoutM
  * เรียกผู้ให้บริการตามทะเบียนใน providers.mjs
  * claude/gemini ยังใช้ฟังก์ชันเดิมเพราะรูปแบบ request ต่างจาก OpenAI
  */
-async function runProvider(id, brief, targetSec, variants, { budget, signal, timeoutMs } = {}) {
-  if (id === "claude") return withClaude(brief, targetSec, variants, { budget, signal, timeoutMs });
-  if (id === "gemini") return withGemini(brief, targetSec, variants, { budget, signal, timeoutMs });
+async function runProvider(id, brief, targetSec, variants, { budget, speakerGender, signal, timeoutMs } = {}) {
+  if (id === "claude") return withClaude(brief, targetSec, variants, { budget, speakerGender, signal, timeoutMs });
+  if (id === "gemini") return withGemini(brief, targetSec, variants, { budget, speakerGender, signal, timeoutMs });
 
   const provider = getProvider(id);
   if (!provider) throw new Error(`ไม่รู้จักผู้ให้บริการ "${id}"`);
-  const payload = { system: SYSTEM, user: userPrompt(brief, targetSec, variants, budget), signal, timeoutMs };
+  const payload = { system: SYSTEM, user: buildScriptPrompt(brief, targetSec, variants, budget, speakerGender), signal, timeoutMs };
   const { text, model } = provider.kind === "cli"
     ? await callCliProvider(provider, payload)
     : await callOpenAICompatible(provider, payload);
@@ -190,7 +203,7 @@ function withTemplate(brief, targetSec, variants, budget) {
 
 export async function generateScript(
   brief,
-  { targetSec = 30, variants = 5, provider = "auto", charsPerSec, speech, timing, signal, timeoutMs } = {},
+  { targetSec = 30, variants = 5, provider = "auto", charsPerSec, speech, timing, speakerGender, signal, timeoutMs } = {},
 ) {
   if (!brief?.name) throw new Error("ข้อมูลสินค้าต้องมี brief.name");
   brief = normalizeBrief(brief);
@@ -209,7 +222,7 @@ export async function generateScript(
     result = withTemplate(brief, targetSec, variants, budget);
   } else {
     try {
-      result = await runProvider(pick, brief, targetSec, variants, { budget, signal, timeoutMs });
+      result = await runProvider(pick, brief, targetSec, variants, { budget, speakerGender, signal, timeoutMs });
     } catch (e) {
       if (e?.name === "AbortError") throw e;
       // ยังได้สคริปต์เสมอ แต่ต้องบอกให้รู้ว่าตกมาใช้ตัวสำรอง ไม่ใช่เงียบ ๆ

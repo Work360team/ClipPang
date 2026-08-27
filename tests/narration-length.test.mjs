@@ -17,6 +17,7 @@ import {
   sampleChunks,
   speechKey,
 } from "../pipeline/speech-rate.mjs";
+import { buildScriptPrompt } from "../pipeline/script.mjs";
 
 const plan = (durations) => ({
   segments: durations.map((durationMs, index) => ({
@@ -188,4 +189,17 @@ test("เสียงเร็วขึ้นต้องขอสคริป�
     characterBudget(fast, { targetMs: 30_000, timing: DEFAULT_TIMING })
       > characterBudget(slow, { targetMs: 30_000, timing: DEFAULT_TIMING }),
   );
+});
+
+test("พรอมต์เขียนสคริปต์กำกับคำลงท้ายตามเพศผู้พากย์", () => {
+  const brief = { name: "สินค้า", features: ["ใช้ง่าย"] };
+  const male = buildScriptPrompt(brief, 30, 5, 180, "ชาย");
+  const female = buildScriptPrompt(brief, 30, 5, 180, "หญิง");
+  const unknown = buildScriptPrompt(brief, 30, 5, 180, null);
+
+  assert.match(male, /ผู้พากย์: ผู้ชาย/);
+  assert.match(male, /ผม\/ครับ/);
+  assert.match(female, /ผู้พากย์: ผู้หญิง/);
+  assert.match(female, /ค่ะ\/นะคะ/);
+  assert.doesNotMatch(unknown, /ผู้พากย์:/, "ไม่รู้เพศต้องไม่เดาให้สคริปต์");
 });

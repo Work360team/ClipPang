@@ -43,6 +43,7 @@ import {
   synthesize,
   synthesizeAll,
 } from "./tts.mjs";
+import { readClone } from "./voice-clones.mjs";
 import { fitNarrationToTimeline } from "./narration-fit.mjs";
 import { compileAss, compileSrt } from "./ass.mjs";
 import { AlphaOverlayError, renderOverlay } from "./hyperframes.mjs";
@@ -52,6 +53,20 @@ const PIPELINE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(PIPELINE_ROOT, "..");
 const FONTS_DIR = path.join(PIPELINE_ROOT, "fonts");
 const STYLES_DIR = path.join(PIPELINE_ROOT, "styles");
+
+/** หาเพศจากเสียงที่เลือกสำหรับทางเข้า pipeline ที่ไม่ได้ผ่าน Local API */
+export function speakerGenderForVoice(voice = {}) {
+  const config = typeof voice === "string" ? { id: voice } : (voice ?? {});
+  const id = config.id ?? config.voiceId;
+  if (!id) return null;
+  if (config.provider === "jaitts") return readClone(id)?.gender ?? null;
+  const providers = config.provider && config.provider !== "auto" ? [config.provider] : Object.keys(VOICES);
+  for (const provider of providers) {
+    const found = VOICES[provider]?.find((item) => item.id === id);
+    if (found?.gender) return found.gender;
+  }
+  return null;
+}
 
 const STYLE_ALIASES = new Map([
   ["pop-yellow", "karaoke-pop"],
@@ -182,6 +197,8 @@ export async function generateScripts(input, options = {}) {
     // สองอย่างนี้กำหนดว่าสคริปต์ควรยาวแค่ไหนถึงจะพูดเต็มคลิปพอดี
     speech: args.speech,
     timing: args.timing,
+    // ภาษาไทยลงท้ายต่างกันตามเพศผู้พูด สคริปต์ต้องรู้ก่อนเขียน
+    speakerGender: args.speakerGender ?? speakerGenderForVoice(args.voice),
     timeoutMs: args.timeoutMs,
     signal: args.signal,
   });
@@ -209,6 +226,8 @@ export async function regenerateChunk({
   chunkIndex,
   instruction = "",
   provider = "auto",
+  speakerGender,
+  voice,
   signal,
 } = {}) {
   hydrateEnvironment();
@@ -228,6 +247,7 @@ export async function regenerateChunk({
     targetSec: Math.max(8, Math.round((estimateMs(current.text) / 1000) * 4)),
     variants: 1,
     provider: process.env.CLIP360_MOCK_TTS === "1" ? "template" : provider,
+    speakerGender: speakerGender ?? speakerGenderForVoice(voice),
     signal,
   });
   const candidates = generated.variants[0]?.chunks || [];
@@ -597,6 +617,7 @@ export async function runPipeline(options = {}) {
           provider: options.mockTts ? "template" : options.scriptProvider || "auto",
           speech: options.speech,
           timing: options.timing,
+          speakerGender: options.speakerGender ?? speakerGenderForVoice(options.voice),
           signal,
         }));
       } else {

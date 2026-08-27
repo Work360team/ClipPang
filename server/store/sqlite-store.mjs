@@ -484,8 +484,23 @@ export class SqliteStore {
     if (Object.hasOwn(changes, "id") && changes.id !== id) {
       throw new StoreValidationError("ไม่สามารถเปลี่ยนรหัสโปรเจกต์ได้");
     }
+    const hasExpectedUpdatedAt = Object.hasOwn(changes, "expectedUpdatedAt")
+      || Object.hasOwn(changes, "expected_updated_at");
+    const expectedUpdatedAt = Number(changes.expectedUpdatedAt ?? changes.expected_updated_at);
+    delete changes.expectedUpdatedAt;
+    delete changes.expected_updated_at;
     const current = this.getProject(id);
     if (!current) throw new StoreNotFoundError(`ไม่พบโปรเจกต์ “${id}”`);
+    if (hasExpectedUpdatedAt) {
+      if (!Number.isSafeInteger(expectedUpdatedAt) || expectedUpdatedAt < 0) {
+        throw new StoreValidationError("revision ของโปรเจกต์ไม่ถูกต้อง");
+      }
+      if (expectedUpdatedAt !== Number(current.updatedAt)) {
+        throw new StoreConflictError(
+          "โปรเจกต์นี้ถูกแก้จากอีกหน้าต่างแล้ว กรุณารีเฟรชหน้านี้ก่อนบันทึกอีกครั้ง เพื่อไม่ให้ข้อมูลใหม่ถูกเขียนทับ",
+        );
+      }
+    }
 
     delete changes.id;
     delete changes.createdAt;
@@ -504,6 +519,12 @@ export class SqliteStore {
       changes.wizardStep = normalizeWizardStep(changes.wizardStep);
     }
 
+    // Date.now() อาจคืนค่าเดิมเมื่อบันทึกหลายครั้งในมิลลิวินาทีเดียว revision ที่ใช้
+    // ทำ compare-and-swap ต้องเพิ่มขึ้นทุกครั้ง ไม่งั้น snapshot เก่ายังผ่านการตรวจได้
+    const updatedAt = Math.max(this.#timestamp(), Number(current.updatedAt) + 1);
+    if (!Number.isSafeInteger(updatedAt)) {
+      throw new StoreError("revision ของโปรเจกต์เกินช่วงที่รองรับ", { code: "STORE_CLOCK_INVALID" });
+    }
     const document = {
       ...current,
       ...changes,
@@ -514,7 +535,7 @@ export class SqliteStore {
         ? changes.wizardStep
         : current.wizardStep,
       createdAt: current.createdAt,
-      updatedAt: this.#timestamp(),
+      updatedAt,
     };
     writeJsonAtomic(this.projectFile(id), document);
     this.#upsertProjectIndex(document);

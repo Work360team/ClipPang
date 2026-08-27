@@ -48,6 +48,7 @@ test("project.json is canonical and the SQLite index can be rebuilt", (t) => {
   assert.ok(existsSync(path.join(rootDir, "projects", project.id, "out")));
 
   const updated = store.updateProject(project.id, {
+    expectedUpdatedAt: project.updatedAt,
     wizard_step: 4,
     product_json: JSON.stringify({ price: 490 }),
     selectedScript: "script-3",
@@ -55,6 +56,12 @@ test("project.json is canonical and the SQLite index can be rebuilt", (t) => {
   assert.equal(updated.wizardStep, 4);
   assert.deepEqual(updated.product, { price: 490 });
   assert.deepEqual(updated.voiceSelection, { id: "th-female-1", speed: 1.05 });
+  assert.ok(updated.updatedAt > project.updatedAt);
+  assert.throws(
+    () => store.updateProject(project.id, { expectedUpdatedAt: project.updatedAt, title: "snapshot เก่า" }),
+    StoreConflictError,
+  );
+  assert.equal(store.getProject(project.id).title, "หัวชาร์จพกพา");
 
   const projectFile = path.join(rootDir, "projects", project.id, "project.json");
   const handEdited = JSON.parse(readFileSync(projectFile, "utf8"));
@@ -238,7 +245,7 @@ test("user API keys are encrypted at rest and legacy plaintext rows upgrade them
 
   // แถวเก่าที่บันทึกไว้ก่อนมีการเข้ารหัส ต้องยังใช้ได้และถูกอัปเกรดให้เอง
   const legacy = "AIzaSyLEGACY9876543210zyxwvu";
-  store.raw?.() ?? null;
+  void (store.raw?.() ?? null);
   const database = store.database ?? null;
   assert.ok(database, "ต้องเข้าถึง database ได้เพื่อจำลองแถวเก่า");
   database.prepare("INSERT INTO user_keys (user_id, slot, api_key, created_at) VALUES (?,?,?,?)")

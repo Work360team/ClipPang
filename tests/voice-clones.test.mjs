@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { DEFAULT_TONE, VOICE_TONES } from "../pipeline/core.mjs";
+import { DEFAULT_TONE, toneSample, VOICE_GENDERS, VOICE_TONES } from "../pipeline/core.mjs";
 import {
   cloneIdFor,
   deleteClone,
@@ -13,6 +13,7 @@ import {
   listSpeakers,
   readClone,
   saveClone,
+  updateCloneGender,
 } from "../pipeline/voice-clones.mjs";
 import { discoverJaitts } from "../pipeline/jaitts.mjs";
 
@@ -29,7 +30,7 @@ test("id ผูกกับเนื้อไฟล์เสียง ไม่�
 test("บันทึกแล้วอ่านกลับมาได้ครบ พร้อม path ของไฟล์เสียง", () => {
   const dir = tempDir();
   const saved = saveClone(
-    { wavBuffer: wav("x"), text: "สวัสดีครับ วันนี้อากาศดี", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" },
+    { wavBuffer: wav("x"), text: "สวัสดีครับ วันนี้อากาศดี", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น", gender: "ชาย" },
     { dir },
   );
   assert.equal(saved.provider, "jaitts");
@@ -39,13 +40,14 @@ test("บันทึกแล้วอ่านกลับมาได้ค�
   const read = readClone(saved.id, { dir });
   assert.equal(read.speaker, "พี่หนึ่ง");
   assert.equal(read.tone, "ตื่นเต้น");
+  assert.equal(read.gender, "ชาย");
   assert.equal(read.text, "สวัสดีครับ วันนี้อากาศดี");
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("โทนที่ไม่รู้จักต้องกลายเป็นโทนปกติ ไม่ใช่เก็บค่ามั่ว ๆ ไว้", () => {
   const dir = tempDir();
-  const saved = saveClone({ wavBuffer: wav("t"), text: "ทดสอบ", tone: "โทนที่ไม่มีอยู่จริง" }, { dir });
+  const saved = saveClone({ wavBuffer: wav("t"), text: "ทดสอบ", tone: "โทนที่ไม่มีอยู่จริง", gender: "ชาย" }, { dir });
   assert.equal(saved.tone, DEFAULT_TONE);
   assert.ok(VOICE_TONES.some((tone) => tone.id === saved.tone));
   fs.rmSync(dir, { recursive: true, force: true });
@@ -53,9 +55,9 @@ test("โทนที่ไม่รู้จักต้องกลายเ�
 
 test("คนเดียวกันอัดได้หลายโทน และจัดกลุ่มตามคนได้", () => {
   const dir = tempDir();
-  saveClone({ wavBuffer: wav("a1"), text: "หนึ่ง", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" }, { dir });
-  saveClone({ wavBuffer: wav("a2"), text: "สอง", speaker: "พี่หนึ่ง", tone: "สุขุม" }, { dir });
-  saveClone({ wavBuffer: wav("b1"), text: "สาม", speaker: "พี่สอง", tone: "ตื่นเต้น" }, { dir });
+  saveClone({ wavBuffer: wav("a1"), text: "หนึ่ง", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น", gender: "ชาย" }, { dir });
+  saveClone({ wavBuffer: wav("a2"), text: "สอง", speaker: "พี่หนึ่ง", tone: "สุขุม", gender: "ชาย" }, { dir });
+  saveClone({ wavBuffer: wav("b1"), text: "สาม", speaker: "พี่สอง", tone: "ตื่นเต้น", gender: "หญิง" }, { dir });
 
   const speakers = listSpeakers({ dir });
   assert.equal(speakers.length, 2);
@@ -67,8 +69,8 @@ test("คนเดียวกันอัดได้หลายโทน แ�
 
 test("เลือกตัวอย่างตามคนและโทน ถ้าไม่มีโทนนั้นใช้โทนอื่นของคนเดิมแทน", () => {
   const dir = tempDir();
-  saveClone({ wavBuffer: wav("c1"), text: "หนึ่ง", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" }, { dir });
-  saveClone({ wavBuffer: wav("c2"), text: "สอง", speaker: "พี่สอง", tone: "สุขุม" }, { dir });
+  saveClone({ wavBuffer: wav("c1"), text: "หนึ่ง", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น", gender: "ชาย" }, { dir });
+  saveClone({ wavBuffer: wav("c2"), text: "สอง", speaker: "พี่สอง", tone: "สุขุม", gender: "หญิง" }, { dir });
 
   const exact = findClone({ speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" }, { dir });
   assert.equal(exact.speaker, "พี่หนึ่ง");
@@ -91,8 +93,8 @@ test("ไม่มีตัวอย่างสักอันต้องค�
 
 test("อัดทับด้วยไฟล์ใหม่ได้ id ใหม่ ของเดิมไม่ถูกเขียนทับ", () => {
   const dir = tempDir();
-  const first = saveClone({ wavBuffer: wav("one"), text: "ข้อความหนึ่ง" }, { dir });
-  const second = saveClone({ wavBuffer: wav("two"), text: "ข้อความสอง" }, { dir });
+  const first = saveClone({ wavBuffer: wav("one"), text: "ข้อความหนึ่ง", gender: "ชาย" }, { dir });
+  const second = saveClone({ wavBuffer: wav("two"), text: "ข้อความสอง", gender: "ชาย" }, { dir });
   assert.notEqual(first.id, second.id);
   // id ที่เปลี่ยนคือสิ่งที่ทำให้คีย์แคช TTS เปลี่ยนตาม ท่อนเก่าจึงไม่ถูกหยิบมาใช้ผิดเสียง
   assert.equal(readClone(first.id, { dir }).text, "ข้อความหนึ่ง");
@@ -103,8 +105,9 @@ test("อัดทับด้วยไฟล์ใหม่ได้ id ให�
 test("ไม่มีข้อความของเสียงต้นแบบก็บันทึกไม่ได้", () => {
   const dir = tempDir();
   // F5-TTS ต้องการข้อความที่ตรงกับเสียงเป๊ะ ๆ ปล่อยว่างไว้แล้วค่อยพังตอนพากย์คือสายเกินไป
-  assert.throws(() => saveClone({ wavBuffer: wav("z"), text: "  " }, { dir }), /ข้อความ/);
-  assert.throws(() => saveClone({ wavBuffer: Buffer.alloc(0), text: "มีข้อความ" }, { dir }), /ไฟล์เสียง/);
+  assert.throws(() => saveClone({ wavBuffer: wav("z"), text: "  ", gender: "ชาย" }, { dir }), /ข้อความ/);
+  assert.throws(() => saveClone({ wavBuffer: Buffer.alloc(0), text: "มีข้อความ", gender: "ชาย" }, { dir }), /ไฟล์เสียง/);
+  assert.throws(() => saveClone({ wavBuffer: wav("g"), text: "มีข้อความ" }, { dir }), /เลือกเพศ/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -118,7 +121,7 @@ test("id ที่พยายามหลุดออกนอกโฟลเ�
 
 test("โฟลเดอร์ที่ meta พังต้องถูกข้าม ไม่ใช่ทำให้เสียงอื่นหายไปด้วย", () => {
   const dir = tempDir();
-  const good = saveClone({ wavBuffer: wav("ok"), text: "ใช้ได้" }, { dir });
+  const good = saveClone({ wavBuffer: wav("ok"), text: "ใช้ได้", gender: "ชาย" }, { dir });
   const broken = path.join(dir, "clone-broken0000");
   fs.mkdirSync(broken, { recursive: true });
   fs.writeFileSync(path.join(broken, "voice.json"), "{ ไม่ใช่ json");
@@ -132,7 +135,7 @@ test("โฟลเดอร์ที่ meta พังต้องถูกข�
 
 test("ลบแล้วหายจริง และลบซ้ำไม่พัง", () => {
   const dir = tempDir();
-  const saved = saveClone({ wavBuffer: wav("d"), text: "จะลบ" }, { dir });
+  const saved = saveClone({ wavBuffer: wav("d"), text: "จะลบ", gender: "ชาย" }, { dir });
   assert.equal(deleteClone(saved.id, { dir }), true);
   assert.equal(readClone(saved.id, { dir }), null);
   assert.equal(deleteClone(saved.id, { dir }), false);
@@ -143,9 +146,27 @@ test("ทุกโทนต้องมีประโยคตัวอย่�
   assert.ok(VOICE_TONES.length >= 4);
   for (const tone of VOICE_TONES) {
     assert.ok(tone.id?.trim(), "โทนต้องมีชื่อ");
-    assert.ok(tone.sample?.trim().length > 20, `${tone.id} ต้องมีประโยคตัวอย่างที่ยาวพอจะจับโทนได้`);
+    for (const gender of VOICE_GENDERS) {
+      assert.ok(tone.samples?.[gender]?.trim().length > 20, `${tone.id}/${gender} ต้องมีประโยคตัวอย่างที่ยาวพอจะจับโทนได้`);
+      assert.equal(toneSample(tone.id, gender), tone.samples[gender]);
+    }
   }
   assert.equal(new Set(VOICE_TONES.map((tone) => tone.id)).size, VOICE_TONES.length, "ห้ามมีโทนซ้ำ");
+  assert.equal(toneSample(DEFAULT_TONE, ""), "", "ยังไม่เลือกเพศต้องไม่เดาให้เอง");
+});
+
+test("เสียงเก่าที่ไม่มีเพศต้องไม่ถูกเดา และเลือกเพิ่มทีหลังได้โดยไม่ต้องอัดใหม่", () => {
+  const dir = tempDir();
+  const saved = saveClone({ wavBuffer: wav("legacy"), text: "เสียงเก่า", gender: "ชาย" }, { dir });
+  const metaFile = path.join(dir, saved.id, "voice.json");
+  const meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+  delete meta.gender;
+  fs.writeFileSync(metaFile, JSON.stringify(meta), "utf8");
+
+  assert.equal(readClone(saved.id, { dir }).gender, null, "ห้ามตีความข้อมูลเก่าเป็นหญิงหรือชายเอง");
+  assert.equal(updateCloneGender(saved.id, "หญิง", { dir }).gender, "หญิง");
+  assert.equal(JSON.parse(fs.readFileSync(metaFile, "utf8")).gender, "หญิง");
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("ยังไม่ได้ติดตั้งต้องบอกเหตุผลที่แก้ตามได้ ไม่ใช่แค่ false", () => {

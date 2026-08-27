@@ -102,11 +102,15 @@ export const localApi = {
 
   // เสียงต้นแบบที่ผู้ใช้อัดเองไว้ให้เครื่องยนต์เสียงในเครื่องโคลนตาม
   voiceClones: () => apiFetch<VoiceCloneLibrary>("/api/voice-clones"),
-  addVoiceClone: (audio: Blob, fields: { speaker: string; tone: string; text?: string }) => {
-    const params = new URLSearchParams({ speaker: fields.speaker, tone: fields.tone });
+  addVoiceClone: (audio: Blob, fields: { speaker: string; tone: string; gender: string; text?: string }) => {
+    const params = new URLSearchParams({ speaker: fields.speaker, tone: fields.tone, gender: fields.gender });
     if (fields.text) params.set("text", fields.text);
     return apiFetch<{ ok: true; clone: LocalVoiceClone }>(`/api/voice-clones?${params}`, { method: "POST", body: audio });
   },
+  updateVoiceCloneGender: (id: string, gender: VoiceGender) => apiFetch<{ ok: true; clone: LocalVoiceClone }>(
+    `/api/voice-clones/${encodeURIComponent(id)}`,
+    { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ gender }) },
+  ),
   deleteVoiceClone: (id: string) => apiFetch<{ ok: true }>(`/api/voice-clones/${encodeURIComponent(id)}`, { method: "DELETE" }),
   saveKey: (key: string) => apiFetch<{ ok: true; key: { configured: boolean; last4: string; masked: string } }>("/api/setup/key", { method: "POST", body: JSON.stringify({ key }) }),
   listInput: () => apiFetch<{ ok: true; files: LocalAsset[] }>("/api/input"),
@@ -140,7 +144,7 @@ export const localApi = {
   updateProject: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; project: LocalProject }>(`/api/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   // เซิร์ฟเวอร์ย้ายไป data/trash ไม่ได้ลบทิ้งถาวร จึงกู้คืนเองได้ถ้ากดพลาด
   deleteProject: (id: string) => apiFetch<{ ok: true; recoverable: boolean; message: string }>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  generateScripts: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; scripts: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script`, { method: "POST", body: JSON.stringify(body) }),
+  generateScripts: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; scripts: LocalScript[]; brief?: Record<string, unknown>; updatedAt?: number }>(`/api/projects/${encodeURIComponent(id)}/script`, { method: "POST", body: JSON.stringify(body) }),
   regenerateChunk: (id: string, variantId: string, index: number, body: Record<string, unknown>) => apiFetch<{ ok: true; chunk: string; scripts?: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script/${encodeURIComponent(variantId)}/chunk/${index}`, { method: "POST", body: JSON.stringify(body) }),
   voices: () => apiFetch<{ ok: true; voices: LocalVoice[] }>("/api/voices"),
   styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[]; colorSets?: LocalColorSet[] }>("/api/styles"),
@@ -156,7 +160,7 @@ export const localApi = {
   captions: (projectId: string) =>
     apiFetch<{ ok: true; captions: LocalCaptionSet | null }>(`/api/projects/${encodeURIComponent(projectId)}/captions`),
   generateCaptions: (projectId: string, body: Record<string, unknown> = {}) =>
-    apiFetch<{ ok: true; captions: LocalCaptionSet }>(`/api/projects/${encodeURIComponent(projectId)}/captions`, {
+    apiFetch<{ ok: true; captions: LocalCaptionSet; updatedAt?: number }>(`/api/projects/${encodeURIComponent(projectId)}/captions`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -218,10 +222,13 @@ export interface LocalScript {
   estDurationMs?: number;
   chunks: string[];
 }
+export type VoiceGender = "หญิง" | "ชาย";
+
 export interface LocalVoiceClone {
   id: string;
   speaker: string;
   tone: string;
+  gender: VoiceGender | null;
   label: string;
   text: string;
   durationMs: number | null;
@@ -233,7 +240,7 @@ export interface VoiceCloneLibrary {
   ok: true;
   speakers: { speaker: string; tones: LocalVoiceClone[] }[];
   clones: LocalVoiceClone[];
-  tones: { id: string; sample: string }[];
+  tones: { id: string; samples: Record<VoiceGender, string> }[];
   engine: { ready: boolean; reason: string | null };
   canTranscribe: boolean;
 }
@@ -295,8 +302,8 @@ export interface LocalRender {
   createdAt?: string; finishedAt?: string | null;
 }
 export interface LocalProject {
-  id: string; title: string; wizard_step?: number; product?: Record<string, unknown>;
-  updated_at?: string; created_at?: string; renders?: LocalRender[];
+  id: string; title: string; wizardStep?: number; wizard_step?: number; product?: Record<string, unknown>;
+  updatedAt?: number; updated_at?: number; createdAt?: number; created_at?: number; renders?: LocalRender[];
 }
 
 export function watchRender(renderId: string, onEvent: (render: LocalRender & { current?: number; total?: number }) => void, onError?: (event: Event) => void) {

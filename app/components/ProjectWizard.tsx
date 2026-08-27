@@ -61,6 +61,7 @@ import {
   type LocalAsset,
   type LocalColorSet,
   type LocalOutput,
+  type LocalProject,
   type LocalProjectAsset,
   type LocalRender,
   type LocalScript,
@@ -283,6 +284,28 @@ const initialBrief: ProductBrief = {
   cta: "",
 };
 
+/** แปลง brief ที่เซิร์ฟเวอร์ยืนยันกลับมาให้เป็นรูปแบบฟอร์ม โดยไม่เดาค่าที่ไม่มี */
+const productBriefFromApi = (value: Record<string, unknown>, fallback: ProductBrief): ProductBrief => {
+  const field = (key: keyof ProductBrief) => typeof value[key] === "string" ? value[key] : fallback[key];
+  const rawFeatures = value.features;
+  const features = Array.isArray(rawFeatures)
+    ? rawFeatures.filter((item): item is string => typeof item === "string").join(", ")
+    : typeof rawFeatures === "string" ? rawFeatures : fallback.features;
+  return {
+    name: field("name"),
+    category: field("category"),
+    features,
+    audience: field("audience"),
+    tone: field("tone"),
+    cta: field("cta"),
+  };
+};
+
+const projectRevision = (project: { updatedAt?: unknown; updated_at?: unknown }) => {
+  const value = Number(project.updatedAt ?? project.updated_at);
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+};
+
 /** หมวดหมู่ตั้งต้น — ผู้ใช้พิมพ์เพิ่มเองได้ ค่าที่พิมพ์จะถูกจำไว้ในโปรเจกต์ */
 const CATEGORY_PRESETS = [
   "มือถือและอุปกรณ์เสริม",
@@ -339,6 +362,7 @@ export function ProjectWizard() {
   // เครื่องยนต์เสียงที่เลือกใช้ — Gemini คือคลาวด์ ส่วน jaitts คือเสียงโคลนในเครื่อง
   const [voiceEngine, setVoiceEngine] = useState<"gemini" | "jaitts">("gemini");
   const [cloneVoice, setCloneVoice] = useState<LocalVoiceClone | null>(null);
+  const [voiceCloneActive, setVoiceCloneActive] = useState(false);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
   captionStylesRef.current = captionStyles;
@@ -352,6 +376,9 @@ export function ProjectWizard() {
   const [scriptVariants, setScriptVariants] = useState<LocalScript[]>(initialScripts);
   const [selectedScript, setSelectedScript] = useState("");
   const [scriptTexts, setScriptTexts] = useState<Record<string, string[]>>({});
+  // จำว่าสคริปต์ชุดปัจจุบันเขียนให้เสียง/เพศ/ความเร็วใด จะได้ไม่เขียนทับเมื่อกลับมา
+  // ขั้นเลือกเสียงโดยไม่ได้เปลี่ยนอะไร แต่สร้างใหม่เมื่อบริบทการพากย์เปลี่ยนจริง
+  const [scriptVoiceSignature, setScriptVoiceSignature] = useState("");
   const [selectedStyle, setSelectedStyle] = useState("karaoke-pop");
   const [styleLaneFilter, setStyleLaneFilter] = useState<StyleLaneFilter>("all");
   const [captionPosition, setCaptionPosition] = useState("ล่าง");
@@ -400,7 +427,15 @@ export function ProjectWizard() {
   const editRevisionRef = useRef(0);
   const activeRenderEditRevisionRef = useRef<number | null>(null);
   const projectSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
-  const skipNextTimelineAutosaveRef = useRef(false);
+  const projectUpdatedAtRef = useRef<number | null>(null);
+  const syncProjectUpdatedAt = useCallback((updatedAt: number) => {
+    projectUpdatedAtRef.current = updatedAt;
+  }, []);
+  const goNextLockRef = useRef(false);
+  const scriptGenerationLockRef = useRef(false);
+  // ข้าม autosave รอบที่ state ถูก hydrate หรือถูกยืนยันและบันทึกโดย API แล้ว
+  // เพื่อไม่ส่ง product snapshot เก่าทั้งก้อนกลับไปทับการแก้จากอีกแท็บ
+  const skipNextProjectAutosaveRef = useRef(false);
   const projectReadyForAutosaveRef = useRef(false);
 
   const selectedScriptData: LocalScript | undefined =
@@ -418,7 +453,7 @@ export function ProjectWizard() {
     ? captionStyles
     : captionStyles.filter((style) => (
       styleLaneFilter === "hyperframes" ? style.lane === "hyperframes" : style.lane !== "hyperframes"
-    ));
+  ));
   const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData?.chunks ?? NO_CHUNKS;
 
@@ -434,6 +469,21 @@ export function ProjectWizard() {
     return () => { active = false; };
   }, []);
 
+  // โปรเจกต์เสียงในเครื่องเก็บแค่ voiceId ใน config หากเปิดกลับมาตรงขั้นสคริปต์
+  // VoiceCloneStudio จะยังไม่ mount จึงต้องเติม metadata (โดยเฉพาะเพศ) ตรงนี้ด้วย
+  useEffect(() => {
+    if (voiceEngine !== "jaitts" || !cloneVoice?.id || cloneVoice.speaker) return;
+    let active = true;
+    void localApi.voiceClones()
+      .then((library) => {
+        if (!active) return;
+        const restored = library.clones.find((clone) => clone.id === cloneVoice.id);
+        if (restored) setCloneVoice(restored);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [cloneVoice?.id, cloneVoice?.speaker, voiceEngine]);
+
   const filteredVoices = voiceLibrary.filter((voice) => voiceFilter === "ทั้งหมด"
     || (GENDER_FILTERS.includes(voiceFilter) ? voice.gender === voiceFilter : voice.tone.includes(voiceFilter)));
   const orderedClipAssets = useMemo(() => [...clipAssets].sort((a, b) => a.order - b.order), [clipAssets]);
@@ -448,6 +498,19 @@ export function ProjectWizard() {
     [orderedTimelineClips],
   );
   const selectedTotalSec = timelineTotalMs / 1000;
+  const voiceSignature = voiceEngine === "jaitts"
+    ? cloneVoice?.id && cloneVoice.gender
+      ? `jaitts:${cloneVoice.id}:${cloneVoice.gender}:${speed.toFixed(2)}:${pace}`
+      : ""
+    : `${selectedVoiceData.provider || "gemini"}:${selectedVoiceData.id}:${selectedVoiceData.gender || ""}:${speed.toFixed(2)}:${pace}`;
+  // เนื้อหาสินค้าและความยาว Timeline มีผลต่อสคริปต์พอ ๆ กับเสียง หากเปลี่ยนอย่างใด
+  // อย่างหนึ่งต้องถือว่าสคริปต์ชุดเดิมเก่าแล้ว ไม่ใช่ตรวจเฉพาะ voiceId
+  const scriptBriefSignature = JSON.stringify({ ...brief, targetSec: Number(selectedTotalSec.toFixed(3)) });
+  const currentScriptVoiceSignature = voiceSignature ? `${voiceSignature}:${scriptBriefSignature}` : "";
+  const voiceContextReady = voiceEngine !== "jaitts" || Boolean(cloneVoice?.id && cloneVoice.gender);
+  const scriptContextStale = Boolean(scriptVariants.length)
+    && (!voiceContextReady || scriptVoiceSignature !== currentScriptVoiceSignature);
+  const scriptContextReady = Boolean(scriptVariants.length) && voiceContextReady && !scriptContextStale;
 
   /**
    * สคริปต์ที่เลือกไว้จะพูดได้กี่วินาที เทียบกับคลิปที่ตัดไว้กี่วินาที
@@ -735,8 +798,9 @@ export function ProjectWizard() {
     return "กำลังตรวจไฟล์รอบสุดท้าย";
   }, [operationMessage, renderProgress]);
 
-  function applyProject(project: { id: string; title: string; wizard_step?: number; product?: Record<string, unknown>; renders?: LocalRender[] }) {
+  function applyProject(project: LocalProject) {
     setProjectId(project.id);
+    projectUpdatedAtRef.current = projectRevision(project);
     const product = project.product ?? {};
     const savedBrief = (product.brief ?? product) as Partial<ProductBrief>;
     setBrief((current) => ({
@@ -813,7 +877,7 @@ export function ProjectWizard() {
         })));
     setTimelineClips(initialTimeline);
     setSelectedTimelineClipId(initialTimeline[0]?.id ?? null);
-    skipNextTimelineAutosaveRef.current = true;
+    skipNextProjectAutosaveRef.current = true;
     projectReadyForAutosaveRef.current = true;
     const config = (product.config ?? {}) as Record<string, unknown>;
     const savedScripts = product.scripts as LocalScript[] | undefined;
@@ -836,6 +900,7 @@ export function ProjectWizard() {
     if (typeof config.speed === "number") setSpeed(config.speed);
     // โปรเจกต์เก่าไม่มีค่านี้ ปล่อยเป็นค่าปกติซึ่งเท่ากับพฤติกรรมเดิมทุกอย่าง
     if (typeof config.pace === "string" && NARRATION_PACES.some((item) => item.id === config.pace)) setPace(config.pace);
+    if (typeof config.scriptVoiceSignature === "string") setScriptVoiceSignature(config.scriptVoiceSignature);
     if (typeof config.captionColor === "string") setCaptionColor(config.captionColor);
     // งานที่กำลังรันต้องกลับมาเห็นเสมอ แม้จะถูกมาร์กว่า stale เพราะผู้ใช้แก้ timeline
     // ต่อหลังกดสร้าง — ไม่งั้นออกไปหน้าอื่นแล้วกลับมาจะเหมือนงานหายไปเฉย ๆ
@@ -1094,7 +1159,8 @@ export function ProjectWizard() {
       config: {
         voiceId: voiceEngine === "jaitts" ? (cloneVoice?.id ?? null) : selectedVoice,
         provider: voiceEngine === "jaitts" ? "jaitts" : (selectedVoiceData.provider || "gemini"),
-        speed, tone, pace, scriptId: selectedScript, styleId: selectedStyle, position: captionPosition, captionColor,
+        speed, tone, pace, scriptId: selectedScript, scriptVoiceSignature,
+        styleId: selectedStyle, position: captionPosition, captionColor,
       },
       ...extra,
     };
@@ -1103,7 +1169,15 @@ export function ProjectWizard() {
   const queueProjectUpdate = (id: string, body: Record<string, unknown>) => {
     const task = projectSaveChainRef.current
       .catch(() => undefined)
-      .then(() => localApi.updateProject(id, body));
+      .then(async () => {
+        const expectedUpdatedAt = projectUpdatedAtRef.current;
+        const result = await localApi.updateProject(id, {
+          ...body,
+          ...(expectedUpdatedAt !== null ? { expectedUpdatedAt } : {}),
+        });
+        projectUpdatedAtRef.current = projectRevision(result.project);
+        return result;
+      });
     projectSaveChainRef.current = task.then(() => undefined, () => undefined);
     return task;
   };
@@ -1137,6 +1211,7 @@ export function ProjectWizard() {
       product: productOverride ?? projectProduct(),
     });
     setProjectId(result.project.id);
+    projectUpdatedAtRef.current = projectRevision(result.project);
     void refreshProjects(); // เมนูซ้ายต้องเห็นโปรเจกต์ใหม่ทันที ไม่ใช่รอรอบถัดไป
     projectReadyForAutosaveRef.current = true;
     window.history.replaceState(null, "", `/p/${encodeURIComponent(result.project.id)}`);
@@ -1145,8 +1220,8 @@ export function ProjectWizard() {
 
   useEffect(() => {
     if (engineState !== "connected" || !projectId || !projectReadyForAutosaveRef.current) return;
-    if (skipNextTimelineAutosaveRef.current) {
-      skipNextTimelineAutosaveRef.current = false;
+    if (skipNextProjectAutosaveRef.current) {
+      skipNextProjectAutosaveRef.current = false;
       return;
     }
     const timer = window.setTimeout(() => {
@@ -1161,7 +1236,7 @@ export function ProjectWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     clipAssets, timelineClips, projectId, engineState,
-    selectedScript, scriptTexts, scriptVariants,
+    selectedScript, scriptTexts, scriptVariants, scriptVoiceSignature,
     selectedVoice, speed, tone, pace, voiceEngine, cloneVoice,
     selectedStyle, captionPosition, captionColor,
   ]);
@@ -1735,6 +1810,7 @@ export function ProjectWizard() {
   };
 
   const goNext = async () => {
+    if (goNextLockRef.current) return;
     if (activeStep === 1 && clipSelectionInvalid) {
       setUploadError(orderedTimelineClips.length === 0
         ? "กรุณาอัปโหลดและจัด Timeline อย่างน้อย 1 คลิปก่อนเข้าสู่ขั้นถัดไป"
@@ -1751,24 +1827,46 @@ export function ProjectWizard() {
       if (activeStep < 6) setActiveStep((activeStep + 1) as WizardStep);
       return;
     }
+    if (activeStep === 3 && voiceCloneActive) {
+      setUploadError("กรุณาหยุดอัดหรือรอให้บันทึกเสียงเสร็จก่อนสร้างสคริปต์");
+      return;
+    }
+    if (activeStep === 3 && voiceEngine === "jaitts" && (!cloneVoice?.id || !cloneVoice.gender)) {
+      setUploadError("กรุณาเลือกเสียงในเครื่องและระบุเพศของเสียงก่อนสร้างสคริปต์");
+      return;
+    }
+    const needsGeneration = activeStep === 3
+      && (!scriptVariants.length || scriptVoiceSignature !== currentScriptVoiceSignature);
+    if (needsGeneration && scriptGenerationLockRef.current) return;
+    goNextLockRef.current = true;
+    if (needsGeneration) {
+      scriptGenerationLockRef.current = true;
+      setScriptBusy(true);
+      setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
+    }
     try {
       const id = await ensureProject();
       if (activeStep === 4 && !scriptVariants.length) {
         setUploadError("ยังไม่มีสคริปต์ — กด “สร้างใหม่ทั้งหมด” ให้ AI เขียนให้ก่อน");
         return;
       }
+      if (activeStep === 4 && scriptContextStale) {
+        setActiveStep(3);
+        setUploadError("เสียงหรือจังหวะการพากย์เปลี่ยนแล้ว กรุณาสร้างสคริปต์ให้ตรงกับเสียงนี้ก่อน");
+        return;
+      }
       if (activeStep === 2) {
         if (!brief.name.trim() || !brief.features.trim()) {
-          setUploadError("กรุณากรอกชื่อสินค้าและจุดขายหลักก่อนสร้างสคริปต์");
+          setUploadError("กรุณากรอกชื่อสินค้าและจุดขายหลักก่อนเลือกเสียง");
           return;
         }
-        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 2 });
-        // มีสคริปต์อยู่แล้วก็แค่บันทึกแล้วไปต่อ การกดถัดไปไม่ควรล้างสคริปต์ที่แก้มาทั้งชุด
-        // อยากได้ชุดใหม่จริง ๆ มีปุ่ม "เขียนสคริปต์ใหม่ทั้งชุด" ให้กดเองที่ขั้นที่ 4
-        if (!scriptVariants.length) {
-          setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
-          await regenerateAllScripts(id);
-        }
+        // ต้องเลือกเสียงก่อนเขียน เพราะภาษาไทยใช้คำลงท้ายต่างกันตามเพศผู้พากย์
+        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 3 });
+      } else if (activeStep === 3) {
+        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 4 });
+        // สร้างใหม่เฉพาะเมื่อยังไม่มี หรือผู้ใช้เปลี่ยนเสียง เพศ ความเร็ว หรือจังหวะ
+        // เพื่อไม่ทับสคริปต์ที่แก้เองเมื่อย้อนกลับมาดูขั้นนี้เฉย ๆ
+        if (needsGeneration) await regenerateAllScripts(id);
       } else {
         await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: Math.min(6, activeStep + 1) });
       }
@@ -1780,11 +1878,17 @@ export function ProjectWizard() {
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "บันทึกขั้นตอนนี้ไม่สำเร็จ");
     } finally {
+      goNextLockRef.current = false;
+      if (needsGeneration) {
+        scriptGenerationLockRef.current = false;
+        setScriptBusy(false);
+      }
       setOperationMessage("");
     }
   };
 
   const previewVoice = async (voiceId: string) => {
+    if (scriptBusy) return;
     previewAudioRef.current?.pause();
     if (voicePlaying === voiceId) {
       setVoicePlaying(null);
@@ -1881,7 +1985,8 @@ export function ProjectWizard() {
    * สคริปต์จึงไม่มีทางสร้างได้เลย รวมไว้ที่เดียวเพื่อไม่ให้หลุดกันได้อีก
    */
   const runScriptRegeneration = () => {
-    if (scriptBusy) return;
+    if (scriptBusy || scriptGenerationLockRef.current) return;
+    scriptGenerationLockRef.current = true;
     setScriptBusy(true);
     setUploadError("");
     setOperationMessage("กำลังเขียนสคริปต์ใหม่ทั้งชุด…");
@@ -1889,6 +1994,7 @@ export function ProjectWizard() {
       .then((count) => setToast(`เขียนสคริปต์ใหม่ ${count} แบบแล้ว`))
       .catch((error) => setUploadError(error instanceof Error ? error.message : "เขียนสคริปต์ใหม่ไม่สำเร็จ"))
       .finally(() => {
+        scriptGenerationLockRef.current = false;
         setScriptBusy(false);
         setOperationMessage("");
       });
@@ -1896,19 +2002,54 @@ export function ProjectWizard() {
 
   const regenerateAllScripts = async (knownProjectId?: string) => {
     const id = knownProjectId ?? projectId ?? await ensureProject();
-    const result = await localApi.generateScripts(id, { brief: briefForApi(), targetSec: selectedTotalSec });
+    // ปุ่มสร้างใหม่อาจถูกกดก่อน autosave รอบ 450ms ต้องบันทึกเสียงที่เลือกก่อนยิง AI
+    // ไม่งั้น API จะอ่าน config เก่าและเขียนคำลงท้ายให้คนละเพศ
+    await queueProjectUpdate(id, {
+      title: projectTitle(),
+      wizardStep: activeStep,
+      product: projectProduct(),
+    });
+    const requestedBrief = briefForApi();
+    const result = await localApi.generateScripts(id, {
+      brief: requestedBrief,
+      targetSec: selectedTotalSec,
+      // API บันทึกค่านี้พร้อม scripts เอง หน้าเว็บจึงไม่ต้อง autosave product ทั้งก้อนซ้ำ
+      scriptVoiceSignature: currentScriptVoiceSignature,
+    });
+    if (typeof result.updatedAt === "number") projectUpdatedAtRef.current = result.updatedAt;
     // ได้ศูนย์ชุดต้องดังขึ้นมา ไม่ใช่เงียบแล้วปล่อยให้หน้าจอค้างของเดิมไว้
     // ซึ่งเคยทำให้ผู้ใช้เห็นสคริปต์ของสินค้าคนละตัวโดยไม่รู้ตัว
     if (!result.scripts.length) {
       throw new Error("สร้างสคริปต์ไม่สำเร็จ — ยังไม่ได้ชุดไหนกลับมา กรุณาลองอีกครั้ง");
     }
+    // ระหว่างรอ AI อีกแท็บอาจแก้ brief ไปแล้ว เซิร์ฟเวอร์คืนฉบับที่ชนะมาให้
+    // ต้องรับเข้ารัฐเดียวกันกับ scripts ก่อน autosave รอบถัดไป ไม่งั้นฉบับเก่าจะทับกลับ
+    const authoritativeBrief = result.brief;
+    const authoritativeFormBrief = authoritativeBrief
+      ? productBriefFromApi(authoritativeBrief, brief)
+      : null;
+    const briefChangedWhileGenerating = authoritativeFormBrief !== null
+      && JSON.stringify(authoritativeFormBrief) !== JSON.stringify(brief);
+    // scripts, brief และ signature ถูก API บันทึกแล้ว ข้าม effect รอบที่ setters ด้านล่างสร้างขึ้น
+    // จึงไม่มีหน้าต่าง 450ms ให้ snapshot นี้ย้อนกลับไปทับ brief ที่อีกแท็บเพิ่งแก้ภายหลัง
+    skipNextProjectAutosaveRef.current = true;
+    if (authoritativeFormBrief) setBrief(authoritativeFormBrief);
     setScriptVariants(result.scripts);
     setSelectedScript(result.scripts[0].id);
     setScriptTexts(Object.fromEntries(result.scripts.map((script) => [script.id, [...script.chunks]])));
+    setScriptVoiceSignature(currentScriptVoiceSignature);
+    if (briefChangedWhileGenerating) {
+      throw new Error("รายละเอียดสินค้าถูกแก้จากอีกแท็บระหว่างเขียนสคริปต์ — ระบบเก็บฉบับใหม่ไว้แล้ว กรุณาตรวจสอบและกดสร้างอีกครั้ง");
+    }
     return result.scripts.length;
   };
 
   const beginRender = async (knownProjectId?: string) => {
+    if (!scriptContextReady) {
+      setActiveStep(3);
+      setUploadError("เสียงหรือจังหวะการพากย์ไม่ตรงกับสคริปต์ กรุณาสร้างสคริปต์ด้วยเสียงนี้ก่อน");
+      return;
+    }
     const id = knownProjectId ?? projectId ?? await ensureProject();
     const renderEditRevision = editRevisionRef.current;
     activeRenderEditRevisionRef.current = renderEditRevision;
@@ -1942,8 +2083,8 @@ export function ProjectWizard() {
             brief: briefForApi(),
             scriptId: selectedScript,
             script: currentChunks,
-            voiceId: selectedVoice,
-            provider: selectedVoiceData.provider || "gemini",
+            voiceId: voiceEngine === "jaitts" ? cloneVoice?.id : selectedVoice,
+            provider: voiceEngine === "jaitts" ? "jaitts" : (selectedVoiceData.provider || "gemini"),
             speed,
             tone,
             pace,
@@ -2028,10 +2169,15 @@ export function ProjectWizard() {
                 type="button"
                 key={step.id}
                 className={`${active ? "active" : ""} ${complete ? "complete" : ""}`}
-                disabled={step.id > 1 && clipSelectionInvalid}
+                disabled={scriptBusy || voiceCloneActive || (step.id > 1 && clipSelectionInvalid)}
                 onClick={() => {
                   if (step.id > 1 && clipSelectionInvalid) {
                     setUploadError("จัด Timeline ให้มีความยาว 1–60 วินาทีก่อนเข้าสู่ขั้นถัดไป");
+                    return;
+                  }
+                  if (step.id >= 4 && !scriptContextReady && !(step.id === 6 && renderDone)) {
+                    setActiveStep(3);
+                    setUploadError("เสียงหรือจังหวะการพากย์เปลี่ยนแล้ว กรุณาสร้างสคริปต์ด้วยเสียงนี้ก่อน");
                     return;
                   }
                   setActiveStep(step.id);
@@ -2300,6 +2446,7 @@ export function ProjectWizard() {
                     type="button"
                     className={voiceEngine === "gemini" ? "active" : ""}
                     aria-pressed={voiceEngine === "gemini"}
+                    disabled={scriptBusy || voiceCloneActive}
                     onClick={() => setVoiceEngine("gemini")}
                   >
                     <b>เสียง AI สำเร็จรูป</b><small>Gemini · เลือกได้ {voiceLibrary.length} เสียง</small>
@@ -2308,6 +2455,7 @@ export function ProjectWizard() {
                     type="button"
                     className={voiceEngine === "jaitts" ? "active" : ""}
                     aria-pressed={voiceEngine === "jaitts"}
+                    disabled={scriptBusy || voiceCloneActive}
                     onClick={() => setVoiceEngine("jaitts")}
                   >
                     <b>เสียงของฉัน</b><small>โคลนจากเสียงที่อัดเอง · ไม่ใช้โควตา</small>
@@ -2315,7 +2463,12 @@ export function ProjectWizard() {
                 </div>
 
                 {voiceEngine === "jaitts" ? (
-                  <VoiceCloneStudio selectedId={cloneVoice?.id ?? null} onSelect={setCloneVoice} />
+                  <VoiceCloneStudio
+                    selectedId={cloneVoice?.id ?? null}
+                    onSelect={setCloneVoice}
+                    locked={scriptBusy}
+                    onActivityChange={setVoiceCloneActive}
+                  />
                 ) : (
                 <>
                 <div className="filter-row">
@@ -2324,7 +2477,7 @@ export function ProjectWizard() {
                       ? voiceLibrary.length
                       : voiceLibrary.filter((voice) => GENDER_FILTERS.includes(filter) ? voice.gender === filter : voice.tone.includes(filter)).length;
                     return (
-                      <button type="button" key={filter} className={voiceFilter === filter ? "active" : ""} disabled={count === 0} onClick={() => setVoiceFilter(filter)}>
+                      <button type="button" key={filter} className={voiceFilter === filter ? "active" : ""} disabled={count === 0 || scriptBusy} onClick={() => setVoiceFilter(filter)}>
                         {filter} <em>{count}</em>
                       </button>
                     );
@@ -2332,7 +2485,7 @@ export function ProjectWizard() {
                 </div>
                 <div className="voice-grid">
                   {filteredVoices.map((voice) => (
-                    <button type="button" className={`voice-card ${selectedVoice === voice.id ? "selected" : ""}`} key={voice.id} onClick={() => setSelectedVoice(voice.id)}>
+                    <button type="button" className={`voice-card ${selectedVoice === voice.id ? "selected" : ""}`} disabled={scriptBusy} key={voice.id} onClick={() => setSelectedVoice(voice.id)}>
                       <span className="voice-avatar" style={{ background: voice.color }}>{voice.initials}</span>
                       <span className="voice-card-copy"><b>{voice.name}</b><small>{voice.gender} · {voice.tone}</small></span>
                       <span
@@ -2355,11 +2508,11 @@ export function ProjectWizard() {
                 <div className="voice-controls">
                   <div className="control-block">
                     <div className="control-label"><span>โทนการพูด</span><b>{tone}</b></div>
-                    <div className="tone-options">{VOICE_TONES.map((item) => <button type="button" className={tone === item.id ? "active" : ""} onClick={() => setTone(item.id)} key={item.id}>{item.id}</button>)}</div>
+                    <div className="tone-options">{VOICE_TONES.map((item) => <button type="button" className={tone === item.id ? "active" : ""} disabled={scriptBusy} onClick={() => setTone(item.id)} key={item.id}>{item.id}</button>)}</div>
                   </div>
                   <div className="control-block">
                     <div className="control-label"><span>ความเร็ว</span><b>{speed.toFixed(1)}×</b></div>
-                    <input className="range" type="range" min="0.8" max="1.2" step="0.1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="ความเร็วเสียง" />
+                    <input className="range" type="range" min="0.8" max="1.2" step="0.1" value={speed} disabled={scriptBusy} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="ความเร็วเสียง" />
                     <div className="range-labels"><span>ช้าชัดเจน</span><span>ธรรมชาติ</span><span>กระชับ</span></div>
                   </div>
                   <div className="control-block">
@@ -2369,6 +2522,7 @@ export function ProjectWizard() {
                         <button
                           type="button"
                           className={pace === item.id ? "active" : ""}
+                          disabled={scriptBusy}
                           onClick={() => setPace(item.id)}
                           key={item.id}
                           title={item.note}
@@ -2636,7 +2790,12 @@ export function ProjectWizard() {
                       <div className="final-video"><video src={renderedVideoUrl || videoUrl} poster={stillPoster} controls playsInline><track kind="captions" srcLang="th" label="คำบรรยายภาษาไทยฝังอยู่ในวิดีโอ" /></video></div>
                     </div>
                     {/* กล่องดาวน์โหลดย้ายไปรางขวาสุด ตรงนี้เหลือคลิปกับแคปชั่นคู่กัน */}
-                    <CaptionIdeas projectId={projectId} onToast={setToast} variant="inline" />
+                    <CaptionIdeas
+                      projectId={projectId}
+                      onToast={setToast}
+                      onProjectUpdated={syncProjectUpdatedAt}
+                      variant="inline"
+                    />
                   </div>
                 )}
               </div>
@@ -2647,8 +2806,8 @@ export function ProjectWizard() {
                 <button type="button" className="button button-quiet" onClick={() => { setTimelinePlaying(false); timelineVideoRef.current?.pause(); setTimelineEditorOpen(false); }}><ArrowLeft size={16} /> กลับไปดูสรุป</button>
                 <button type="button" className="button button-primary" disabled={clipSelectionInvalid || analyzing || Boolean(operationMessage)} onClick={() => void finishTimelineEdit()}><Check size={17} /> เสร็จสิ้นการตัดต่อ</button>
               </> : <>
-                <button type="button" className="button button-quiet" disabled={activeStep === 1} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
-                {activeStep < 6 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || scriptBusy || (activeStep === 1 && clipSelectionInvalid) || (activeStep === 4 && !selectedScriptData)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? (operationMessage ? "กำลังสร้างสคริปต์…" : "สร้างสคริปต์") : activeStep === 3 ? "เลือกเสียงนี้" : activeStep === 4 ? "ใช้สคริปต์นี้" : "สร้างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
+                <button type="button" className="button button-quiet" disabled={activeStep === 1 || scriptBusy || voiceCloneActive} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                {activeStep < 6 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || scriptBusy || voiceCloneActive || (activeStep === 1 && clipSelectionInvalid) || (activeStep === 3 && voiceEngine === "jaitts" && (!cloneVoice?.id || !cloneVoice.gender)) || (activeStep === 4 && !selectedScriptData)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? "ไปเลือกเสียง" : activeStep === 3 ? (scriptVariants.length && scriptVoiceSignature === currentScriptVoiceSignature ? "เลือกเสียงนี้" : "สร้างสคริปต์ด้วยเสียงนี้") : activeStep === 4 ? "ใช้สคริปต์นี้" : "สร้างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
               </>}
             </footer>
           </section>

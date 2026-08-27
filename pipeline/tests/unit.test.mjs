@@ -19,6 +19,7 @@ import {
   listVoices,
   padNarrationTimeline,
   run,
+  speakerGenderForVoice,
   slugify,
   synthesize,
   validateOverlayAlpha,
@@ -51,6 +52,13 @@ test("speech-rate environment is read at call time, not import time", () => {
     if (before === undefined) delete process.env.SPEAK_GRAPHEMES_PER_SEC;
     else process.env.SPEAK_GRAPHEMES_PER_SEC = before;
   }
+});
+
+test("script gender lookup understands explicit and auto voice providers", () => {
+  assert.equal(speakerGenderForVoice({ provider: "gemini", id: "Charon" }), "ชาย");
+  assert.equal(speakerGenderForVoice({ provider: "auto", id: "Kore" }), "หญิง");
+  assert.equal(speakerGenderForVoice({ id: "Puck" }), "ชาย");
+  assert.equal(speakerGenderForVoice({ provider: "gemini", id: "missing" }), null);
 });
 
 test("child process timeout terminates and rejects with a typed error", async () => {

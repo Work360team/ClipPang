@@ -30,8 +30,8 @@ import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
 import { hashPassword, verifyPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
-import { timingForPace, VOICE_TONES } from "../pipeline/core.mjs";
-import { deleteClone, listClones, listSpeakers } from "../pipeline/voice-clones.mjs";
+import { timingForPace, VOICE_GENDERS, VOICE_TONES } from "../pipeline/core.mjs";
+import { deleteClone, listClones, listSpeakers, readClone, updateCloneGender } from "../pipeline/voice-clones.mjs";
 import { discoverJaitts } from "../pipeline/jaitts.mjs";
 import { whisperReady } from "../pipeline/whisper.mjs";
 import { intakeVoiceClone } from "./voice-clone-intake.mjs";
@@ -45,6 +45,7 @@ import {
   probe,
   regenerateChunk,
   synthesizePreview,
+  VOICES,
 } from "../pipeline/index.mjs";
 import { detectScriptProviders, SCRIPT_PROVIDERS } from "../pipeline/providers.mjs";
 import { checkTtsHealth, resetTtsHealthCache } from "./tts-health.mjs";
@@ -223,6 +224,18 @@ function normalizeProductMedia(product) {
 function settingValue(value) {
   if (value == null || typeof value === "string") return value;
   return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+/**
+ * เพศของเสียงที่โปรเจกต์นี้เลือกไว้
+ *
+ * เสียงโคลนเก็บเพศไว้กับตัวอย่างที่อัด ส่วนเสียงของ Gemini มีป้ายเพศอยู่ในแคตตาล็อก
+ * ไม่รู้ก็คืน null แล้วปล่อยให้พรอมต์ไม่พูดถึงเพศเลย ดีกว่าเดาผิดแล้วสคริปต์ลงท้ายผิด
+ */
+function narratorGender(config = {}) {
+  if (config.provider === "jaitts") return readClone(config.voiceId)?.gender ?? null;
+  const voice = VOICES.gemini?.find((item) => item.id === config.voiceId);
+  return voice?.gender ?? null;
 }
 
 function readStoreSettings(store) {
@@ -598,6 +611,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         const body = await readJson(request);
         const existingProduct = parseMaybeJson(project.product ?? project.product_json, {});
         const brief = body.brief ?? existingProduct.brief ?? existingProduct;
+        const storedBriefAtStart = JSON.stringify(existingProduct.brief ?? null);
         // ความยาวสคริปต์ที่ถูกต้องขึ้นกับเสียงที่จะใช้พากย์และจังหวะเว้นวรรค
         // ไม่ใช่แค่ความยาวคลิป — เสียงเร็วต้องใช้คำมากกว่าเพื่อเวลาเท่ากัน
         const voiceConfig = existingProduct.config ?? {};
@@ -611,14 +625,39 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
             speed: voiceConfig.speed,
           }),
           timing: timingForPace(voiceConfig.pace),
+          speakerGender: narratorGender(voiceConfig),
           // ผู้ใช้เลือกผู้ให้บริการไว้ในหน้าตั้งค่า — auto = ตัวแรกที่ใช้ได้จริง (CLI มาก่อน API)
           provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,
         });
         const scripts = normalizeScriptsForClient(generated);
-        const product = { ...existingProduct, brief, scripts };
-        store.updateProject(project.id, { product, wizardStep: 4 });
-        return json({ ok: true, scripts });
+        // AI อาจใช้เวลาหลายวินาที ระหว่างนั้น autosave/แท็บอื่นอาจแก้ config ได้
+        // อ่านฉบับล่าสุดก่อนเขียนผลกลับ เพื่อไม่เอา snapshot เก่าทับเสียงหรือ timeline ใหม่
+        const latestProject = store.getProject(project.id) ?? project;
+        const latestProduct = parseMaybeJson(latestProject.product ?? latestProject.product_json, {});
+        const briefChangedWhileGenerating = JSON.stringify(latestProduct.brief ?? null) !== storedBriefAtStart;
+        const scriptVoiceSignature = typeof body.scriptVoiceSignature === "string"
+          ? body.scriptVoiceSignature
+          : null;
+        const latestConfig = latestProduct.config && typeof latestProduct.config === "object" && !Array.isArray(latestProduct.config)
+          ? latestProduct.config
+          : {};
+        const product = {
+          ...latestProduct,
+          // ถ้าอีกแท็บแก้สินค้าในช่วงที่ AI กำลังตอบ ให้เก็บฉบับใหม่ไว้ สคริปต์ชุดนี้จะถูก
+          // signature ฝั่ง UI มาร์กว่าเก่าและให้สร้างใหม่ แต่อย่าทำข้อมูลที่ผู้ใช้เพิ่งแก้หาย
+          brief: briefChangedWhileGenerating ? latestProduct.brief : brief,
+          scripts,
+          // API เป็นผู้บันทึก signature พร้อม scripts แบบ atomic ฝั่งเซิร์ฟเวอร์
+          // หน้าเว็บจึงไม่ต้อง PATCH product ทั้งก้อนอีกรอบหลังคำขอนี้
+          ...(scriptVoiceSignature ? {
+            config: { ...latestConfig, scriptVoiceSignature },
+          } : {}),
+        };
+        const savedProject = store.updateProject(project.id, { product, wizardStep: 4 });
+        // ส่ง brief ฉบับที่บันทึกจริงกลับไปด้วย หากอีกแท็บแก้ระหว่างรอ AI
+        // หน้าจอเดิมจะได้ autosave ต่อจากฉบับล่าสุด ไม่เขียน snapshot เก่าทับกลับมา
+        return json({ ok: true, scripts, brief: product.brief, updatedAt: savedProject.updatedAt });
       }
 
       // แคปชั่นใต้โพสต์ + แฮชแท็ก สำหรับเอาไปวางตอนอัปโหลดคลิป
@@ -639,8 +678,12 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,
         });
-        store.updateProject(project.id, { product: { ...existingProduct, captions: generated } });
-        return json({ ok: true, captions: generated });
+        // การสร้างอาจใช้เวลานาน จึงอ่านฉบับล่าสุดอีกครั้งก่อนเติม captions
+        // ไม่เอา product snapshot ก่อน await ไปทับการแก้ที่เพิ่งบันทึก
+        const latestProject = store.getProject(project.id) ?? project;
+        const latestProduct = parseMaybeJson(latestProject.product ?? latestProject.product_json, {});
+        const savedProject = store.updateProject(project.id, { product: { ...latestProduct, captions: generated } });
+        return json({ ok: true, captions: generated, updatedAt: savedProject.updatedAt });
       }
 
       const chunkMatch = /^\/api\/projects\/([^/]+)\/script\/([^/]+)\/chunk\/(\d+)$/.exec(pathname);
@@ -656,6 +699,8 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           variantId: chunkMatch[2],
           chunkIndex: Number(chunkMatch[3]),
           instruction: body.instruction,
+          speakerGender: narratorGender(product.config ?? {}),
+          provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,
         });
         return json({
@@ -685,6 +730,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           buffer,
           speaker: params.get("speaker"),
           tone: params.get("tone"),
+          gender: params.get("gender"),
           fallbackText: params.get("text"),
           signal: request.signal,
         });
@@ -693,6 +739,15 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       const clonePrefix = "/api/voice-clones/";
       const voiceCloneMatch = pathname.startsWith(clonePrefix) ? pathname.slice(clonePrefix.length) : null;
+      if (voiceCloneMatch && !voiceCloneMatch.includes("/") && method === "PATCH") {
+        const body = await readJson(request);
+        if (!VOICE_GENDERS.includes(String(body.gender ?? "").trim())) {
+          return apiError(400, "INVALID_VOICE_GENDER", "กรุณาเลือกเพศของเสียง");
+        }
+        const clone = updateCloneGender(decodeURIComponent(voiceCloneMatch), body.gender);
+        if (!clone) return apiError(404, "VOICE_CLONE_NOT_FOUND", "ไม่พบเสียงต้นแบบนี้");
+        return json({ ok: true, clone });
+      }
       if (voiceCloneMatch && !voiceCloneMatch.includes("/") && method === "DELETE") {
         const removed = deleteClone(decodeURIComponent(voiceCloneMatch));
         if (!removed) return apiError(404, "VOICE_CLONE_NOT_FOUND", "ไม่พบเสียงต้นแบบนี้");

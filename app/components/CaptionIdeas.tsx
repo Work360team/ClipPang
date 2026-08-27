@@ -10,9 +10,10 @@ import { localApi, type LocalCaptionSet } from "../lib/local-api";
  * แทนที่กล่องพรีวิวสดหลังเรนเดอร์เสร็จ เพราะถึงตอนนั้นพรีวิวไม่บอกอะไรเพิ่มแล้ว
  * แต่สิ่งที่ผู้ใช้ต้องทำต่อทันทีคือเขียนแคปชั่น ซึ่งเป็นงานที่คนส่วนใหญ่ติด
  */
-export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
+export function CaptionIdeas({ projectId, onToast, onProjectUpdated, variant = "panel" }: {
   projectId: string | null;
   onToast: (message: string) => void;
+  onProjectUpdated?: (updatedAt: number) => void;
   /** panel = การ์ดเข้มในรางขวา, inline = การ์ดสว่างที่วางรวมในหน้าผลลัพธ์ */
   variant?: "panel" | "inline";
 }) {
@@ -34,12 +35,13 @@ export function CaptionIdeas({ projectId, onToast, variant = "panel" }: {
     try {
       const result = await localApi.generateCaptions(projectId);
       setData(result.captions);
+      if (typeof result.updatedAt === "number") onProjectUpdated?.(result.updatedAt);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "สร้างแคปชั่นไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [onProjectUpdated, projectId]);
 
   // ชุดที่เคยสร้างไว้ถูกเก็บกับโปรเจกต์ กลับมาหน้าเดิมจึงเห็นของเดิมไม่ต้องสร้างซ้ำ
   // ถ้ายังไม่เคยมี ให้ร่างให้เลยครั้งเดียว — คลิปเสร็จแล้วงานถัดไปคือโพสต์ ไม่ต้องรอกด

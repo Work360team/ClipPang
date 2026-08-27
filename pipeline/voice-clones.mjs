@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_TONE, VOICE_TONES } from "./core.mjs";
+import { DEFAULT_TONE, VOICE_GENDERS, VOICE_TONES } from "./core.mjs";
 import { sha256 } from "./lib.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,6 +38,11 @@ function knownTone(value) {
   return VOICE_TONES.some((tone) => tone.id === text) ? text : DEFAULT_TONE;
 }
 
+function knownGender(value) {
+  const text = String(value ?? "").trim();
+  return VOICE_GENDERS.includes(text) ? text : null;
+}
+
 function readMeta(dir, id) {
   const metaFile = path.join(dir, id, "voice.json");
   const wav = path.join(dir, id, "ref.wav");
@@ -51,6 +56,8 @@ function readMeta(dir, id) {
       id,
       speaker,
       tone,
+      // คนเขียนสคริปต์ต้องรู้ ไม่งั้นเสียงผู้ชายอาจได้สคริปต์ที่ลงท้ายด้วย ค่ะ
+      gender: knownGender(meta.gender),
       label: `${speaker} · ${tone}`,
       text: String(meta.text),
       durationMs: Number(meta.durationMs) || null,
@@ -111,9 +118,16 @@ export function findClone({ speaker, tone }, { dir = clonesDir() } = {}) {
  * ข้อความต้องตรงกับที่พูดในไฟล์เป๊ะ ๆ ไม่งั้น F5-TTS จะเพี้ยน — ผู้เรียกควรถอดข้อความ
  * ด้วย whisper ที่ติดตั้งอยู่แล้วแทนที่จะให้ผู้ใช้พิมพ์เอง
  */
-export function saveClone({ wavBuffer, text, speaker, tone, durationMs }, { dir = clonesDir() } = {}) {
+export function saveClone({ wavBuffer, text, speaker, tone, gender, durationMs }, { dir = clonesDir() } = {}) {
   if (!Buffer.isBuffer(wavBuffer) || !wavBuffer.length) throw new Error("ไม่มีไฟล์เสียงต้นแบบ");
   if (!text?.trim()) throw new Error("ต้องมีข้อความที่ตรงกับเสียงต้นแบบ");
+  const normalizedGender = knownGender(gender);
+  if (!normalizedGender) {
+    throw Object.assign(new Error("กรุณาเลือกเพศของเสียงก่อนบันทึก"), {
+      status: 400,
+      code: "VOICE_GENDER_REQUIRED",
+    });
+  }
   const id = cloneIdFor(wavBuffer);
   const target = path.join(dir, id);
   fs.mkdirSync(target, { recursive: true });
@@ -122,11 +136,29 @@ export function saveClone({ wavBuffer, text, speaker, tone, durationMs }, { dir 
     id,
     speaker: String(speaker || "เสียงของฉัน").slice(0, 60),
     tone: knownTone(tone),
+    gender: normalizedGender,
     text: String(text).trim(),
     durationMs: Number(durationMs) || null,
     createdAt: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(target, "voice.json"), JSON.stringify(meta, null, 2), "utf8");
+  return readMeta(dir, id);
+}
+
+/** เพิ่มเพศให้เสียงที่อัดไว้ก่อนฟีเจอร์นี้ โดยไม่ต้องอัดเสียงใหม่ */
+export function updateCloneGender(id, gender, { dir = clonesDir() } = {}) {
+  const clone = readClone(id, { dir });
+  if (!clone) return null;
+  const normalizedGender = knownGender(gender);
+  if (!normalizedGender) {
+    throw Object.assign(new Error("กรุณาเลือกเพศของเสียง"), {
+      status: 400,
+      code: "INVALID_VOICE_GENDER",
+    });
+  }
+  const metaFile = path.join(dir, id, "voice.json");
+  const meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+  fs.writeFileSync(metaFile, JSON.stringify({ ...meta, gender: normalizedGender }, null, 2), "utf8");
   return readMeta(dir, id);
 }
 

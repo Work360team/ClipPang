@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { VOICE_GENDERS } from "../pipeline/core.mjs";
 import { durationMs, ffmpeg } from "../pipeline/lib.mjs";
 import { transcribeTokens, whisperReady } from "../pipeline/whisper.mjs";
 import { MAX_REF_MS, MIN_REF_MS, saveClone } from "../pipeline/voice-clones.mjs";
@@ -47,10 +48,16 @@ async function toReferenceWav(inputFile, outputFile, options = {}) {
  * ข้อความต้องตรงกับที่พูดเป๊ะ ๆ ไม่งั้น F5-TTS จะเพี้ยน จึงถอดด้วย whisper แทนที่จะ
  * เชื่อประโยคที่ให้ผู้ใช้อ่าน เพราะคนอ่านมักไม่ตรงกับที่เขียนไว้ทุกคำ
  */
-export async function intakeVoiceClone({ buffer, speaker, tone, fallbackText, signal }) {
+export async function intakeVoiceClone({ buffer, speaker, tone, gender, fallbackText, signal }) {
   if (!buffer?.length) throw Object.assign(new Error("ไม่มีไฟล์เสียง"), { status: 400, code: "EMPTY_UPLOAD" });
   if (buffer.length > MAX_UPLOAD_BYTES) {
     throw Object.assign(new Error("ไฟล์เสียงใหญ่เกินไป"), { status: 413, code: "FILE_TOO_LARGE" });
+  }
+  if (!VOICE_GENDERS.includes(String(gender ?? "").trim())) {
+    throw Object.assign(new Error("กรุณาเลือกเพศของเสียงก่อนเริ่มอัด"), {
+      status: 400,
+      code: "VOICE_GENDER_REQUIRED",
+    });
   }
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "clip360-voice-"));
@@ -100,6 +107,7 @@ export async function intakeVoiceClone({ buffer, speaker, tone, fallbackText, si
       text,
       speaker,
       tone,
+      gender,
       durationMs: length,
     });
     return { ...clone, transcribedBy };
