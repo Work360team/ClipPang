@@ -105,6 +105,26 @@ export default function StylesPage() {
     });
   }, [engineStyles]);
 
+  // เล่นเฉพาะตัวอย่างที่อยู่ในจอ
+  //
+  // วัดบนมือถือแล้วพบว่าคลิปตัวอย่างทั้ง 15 ใบเล่นพร้อมกันหมดตั้งแต่เปิดหน้า
+  // ทั้งที่เห็นทีละไม่กี่ใบ กินแบตและทำให้เลื่อนหน้าสะดุดโดยไม่ได้อะไรกลับมา
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const videos = Array.from(document.querySelectorAll<HTMLVideoElement>(".style-video-frame video"));
+    if (!videos.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const video = entry.target as HTMLVideoElement;
+        // เบราว์เซอร์ปฏิเสธ play() ได้หลายกรณี ปล่อยค้างที่ภาพปกดีกว่าโยน error ทิ้งไว้
+        if (entry.isIntersecting) void video.play().catch(() => undefined);
+        else video.pause();
+      }
+    }, { rootMargin: "200px 0px" });
+    videos.forEach((video) => observer.observe(video));
+    return () => observer.disconnect();
+  }, [styles, laneFilter]);
+
   // กรองตามเลนที่ใช้เรนเดอร์จริง — สองเลนนี้ต่างกันทั้งหน้าตาและเวลาเรนเดอร์
   // จึงเป็นสิ่งแรกที่คนเลือกสไตล์อยากแยก
   const laneCounts = {
@@ -173,7 +193,6 @@ export default function StylesPage() {
                 <div className="style-video-frame">
                   <video
                     aria-label={`วิดีโอตัวอย่างสไตล์ ${style.name}`}
-                    autoPlay
                     loop
                     muted
                     playsInline
@@ -569,16 +588,79 @@ export default function StylesPage() {
           .style-caption-kanit { font-size: clamp(20px, 2.8vw, 30px); }
         }
 
-        @media (max-width: 700px) {
-          .style-page { padding: 26px 18px 40px; }
-          .style-heading { align-items: flex-start; flex-direction: column; gap: 16px; }
-          .style-heading-note { display: none; }
+        /* มือถือ: เรียงสองคอลัมน์ให้เทียบสไตล์กันได้ในจอเดียว
 
-        .style-gallery { grid-template-columns: 1fr; }
-          .style-video-frame { aspect-ratio: 9 / 10.5; }
-          .style-selection-summary { grid-template-columns: auto 1fr; }
-          .style-selection-summary p { grid-column: 1 / -1; justify-self: start; padding-top: 2px; }
-          .style-use-link { grid-column: 1 / -1; width: 100%; }
+           คอลัมน์เดียวทำให้การ์ดใบเดียวสูง 611px กินจอเกือบทั้งใบ พอมี 15 สไตล์
+           หน้าจึงยาวเกือบหมื่นพิกเซล กว่าจะเลื่อนถึงอันท้าย ๆ ก็ลืมแล้วว่าอันแรก
+           หน้าตายังไง ทั้งที่งานของหน้านี้คือเอามาเทียบกันแล้วเลือก */
+        @media (max-width: 700px) {
+          .style-page { padding: 16px 14px 18px; }
+          .style-heading { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 13px; }
+          .style-heading-note { display: none; }
+          /* แถบบนบอกอยู่แล้วว่านี่คือหน้าคลังสไตล์ซับ */
+          .style-kicker { display: none; }
+          .style-heading h1 { font-size: 22px; letter-spacing: -.022em; }
+          .style-heading p { margin-top: 4px; font-size: 12.5px; line-height: 1.5; }
+          .style-filter-note { font-size: 11.5px; }
+
+          .style-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .style-card { position: relative; border-radius: 15px; }
+          .style-card:hover { transform: none; }
+
+          .style-video-frame {
+            /* 9:16 เท่าสัดส่วนคลิปจริงที่จะได้ออกมา */
+            aspect-ratio: 9 / 16;
+            margin: 5px;
+            border-radius: 11px;
+            container-type: inline-size;
+          }
+
+          /* ตัวอย่างย่อตามความกว้างการ์ด ไม่ใช่ความกว้างจอ ไม่งั้นซับล้นออกนอกกรอบ */
+          .style-card .style-caption-live { font-size: 7.4cqw; }
+          .style-card .style-caption-live.style-caption-big { font-size: 9.6cqw; }
+          .style-caption-karaoke { font-size: 7.6cqw; }
+          .style-caption-box { font-size: 7.2cqw; }
+          .style-caption-reveal { font-size: 6.8cqw; }
+          .style-caption-kanit { font-size: 8cqw; }
+
+          /* ป้ายอธิบายยาวกว่าครึ่งการ์ด ทับตัวอย่างจนดูไม่ออกว่าสไตล์ไหนเป็นไหน */
+          .style-preview-pill { display: none; }
+          .style-quality-pill { top: 7px; right: 7px; gap: 3px; padding: 3px 7px; font-size: 10px; }
+
+          .style-card-body { padding: 9px 10px 11px; }
+          .style-number { margin-bottom: 0; font-size: 10.5px; }
+          .style-card h2 { font-size: 13.5px; line-height: 1.25; }
+          /* คำอธิบายกับสเปกอ่านได้สบายบนจอใหญ่ แต่ในการ์ดกว้าง 160px มันเบียดจนไม่มีใครอ่าน
+             ตัวอย่างที่ขยับอยู่บอกหน้าตาของสไตล์ได้ตรงกว่าคำอธิบายอยู่แล้ว */
+          .style-card-body > p,
+          .style-meta { display: none; }
+          .style-check { width: 20px; height: 20px; flex: 0 0 20px; }
+          .style-select-button { margin-top: 9px; border-radius: 10px; font-size: 12px; }
+
+          /* แตะตรงไหนของการ์ดก็เลือกได้ ไม่ต้องเล็งปุ่มแถบเดียวท้ายการ์ด
+             ยังเป็นปุ่มจริงตัวเดิม โฟกัสและ aria-pressed จึงไม่หายไปไหน */
+          .style-select-button::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+          }
+
+          /* สรุปว่าเลือกอันไหนอยู่ท้ายสุดของการ์ดทั้ง 15 ใบ ไม่มีใครเลื่อนไปเห็น
+             ตรึงไว้เหนือแถบเมนูล่างแทน เลือกจากตรงไหนก็กดใช้ต่อได้ทันที */
+          .style-selection-summary {
+            position: sticky;
+            bottom: calc(var(--app-nav-h, 58px) + var(--app-safe-b, 0px) + 14px);
+            z-index: 12;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            margin-top: 14px;
+            padding: 10px 12px;
+            box-shadow: 0 12px 30px rgba(30, 35, 27, .16);
+          }
+
+          .style-selection-summary p { display: none; }
+          .style-summary-icon { width: 30px; height: 30px; }
+          .style-use-link { width: auto; padding: 0 13px; font-size: 12px; }
         }
 
         @media (prefers-reduced-motion: reduce) {

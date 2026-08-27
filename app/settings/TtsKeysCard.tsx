@@ -233,6 +233,9 @@ export function TtsKeysCard({ engineState }: { engineState: string }) {
         .key-remove:disabled { opacity: .35; cursor: not-allowed; }
         .key-add { display: flex; gap: 8px; align-items: center; }
         .key-add .settings-input-wrap { flex: 1; min-width: 0; }
+        /* ช่องกรอกมีความกว้างตั้งต้นของมันเองราว 280px ถ้าไม่ปลดออก แถวนี้จะย่อ
+           ไม่ลงและดันหน้าตั้งค่าทั้งหน้าให้กว้างเกินจอมือถือ */
+        .key-add .settings-input-wrap input { min-width: 0; }
         .key-try { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
         .key-try small { font-size: 11.5px; opacity: .6; }
         .key-audio { width: 100%; margin-top: 10px; height: 38px; }

@@ -378,6 +378,9 @@ export default function SettingsPage() {
         .settings-main-column,
         .settings-side-column {
           display: grid;
+          /* ช่องกริดมีขนาดต่ำสุดเท่าเนื้อหาที่ย่อไม่ได้ ถ้าไม่กำหนด minmax การ์ดใบเดียว
+             ที่ย่อไม่ลงจะดันคอลัมน์ให้กว้างกว่าจอ แล้วทั้งหน้าล้นออกไปทางขวา */
+          grid-template-columns: minmax(0, 1fr);
           gap: 17px;
         }
 
@@ -773,7 +776,9 @@ export default function SettingsPage() {
         }
 
         @media (max-width: 900px) {
-          .settings-layout { grid-template-columns: 1fr; }
+          /* minmax(0, …) ไม่ใช่ 1fr เปล่า ๆ เพราะช่องกริดมีขนาดต่ำสุดเท่าเนื้อหาข้างใน
+             ที่ย่อไม่ได้ ช่องจึงกว้าง 400px ทั้งที่จอกว้าง 375px แล้วหน้าล้นออกไปด้านขวา */
+          .settings-layout { grid-template-columns: minmax(0, 1fr); }
           .settings-side-column { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
           .settings-side-column > section { height: 100%; }
         }
