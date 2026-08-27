@@ -33,6 +33,7 @@ import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import { timingForPace, VOICE_GENDERS, VOICE_TONES } from "../pipeline/core.mjs";
 import { deleteClone, listClones, listSpeakers, readClone, updateCloneGender } from "../pipeline/voice-clones.mjs";
 import { discoverJaitts } from "../pipeline/jaitts.mjs";
+import { toSpokenThai } from "../pipeline/thai-speech.mjs";
 import { whisperReady } from "../pipeline/whisper.mjs";
 import { intakeVoiceClone } from "./voice-clone-intake.mjs";
 import { readSpeechRates, speechModelFor } from "./speech-stats.mjs";
@@ -626,6 +627,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           }),
           timing: timingForPace(voiceConfig.pace),
           speakerGender: narratorGender(voiceConfig),
+          spoken: voiceConfig.provider === "jaitts" ? (text) => toSpokenThai(text).text : undefined,
           // ผู้ใช้เลือกผู้ให้บริการไว้ในหน้าตั้งค่า — auto = ตัวแรกที่ใช้ได้จริง (CLI มาก่อน API)
           provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,

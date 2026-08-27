@@ -1,5 +1,5 @@
 // script — brief → สคริปต์ขายของภาษาไทย 5 เวอร์ชัน  →  อนาคตคือ packages/ai
-import { chunkText, DEFAULT_TIMING, graphemeCount } from "./core.mjs";
+import { chunkText, DEFAULT_TIMING, graphemeCount, MAX_CHARS_PER_CHUNK } from "./core.mjs";
 import { characterBudget, chunkMs } from "./speech-rate.mjs";
 import {
   callCliProvider,
@@ -50,6 +50,22 @@ function normalizeBrief(brief) {
  * ภาษาไทยลงท้ายต่างกันตามเพศผู้พูด ก่อนหน้านี้พรอมต์ไม่มีข้อมูลนี้เลย สคริปต์จึง
  * สุ่มลงท้าย ครับ/ค่ะ เอง แล้วบางทีก็สวนทางกับเสียงที่เลือกไว้
  */
+/**
+ * ตัดสัญลักษณ์หัวข้อที่ติดมาหน้าบรรทัด
+ *
+ * ตัวสำรองออฟไลน์หยิบข้อความจากช่อง "จุดขาย" มาตรง ๆ ซึ่งผู้ใช้มักวางมาเป็น
+ * bullet list ถ้าไม่ตัดออก คนพากย์จะได้ยินว่า "ลบ" นำหน้าทุกข้อ
+ *
+ * ไล่ทีละตัวแทนการใช้ regex เพราะคลาสอักขระที่มีขีดคั่นตีความเป็นช่วงได้ง่าย
+ * และช่วงนั้นกินตัวอักษรไทยไปด้วย
+ */
+const BULLET_CHARS = new Set([" ", "	", "-", "–", "—", "•", "*", "·"]);
+function stripBullet(text) {
+  let index = 0;
+  while (index < text.length && BULLET_CHARS.has(text[index])) index += 1;
+  return text.slice(index).trim();
+}
+
 function speakerLine(gender) {
   if (gender === "ชาย") return "ผู้พากย์: ผู้ชาย — ใช้ ผม/ครับ ห้ามใช้ ค่ะ และห้ามใช้ ดิฉัน เป็นสรรพนามแทนผู้พูด";
   if (gender === "หญิง") return "ผู้พากย์: ผู้หญิง — ใช้ ค่ะ/นะคะ ห้ามใช้ ครับ และห้ามใช้ ผม เป็นสรรพนามแทนผู้พูด (คำว่า ผม ที่หมายถึงเส้นผมยังใช้ได้)";
@@ -203,7 +219,7 @@ function withTemplate(brief, targetSec, variants, budget) {
 
 export async function generateScript(
   brief,
-  { targetSec = 30, variants = 5, provider = "auto", charsPerSec, speech, timing, speakerGender, signal, timeoutMs } = {},
+  { targetSec = 30, variants = 5, provider = "auto", charsPerSec, speech, timing, speakerGender, spoken = (text) => text, signal, timeoutMs } = {},
 ) {
   if (!brief?.name) throw new Error("ข้อมูลสินค้าต้องมี brief.name");
   brief = normalizeBrief(brief);
@@ -234,7 +250,13 @@ export async function generateScript(
   result.variants = result.variants.map((v, vi) => {
     const chunks = [];
     for (const c of v.chunks || []) {
-      for (const piece of chunkText(String(c.text || ""))) {
+      const line = stripBullet(String(c.text || ""));
+      if (!line) continue;
+      // พรอมต์สั่งให้เขียนมาเป็นท่อนละหนึ่งจออยู่แล้ว การหั่นซ้ำมีกฎ "ตัดหลังคำว่า
+      // ครับ/เลย/นะ" ซึ่งทำให้ "งานเข้าเลยครับ" กลายเป็นสองท่อน แล้วคำว่า "ครับ"
+      // ไปยืนเป็นท่อนของตัวเอง หั่นเฉพาะท่อนที่ยาวเกินหนึ่งจอจริง ๆ พอ
+      const pieces = graphemeCount(line) > MAX_CHARS_PER_CHUNK ? chunkText(line) : [line];
+      for (const piece of pieces) {
         chunks.push({
           i: chunks.length,
           text: piece,
@@ -243,7 +265,19 @@ export async function generateScript(
         });
       }
     }
-    const estMs = chunks.reduce((a, c) => a + chunkMs(model, c.text), 0);
+
+    // ตัดให้ลงงบเวลาจริง — AI มักเขียนเกินที่ขอ ปล่อยไว้แล้วเสียงจะยาวเกินคลิป
+    // ตัดจากท่อนเนื้อหาท้าย ๆ เพราะ hook กับ CTA ทิ้งไม่ได้
+    const spokenLength = (text) => graphemeCount(spoken(text));
+    let used = chunks.reduce((sum, chunk) => sum + spokenLength(chunk.text), 0);
+    while (budget > 0 && used > budget) {
+      const index = chunks.findLastIndex((chunk) => chunk.role === "body");
+      if (index < 0) break;
+      used -= spokenLength(chunks[index].text);
+      chunks.splice(index, 1);
+    }
+    chunks.forEach((chunk, index) => { chunk.i = index; });
+    const estMs = chunks.reduce((a, c) => a + chunkMs(model, spoken(c.text)), 0);
     return { id: v.id || `v${vi + 1}`, hookType: v.hookType || "-", chunks, estDurationMs: estMs };
   });
   return result;

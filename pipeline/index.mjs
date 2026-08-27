@@ -200,6 +200,9 @@ export async function generateScripts(input, options = {}) {
     timing: args.timing,
     // ภาษาไทยลงท้ายต่างกันตามเพศผู้พูด สคริปต์ต้องรู้ก่อนเขียน
     speakerGender: args.speakerGender ?? speakerGenderForVoice(args.voice),
+    // เครื่องยนต์ในเครื่องพูด 20000mAh ว่า สองหมื่นมิลลิแอมป์ งบตัวอักษรต้องนับ
+    // จากคำที่พูดจริง ไม่งั้นสคริปต์จะยาวเกินคลิปทุกครั้งที่มีตัวเลข
+    spoken: args.spoken,
     timeoutMs: args.timeoutMs,
     signal: args.signal,
   });
@@ -937,7 +940,9 @@ export async function runPipeline(options = {}) {
       },
       durationMs: timeline.durationMs,
       // สถิติความเร็วพูดของงานนี้ ใช้ประเมินความยาวสคริปต์ครั้งต่อไปให้แม่นขึ้น
-      speechSample: reuse ? null : (() => {
+      // เสียงที่ถูกเร่งให้ลงไทม์ไลน์แล้วสั้นกว่าจังหวะพูดจริง เอาไปวัดอัตราจะได้ค่าที่
+      // เร็วเกินจริง แล้วรอบหน้าระบบจะขอสคริปต์ยาวขึ้นจนเสียงเกินเวลาอีก วนไปเรื่อย ๆ
+      speechSample: (reuse || narrationFitResult?.rate > 1.001) ? null : (() => {
         // นับตัวอักษรจากข้อความที่ "พูดจริง" ไม่ใช่ที่แสดงบนซับ — เสียงในเครื่องอ่าน
         // 20000mAh ว่า สองหมื่นมิลลิแอมป์ ถ้านับจากแปดตัวอักษรแต่จับเวลาของสิบแปด
         // ตัวอักษร อัตราที่วัดได้จะเพี้ยนไปทั้งชุด

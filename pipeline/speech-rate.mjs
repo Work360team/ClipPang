@@ -21,14 +21,14 @@ import { graphemeCount } from "./core.mjs";
 /** คีย์ในตาราง settings ที่เก็บสถิติสะสม */
 export const SPEECH_RATE_SETTING = "speechRates";
 
+/** ค่าตั้งต้นก่อนมีข้อมูลของตัวเอง หน่วยเป็นตัวอักษร/วินาที */
 /**
- * ค่าตั้งต้นก่อนมีข้อมูลของตัวเอง หน่วยเป็นตัวอักษร/วินาที
- *
- * gemini มาจากการวัดงานจริงหลัง pipeline เสียงตัดหางเงียบแล้ว ตั้งไว้ต่ำกว่าที่วัดได้
- * เล็กน้อย (10.7) เพราะพลาดทางช้าปลอดภัยกว่า — สคริปต์สั้นไปนิดระบบตัดคลิปให้พอดีได้
- * แต่สคริปต์ยาวเกินจะไปจบที่ error ที่ผู้ใช้ต้องแก้เอง
+ * gemini มาจากการวัดงานจริงหลัง pipeline เสียงตัดหางเงียบแล้ว (10.7)
+ * jaitts วัดจากการสังเคราะห์จริงบนเครื่องนี้ได้ราว 9-12 ตัวอักษร/วินาที
+ * ทั้งคู่ตั้งไว้ต่ำกว่าที่วัดได้เล็กน้อย เพราะพลาดทางช้าปลอดภัยกว่า — สคริปต์สั้นไป
+ * ระบบตัดคลิปให้พอดีได้ แต่สคริปต์ยาวเกินจะไปจบที่ error ที่ผู้ใช้ต้องแก้เอง
  */
-const DEFAULT_RATES = { gemini: 9.5 };
+const DEFAULT_RATES = { gemini: 9.5, jaitts: 9.5 };
 export const FALLBACK_GRAPHEMES_PER_SEC = 6.4;
 
 /** ท่อนที่สั้นหรือยาวผิดปกติมักมาจากไฟล์เสียงพัง ไม่ใช่ลักษณะการพูดจริง */
@@ -37,6 +37,16 @@ const MAX_CHUNK_MS = 20000;
 
 /** ต่ำกว่านี้ยังไม่เชื่อค่าที่วัดได้ ใช้ค่าตั้งต้นไปก่อน */
 const MIN_SAMPLES = 6;
+
+/**
+ * รุ่นของวิธีวัด
+ *
+ * ค่าที่เก็บไว้ก่อนหน้านี้นับตัวอักษรจากคำที่พูดจริง แต่จับเวลาจากเสียงที่ยังข้าม
+ * ตัวเลขไปเงียบ ๆ อัตราที่ได้จึงเร็วเกินจริงเกือบเท่าตัว (วัดได้ 15.87 ตัว/วินาที
+ * ทั้งที่ของจริงราว 8-10) ทิ้งค่าที่วัดด้วยวิธีเก่าแล้วเริ่มนับใหม่ ดีกว่าปล่อยให้
+ * ค่าเพี้ยนไปกำหนดความยาวสคริปต์
+ */
+export const SAMPLE_VERSION = 2;
 
 /** กรอบที่เป็นไปได้ของภาษาพูด กันข้อมูลแปลก ๆ ทำให้ประเมินเพี้ยนไปคนละโลก */
 const RATE_RANGE = [3, 25];
@@ -66,13 +76,15 @@ export function sampleChunks(chunks) {
     graphemes += count;
     ms += duration;
   }
-  return n ? { n, graphemes, ms } : null;
+  return n ? { v: SAMPLE_VERSION, n, graphemes, ms } : null;
 }
 
 export function mergeSamples(previous, next) {
   if (!next?.n) return previous ?? null;
-  if (!previous?.n) return { ...next };
+  // ของเก่าที่วัดด้วยวิธีคนละรุ่นเอามารวมกันไม่ได้ ทิ้งแล้วเริ่มจากชุดใหม่
+  if (!previous?.n || previous.v !== next.v) return { ...next };
   return {
+    v: next.v,
     n: previous.n + next.n,
     graphemes: previous.graphemes + next.graphemes,
     ms: previous.ms + next.ms,
@@ -87,7 +99,7 @@ function modelFrom(sample, { provider, speed = 1, source } = {}) {
   const factor = Number(speed) > 0 ? Number(speed) : 1;
   const fallback = defaultRate(provider) * factor;
   const asDefault = { graphemesPerSec: fallback, msPerGrapheme: 1000 / fallback, samples: sample?.n ?? 0, source: "default" };
-  if (!sample?.n || sample.n < MIN_SAMPLES || !(sample.graphemes > 0) || !(sample.ms > 0)) return asDefault;
+  if (!sample?.n || sample.v !== SAMPLE_VERSION || sample.n < MIN_SAMPLES || !(sample.graphemes > 0) || !(sample.ms > 0)) return asDefault;
   const rate = (sample.graphemes / sample.ms) * 1000;
   if (!(rate >= RATE_RANGE[0] && rate <= RATE_RANGE[1])) return asDefault;
   return { graphemesPerSec: rate, msPerGrapheme: 1000 / rate, samples: sample.n, source: source ?? "measured" };
@@ -105,9 +117,9 @@ export function lookupSpeechModel(rates, { provider, voice, speed } = {}) {
   const targetSpeed = Number.isFinite(wanted) && wanted > 0 ? wanted : 1;
 
   const exact = table[speechKey({ provider, voice, speed })];
-  if (exact?.n >= MIN_SAMPLES) return modelFrom(exact, { provider, speed: targetSpeed });
+  if (exact?.n >= MIN_SAMPLES && exact?.v === SAMPLE_VERSION) return modelFrom(exact, { provider, speed: targetSpeed });
 
-  const entries = Object.entries(table).filter(([, value]) => value?.n >= MIN_SAMPLES);
+  const entries = Object.entries(table).filter(([, value]) => value?.n >= MIN_SAMPLES && value?.v === SAMPLE_VERSION);
   const sameVoice = entries.filter(([key]) => {
     const [keyProvider, keyVoice] = key.split("|");
     return keyProvider === (provider || "?") && keyVoice === (voice || "?");

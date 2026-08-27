@@ -90,7 +90,9 @@ test("Codex script provider runs isolated from personal config with a latency-or
   assert.ok(provider.args.includes("--ephemeral"));
   assert.ok(provider.args.includes('model_reasoning_effort="low"'));
   assert.equal(provider.args.at(-1), "-");
-  assert.ok(provider.timeoutMs > 0 && provider.timeoutMs < 120_000);
+  // วัดจริงแล้วขอสคริปต์ 5 ชุดใช้ 82 วินาที ของเดิมตั้งไว้ 75 จึงหมดเวลาแล้วตกไปใช้
+  // เทมเพลตออฟไลน์เงียบ ๆ แต่ก็ต้องมีเพดาน ไม่ใช่ปล่อยให้ผู้ใช้รอไม่รู้จบ
+  assert.ok(provider.timeoutMs >= 120_000 && provider.timeoutMs <= 300_000);
 });
 
 test("CLI provider abort stops its child process and reports cancellation", async () => {

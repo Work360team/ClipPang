@@ -11,6 +11,7 @@ import {
   trimSourcePlan,
 } from "../pipeline/core.mjs";
 import {
+  SAMPLE_VERSION,
   characterBudget,
   lookupSpeechModel,
   mergeSamples,
@@ -137,18 +138,39 @@ test("สรุปท่อนเป็นสถิติ และข้าม�
 });
 
 test("รวมสถิติข้ามงานได้ และค่าที่วัดเองต้องชนะค่าตั้งต้น", () => {
-  const merged = mergeSamples({ n: 6, graphemes: 60, ms: 6000 }, { n: 6, graphemes: 60, ms: 6000 });
-  assert.deepEqual(merged, { n: 12, graphemes: 120, ms: 12_000 });
+  const merged = mergeSamples({ v: SAMPLE_VERSION, n: 6, graphemes: 60, ms: 6000 }, { v: SAMPLE_VERSION, n: 6, graphemes: 60, ms: 6000 });
+  assert.deepEqual(merged, { v: SAMPLE_VERSION, n: 12, graphemes: 120, ms: 12_000 });
   const key = speechKey({ provider: "gemini", voice: "Laomedeia", speed: 1 });
   const model = lookupSpeechModel({ [key]: merged }, { provider: "gemini", voice: "Laomedeia", speed: 1 });
   assert.equal(model.source, "measured");
   assert.equal(Math.round(model.graphemesPerSec), 10, "120 ตัวอักษรใน 12 วินาที = 10 ตัว/วินาที");
 });
 
+test("สถิติที่วัดด้วยวิธีรุ่นเก่าต้องถูกทิ้ง ไม่ใช่เอามาใช้ต่อ", () => {
+  const key = speechKey({ provider: "jaitts", voice: "clone-abc", speed: 1 });
+  // ค่าเดิมนับตัวอักษรจากคำที่พูดจริง แต่จับเวลาจากเสียงที่ยังข้ามตัวเลขไป
+  // อัตราที่ได้จึงเร็วเกินจริงเกือบเท่าตัว แล้วไปทำให้สคริปต์ยาวเกินคลิป
+  const stale = { n: 20, graphemes: 320, ms: 20_000 };
+  const model = lookupSpeechModel({ [key]: stale }, { provider: "jaitts", voice: "clone-abc", speed: 1 });
+  assert.equal(model.source, "default", "ไม่มีรุ่นกำกับ = วัดด้วยวิธีเก่า ต้องไม่เชื่อ");
+
+  // ชุดใหม่ที่ติดรุ่นไว้ต้องใช้ได้ตามปกติ
+  const fresh = { v: SAMPLE_VERSION, n: 20, graphemes: 200, ms: 20_000 };
+  const usable = lookupSpeechModel({ [key]: fresh }, { provider: "jaitts", voice: "clone-abc", speed: 1 });
+  assert.equal(usable.source, "measured");
+  assert.equal(Math.round(usable.graphemesPerSec), 10);
+});
+
+test("รวมสถิติข้ามรุ่นไม่ได้ ต้องเริ่มนับใหม่จากชุดใหม่", () => {
+  const merged = mergeSamples({ n: 10, graphemes: 300, ms: 10_000 }, { v: SAMPLE_VERSION, n: 5, graphemes: 50, ms: 5000 });
+  assert.equal(merged.n, 5, "ของเก่าต้องไม่ถูกรวมเข้ามา");
+  assert.equal(merged.v, SAMPLE_VERSION);
+});
+
 test("ตัวอย่างน้อยเกินไปยังไม่เชื่อ ใช้ค่าตั้งต้นของ provider ไปก่อน", () => {
   const key = speechKey({ provider: "gemini", voice: "Kore", speed: 1 });
   const model = lookupSpeechModel(
-    { [key]: { n: 2, graphemes: 20, ms: 9000 } },
+    { [key]: { v: SAMPLE_VERSION, n: 2, graphemes: 20, ms: 9000 } },
     { provider: "gemini", voice: "Kore", speed: 1 },
   );
   assert.equal(model.source, "default");
@@ -157,7 +179,7 @@ test("ตัวอย่างน้อยเกินไปยังไม่�
 
 test("ไม่มีข้อมูลของเสียงนั้น ใช้เสียงอื่นของ provider เดียวกันแทน", () => {
   const key = speechKey({ provider: "gemini", voice: "Laomedeia", speed: 1 });
-  const rates = { [key]: { n: 20, graphemes: 200, ms: 20_000 } };
+  const rates = { [key]: { v: SAMPLE_VERSION, n: 20, graphemes: 200, ms: 20_000 } };
   const model = lookupSpeechModel(rates, { provider: "gemini", voice: "Zephyr", speed: 1 });
   assert.equal(model.source, "measured-nearby");
   assert.equal(Math.round(model.graphemesPerSec), 10);
@@ -165,7 +187,7 @@ test("ไม่มีข้อมูลของเสียงนั้น ใ�
 
 test("เสียงเดียวกันคนละความเร็ว เทียบสัดส่วนตามความเร็ว", () => {
   const key = speechKey({ provider: "gemini", voice: "Laomedeia", speed: 1 });
-  const rates = { [key]: { n: 20, graphemes: 200, ms: 20_000 } };
+  const rates = { [key]: { v: SAMPLE_VERSION, n: 20, graphemes: 200, ms: 20_000 } };
   const model = lookupSpeechModel(rates, { provider: "gemini", voice: "Laomedeia", speed: 1.2 });
   assert.equal(model.source, "measured-scaled");
   assert.ok(Math.abs(model.graphemesPerSec - 12) < 0.01, "เร่ง 1.2 เท่า ต้องพูดได้มากขึ้น 1.2 เท่า");

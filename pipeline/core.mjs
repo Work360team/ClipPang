@@ -1,7 +1,7 @@
 // core — ตัดคำไทย / ตัดท่อน / ประกอบ timeline / duration fitting
 //        →  อนาคตคือ packages/core   (ไม่มีการเรียก I/O ใด ๆ ในไฟล์นี้ ทดสอบได้ล้วน ๆ)
 
-const MAX_CHARS_PER_CHUNK = 22;
+export const MAX_CHARS_PER_CHUNK = 22;
 const MAX_WORDS_PER_CHUNK = 5;
 
 /* ---------- ภาษาไทย ---------- */

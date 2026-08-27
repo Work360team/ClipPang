@@ -2112,9 +2112,11 @@ export function ProjectWizard() {
 
   const regenerateAllScripts = async (knownProjectId?: string, signal?: AbortSignal) => {
     // ครอบทั้งการสร้าง/บันทึกโปรเจกต์และการเรียก AI ไม่ใช่เริ่มนับเมื่อเข้าถึง AI แล้วเท่านั้น
+    // ต้องยาวกว่าเวลาที่ CLI ฝั่งเซิร์ฟเวอร์ได้รับ ไม่งั้นตัดสายก่อนแล้วผู้ใช้จะเห็น
+    // แค่ว่าล้มเหลว ทั้งที่อีกไม่กี่วินาทีก็ได้สคริปต์แล้ว
     const operationSignal = signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(90_000)])
-      : AbortSignal.timeout(90_000);
+      ? AbortSignal.any([signal, AbortSignal.timeout(240_000)])
+      : AbortSignal.timeout(240_000);
     const id = knownProjectId ?? projectId ?? await waitForAbort(ensureProject(), operationSignal);
     // ปุ่มสร้างใหม่อาจถูกกดก่อน autosave รอบ 450ms ต้องบันทึกเสียงที่เลือกก่อนยิง AI
     // ไม่งั้น API จะอ่าน config เก่าและเขียนคำลงท้ายให้คนละเพศ

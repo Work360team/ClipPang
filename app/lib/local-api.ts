@@ -151,7 +151,7 @@ export const localApi = {
   ) => {
     // Server จะตัด CLI ของตัวเองก่อนครบเวลานี้ ส่วน watchdog ฝั่งหน้าเว็บกันกรณี
     // connection หายแล้ว promise ไม่จบ ทำให้ปุ่มถูกล็อกค้างตลอดไป
-    const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? 90_000);
+    const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? 240_000);
     const signal = options.signal
       ? AbortSignal.any([options.signal, timeoutSignal])
       : timeoutSignal;

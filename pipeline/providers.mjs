@@ -124,7 +124,10 @@ export const SCRIPT_PROVIDERS = [
       "--color", "never",
       "-",
     ],
-    timeoutMs: 75_000,
+    // วัดจริงบนเครื่องที่มี subscription: ขอสคริปต์ 2 ชุดใช้ 35 วินาที ขอ 5 ชุด
+    // (ค่าที่หน้าสร้างคลิปใช้จริง) เกิน 75 วินาทีเป็นปกติ ของเดิมจึงหมดเวลาแล้วตก
+    // ไปใช้เทมเพลตออฟไลน์ซึ่งแค่หั่นช่องจุดขายมาเป็นท่อน ๆ
+    timeoutMs: 180_000,
     versionArgs: ["--version"],
     installUrl: "https://developers.openai.com/codex/cli",
   },
