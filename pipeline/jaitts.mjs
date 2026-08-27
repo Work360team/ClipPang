@@ -3,7 +3,7 @@
 // ตัวนี้คุม worker ฝั่ง Python ที่โหลดโมเดลค้างไว้ตัวเดียว แล้วส่งงานเข้าไปทีละท่อน
 // เหตุผลอยู่ในหัวไฟล์ jaitts-worker.py — เรียกสคริปต์ของต้นทางตรง ๆ จะเสียเวลา
 // โหลดโมเดลใหม่ทุกท่อน (วัดได้ 40.7 วินาที/ครั้ง เทียบกับเวลาสังเคราะห์จริง ~4 วินาที)
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,8 +13,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const WORKER = path.join(HERE, "jaitts-worker.py");
 
-/** โหลดโมเดลรอบแรกอ่านไฟล์เป็นกิกะไบต์ ให้เวลามันพอสมควร */
-const START_TIMEOUT_MS = 180_000;
+/** โหลดโมเดลรอบแรกอาจต้องดาวน์โหลดไฟล์ราว 1.3 GB ก่อน จึงให้เวลามากกว่ารอบที่ cache แล้ว */
+const DEFAULT_START_TIMEOUT_MS = 600_000;
+const PYTHON_PROBE_TIMEOUT_MS = 8_000;
 /** ท่อนหนึ่งวัดได้ ~4 วินาทีบน RTX 5080 เผื่อไว้มากพอสำหรับเครื่องที่ช้ากว่า */
 const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -35,6 +36,78 @@ function pythonPath(home) {
     : path.join(home, ".venv-tts", "bin", "python");
 }
 
+const pythonProbeCache = new Map();
+
+function compactDetail(value, maxLength = 300) {
+  return String(value || "").trim().split(/\r?\n/).filter(Boolean).slice(-2).join(" ").slice(0, maxLength);
+}
+
+function pythonRepairHint() {
+  return "รัน uv python install 3.11 แล้วเปิด Clip360 ใหม่ หรือกดติดตั้ง JaiTTS ใหม่ในหน้าตั้งค่า";
+}
+
+function probeJaittsPython(python) {
+  let stat;
+  try {
+    stat = fs.statSync(python);
+  } catch (error) {
+    return {
+      ready: false,
+      code: "JAITTS_PYTHON_BROKEN",
+      reason: `อ่าน Python ของ JaiTTS ไม่ได้: ${compactDetail(error?.message || error)} — ${pythonRepairHint()}`,
+      checkedAt: Date.now(),
+    };
+  }
+  const cacheKey = `${python}:${stat.size}:${stat.mtimeMs}`;
+  const cached = pythonProbeCache.get(cacheKey);
+  const cacheMs = cached?.ready ? 30_000 : 2_000;
+  if (cached && Date.now() - cached.checkedAt < cacheMs) return cached;
+
+  let probe;
+  try {
+    probe = spawnSync(python, ["-c", "import sys; print(sys.version_info[:2])"], {
+      encoding: "utf8",
+      timeout: PYTHON_PROBE_TIMEOUT_MS,
+      windowsHide: true,
+    });
+  } catch (error) {
+    const result = {
+      ready: false,
+      code: "JAITTS_PYTHON_BROKEN",
+      reason: `Python ของ JaiTTS เปิดไม่ได้: ${compactDetail(error?.message || error)} — ${pythonRepairHint()}`,
+      checkedAt: Date.now(),
+    };
+    pythonProbeCache.set(cacheKey, result);
+    return result;
+  }
+
+  if (probe.error || probe.status !== 0) {
+    const timedOut = probe.error?.code === "ETIMEDOUT";
+    const detail = compactDetail(probe.stderr || probe.stdout || probe.error?.message);
+    const result = {
+      ready: false,
+      code: "JAITTS_PYTHON_BROKEN",
+      reason: timedOut
+        ? `Python ของ JaiTTS ไม่ตอบสนองภายใน ${Math.round(PYTHON_PROBE_TIMEOUT_MS / 1000)} วินาที — ${pythonRepairHint()}`
+        : `Python ของ JaiTTS เปิดไม่ได้${detail ? `: ${detail}` : ""} — ${pythonRepairHint()}`,
+      checkedAt: Date.now(),
+    };
+    pythonProbeCache.set(cacheKey, result);
+    return result;
+  }
+
+  const result = { ready: true, code: null, reason: null, checkedAt: Date.now() };
+  pythonProbeCache.set(cacheKey, result);
+  return result;
+}
+
+function startTimeoutMs() {
+  const configured = Number(process.env.JAITTS_START_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 1_000
+    ? configured
+    : DEFAULT_START_TIMEOUT_MS;
+}
+
 /**
  * ตรวจว่าติดตั้งครบพร้อมใช้หรือยัง
  *
@@ -53,24 +126,45 @@ export function discoverJaitts() {
   if (!fs.existsSync(python)) {
     return { ready: false, home, python: null, reason: "ไม่เจอ Python ของ JaiTTS — ติดตั้งใหม่อีกครั้ง" };
   }
-  return { ready: true, home, python, reason: null };
+  const pythonProbe = probeJaittsPython(python);
+  if (!pythonProbe.ready) {
+    return { ready: false, home, python, reason: pythonProbe.reason, code: pythonProbe.code };
+  }
+  return { ready: true, home, python, reason: null, code: null };
 }
 
 let worker = null;
+
+function workerError(message, code, cause) {
+  const error = new Error(message, cause ? { cause } : undefined);
+  error.code = code;
+  return error;
+}
+
+function settleStartup(state, error = null) {
+  if (!state || state.startupSettled) return;
+  state.startupSettled = true;
+  if (state.startupTimer) clearTimeout(state.startupTimer);
+  if (error) state.rejectReady(error);
+  else state.resolveReady(state);
+}
 
 function killWorker(reason) {
   if (!worker) return;
   const current = worker;
   worker = null;
-  for (const pending of current.pending.values()) pending.reject(new Error(reason));
+  const error = reason instanceof Error ? reason : new Error(reason);
+  settleStartup(current, error);
+  for (const pending of current.pending.values()) pending.reject(error);
   current.pending.clear();
+  for (const queued of current.queue) queued.reject(error);
   current.queue.length = 0;
   try {
     current.child.stdin.end();
   } catch {
     // ปิด stdin ไม่ได้แปลว่าโปรเซสตายไปแล้ว ไม่ต้องทำอะไรต่อ
   }
-  current.child.kill();
+  if (current.child.exitCode === null && current.child.signalCode === null) current.child.kill();
 }
 
 /** ปิด worker — ใช้ตอนปิดโปรแกรมหรือจบเทสต์ ไม่งั้นโปรเซสจะค้าง */
@@ -103,7 +197,25 @@ function spawnWorker(install) {
     nextId: 1,
     stderr: "",
     device: null,
+    startupSettled: false,
+    startupTimer: null,
+    resolveReady: null,
+    rejectReady: null,
   };
+  state.readyPromise = new Promise((resolve, reject) => {
+    state.resolveReady = resolve;
+    state.rejectReady = reject;
+  });
+  const startupTimeoutMs = startTimeoutMs();
+  state.startupTimer = setTimeout(() => {
+    const detail = compactDetail(state.stderr, 200);
+    const error = workerError(
+      `โหลดโมเดลเสียงพากย์ในเครื่องนานเกิน ${Math.round(startupTimeoutMs / 1000)} วินาที${detail ? `: ${detail}` : ""}`,
+      "JAITTS_START_TIMEOUT",
+    );
+    settleStartup(state, error);
+    if (worker === state) killWorker(error);
+  }, startupTimeoutMs);
 
   let buffer = "";
   child.stdout.setEncoding("utf8");
@@ -124,15 +236,21 @@ function spawnWorker(install) {
     state.stderr = (state.stderr + chunk).slice(-4000);
   });
 
-  child.on("exit", (code) => {
-    if (worker !== state) return;
-    const detail = state.stderr.trim().split("\n").slice(-3).join(" ").slice(0, 300);
-    killWorker(`เสียงพากย์ในเครื่องหยุดทำงาน (code ${code})${detail ? `: ${detail}` : ""}`);
+  child.on("exit", (code, signal) => {
+    const detail = compactDetail(state.stderr);
+    const phase = state.ready ? "หยุดทำงาน" : "หยุดทำงานก่อนพร้อม";
+    const error = workerError(
+      `เสียงพากย์ในเครื่อง${phase} (${signal ? `signal ${signal}` : `code ${code}`})${detail ? `: ${detail}` : ""}`,
+      "JAITTS_WORKER_EXITED",
+    );
+    settleStartup(state, error);
+    if (worker === state) killWorker(error);
   });
 
   child.on("error", (error) => {
-    if (worker !== state) return;
-    killWorker(`เรียก Python ของ JaiTTS ไม่ได้: ${error.message}`);
+    const wrapped = workerError(`เรียก Python ของ JaiTTS ไม่ได้: ${error.message}`, "JAITTS_WORKER_SPAWN_FAILED", error);
+    settleStartup(state, wrapped);
+    if (worker === state) killWorker(wrapped);
   });
 
   return state;
@@ -149,11 +267,13 @@ function handleLine(state, line) {
   if (message.ready === true) {
     state.ready = true;
     state.device = message.device ?? null;
-    state.onReady?.(null);
+    settleStartup(state);
     return;
   }
   if (message.ready === false) {
-    state.onReady?.(new Error(message.error || "โหลดโมเดล JaiTTS ไม่สำเร็จ"));
+    const error = workerError(message.error || "โหลดโมเดล JaiTTS ไม่สำเร็จ", "JAITTS_MODEL_LOAD_FAILED");
+    settleStartup(state, error);
+    if (worker === state) killWorker(error);
     return;
   }
   const pending = state.pending.get(message.id);
@@ -184,30 +304,49 @@ function drain(state) {
   }
 }
 
+function abortJob(state, job, error, deadline) {
+  const queuedIndex = state.queue.indexOf(job);
+  if (queuedIndex >= 0) {
+    state.queue.splice(queuedIndex, 1);
+    job.reject(error);
+    return "queued";
+  }
+  if (state.pending.get(job.id) === job) {
+    // ผู้เรียกไม่ต้องรอ แต่ยังเก็บ job ไว้เพื่อรับคำตอบจาก Python แล้วปลด busy/drain คิว
+    // ถ้า Python ไม่ตอบภายใน deadline เดิม watchdog จะทิ้ง worker แล้วเริ่มใหม่รอบหน้า
+    job.reject(error);
+    job.workerWatchdog = setTimeout(() => {
+      if (state.pending.get(job.id) !== job || worker !== state) return;
+      killWorker(workerError("ยกเลิกแล้วแต่เสียงพากย์ในเครื่องไม่ยอมหยุด", "JAITTS_ABORT_TIMEOUT"));
+    }, Math.max(1, deadline - Date.now()));
+    return "active";
+  }
+  job.reject(error);
+  return "settled";
+}
+
+// เปิดเฉพาะ state machine เล็ก ๆ ให้ regression test จำลอง worker ได้โดยไม่ต้องโหลดโมเดล 1.3 GB
+export const __jaittsTesting = Object.freeze({ abortJob, handleLine });
+
 async function ensureWorker(install, { signal } = {}) {
   if (worker?.ready) return worker;
   if (!worker) {
-    const state = spawnWorker(install);
-    worker = state;
-    state.readyPromise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const detail = state.stderr.trim().split("\n").slice(-2).join(" ").slice(0, 200);
-        killWorker(`โหลดโมเดลเสียงพากย์นานเกินไป${detail ? `: ${detail}` : ""}`);
-        reject(new Error("โหลดโมเดลเสียงพากย์ในเครื่องนานเกินไป"));
-      }, START_TIMEOUT_MS);
-      state.onReady = (error) => {
-        clearTimeout(timer);
-        if (error) {
-          killWorker(error.message);
-          reject(error);
-        } else {
-          resolve(state);
-        }
-      };
-    });
+    worker = spawnWorker(install);
   }
   throwIfAborted(signal);
-  return worker.readyPromise;
+  if (!signal) return worker.readyPromise;
+  const current = worker;
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(toAbortError(signal.reason));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    current.readyPromise.then(
+      (value) => { signal.removeEventListener("abort", onAbort); resolve(value); },
+      (error) => { signal.removeEventListener("abort", onAbort); reject(error); },
+    );
+  });
 }
 
 /**
@@ -221,7 +360,7 @@ export async function jaittsTts({ text, refWav, refText, speed = 1, signal, time
   const install = discoverJaitts();
   if (!install.ready) {
     const error = new Error(install.reason);
-    error.code = "JAITTS_NOT_INSTALLED";
+    error.code = install.code || "JAITTS_NOT_INSTALLED";
     throw error;
   }
   if (!refWav || !fs.existsSync(refWav)) {
@@ -235,9 +374,12 @@ export async function jaittsTts({ text, refWav, refText, speed = 1, signal, time
   const id = state.nextId++;
 
   return new Promise((resolve, reject) => {
+    const requestTimeoutMs = Number(timeoutMs ?? REQUEST_TIMEOUT_MS);
+    const deadline = Date.now() + requestTimeoutMs;
     const job = {
       id,
       signal,
+      workerWatchdog: null,
       request: {
         id,
         text,
@@ -248,28 +390,27 @@ export async function jaittsTts({ text, refWav, refText, speed = 1, signal, time
       },
     };
 
-    const timer = setTimeout(() => {
-      state.pending.delete(id);
-      // ค้างหนึ่งงานแปลว่า worker น่าจะค้างทั้งตัว เริ่มใหม่ปลอดภัยกว่าปล่อยไว้
-      killWorker("สังเคราะห์เสียงนานเกินกำหนด");
-      reject(new Error("สังเคราะห์เสียงในเครื่องนานเกินกำหนด"));
-    }, timeoutMs ?? REQUEST_TIMEOUT_MS);
-
-    const onAbort = () => {
-      state.pending.delete(id);
-      clearTimeout(timer);
-      // ตัดกลางคันไม่ได้ งานที่ส่งไปแล้วต้องปล่อยให้จบเอง แต่ผู้เรียกไม่ต้องรอ
-      reject(toAbortError());
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
+    let timer = null;
+    function onAbort() {
+      abortJob(state, job, toAbortError(signal?.reason), deadline);
+    }
 
     const done = (fn) => (value) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      if (job.workerWatchdog) clearTimeout(job.workerWatchdog);
       signal?.removeEventListener("abort", onAbort);
       fn(value);
     };
     job.resolve = done(resolve);
     job.reject = done(reject);
+
+    timer = setTimeout(() => {
+      // ค้างหนึ่งงานแปลว่า worker น่าจะค้างทั้งตัว เริ่มใหม่ปลอดภัยกว่าปล่อยไว้
+      const error = workerError("สังเคราะห์เสียงในเครื่องนานเกินกำหนด", "JAITTS_REQUEST_TIMEOUT");
+      if (worker === state) killWorker(error);
+      else job.reject(error);
+    }, requestTimeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     state.queue.push(job);
     drain(state);

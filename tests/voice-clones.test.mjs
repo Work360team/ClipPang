@@ -189,3 +189,32 @@ test("ยังไม่ได้ติดตั้งต้องบอกเ�
     else process.env.JAITTS_HOME = original;
   }
 });
+
+test("มี Python launcher แต่เปิดไม่ได้ต้องรายงานทันที ไม่ปล่อยไปค้างตอนโหลดโมเดล", () => {
+  const original = process.env.JAITTS_HOME;
+  const home = tempDir();
+  try {
+    process.env.JAITTS_HOME = home;
+    fs.writeFileSync(path.join(home, "jaitts_synth.py"), "# test fixture\n", "utf8");
+    const python = process.platform === "win32"
+      ? path.join(home, ".venv-tts", "Scripts", "python.exe")
+      : path.join(home, ".venv-tts", "bin", "python");
+    fs.mkdirSync(path.dirname(python), { recursive: true });
+    if (process.platform === "win32") {
+      fs.writeFileSync(python, "launcher ที่เสีย", "utf8");
+    } else {
+      fs.writeFileSync(python, "#!/bin/sh\necho 'base Python missing' >&2\nexit 103\n", "utf8");
+      fs.chmodSync(python, 0o755);
+    }
+
+    const broken = discoverJaitts();
+    assert.equal(broken.ready, false);
+    assert.equal(broken.code, "JAITTS_PYTHON_BROKEN");
+    assert.match(broken.reason, /Python.*(?:เปิดไม่ได้|ไม่ตอบสนอง)/);
+    assert.match(broken.reason, /uv python install 3\.11/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    if (original === undefined) delete process.env.JAITTS_HOME;
+    else process.env.JAITTS_HOME = original;
+  }
+});

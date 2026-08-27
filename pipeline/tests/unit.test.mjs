@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { getProvider, runProcess as runProviderProcess } from "../providers.mjs";
+import { __jaittsTesting } from "../jaitts.mjs";
 
 import {
   AlphaOverlayError,
@@ -110,6 +111,42 @@ test("CLI provider abort stops its child process and reports cancellation", asyn
     () => process.kill(childPid, 0),
     (error) => error?.code === "ESRCH" || error?.code === "EINVAL",
   );
+});
+
+test("aborting active JaiTTS work keeps its response tracked so the next job can drain", () => {
+  const writes = [];
+  let rejectedWith = null;
+  const active = {
+    id: 1,
+    workerWatchdog: null,
+    reject: (error) => { rejectedWith = error; },
+    resolve: () => {
+      if (active.workerWatchdog) clearTimeout(active.workerWatchdog);
+    },
+  };
+  const next = {
+    id: 2,
+    request: { id: 2, text: "งานถัดไป" },
+    reject: (error) => assert.fail(error),
+    resolve: () => undefined,
+  };
+  const state = {
+    ready: true,
+    busy: true,
+    pending: new Map([[active.id, active]]),
+    queue: [next],
+    child: { stdin: { write: (line) => writes.push(line) } },
+  };
+  const abortError = new Error("ยกเลิกแล้ว");
+
+  assert.equal(__jaittsTesting.abortJob(state, active, abortError, Date.now() + 1_000), "active");
+  assert.equal(state.pending.get(active.id), active, "งานที่ Python กำลังทำต้องอยู่จนกว่าจะตอบกลับ");
+  __jaittsTesting.handleLine(state, JSON.stringify({ id: active.id, ok: true }));
+
+  assert.equal(rejectedWith, abortError);
+  assert.equal(state.pending.get(next.id), next);
+  assert.equal(state.busy, true);
+  assert.deepEqual(JSON.parse(writes[0]), next.request);
 });
 
 test("all shipped caption presets use the bundled Kanit family", async () => {
