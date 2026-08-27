@@ -10,6 +10,8 @@ import { keyQuotaStatus, noteQuotaOk, noteRateLimited } from "./tts-quota.mjs";
 import { listGeminiKeys } from "./gemini-keys.mjs";
 import { graphemeCount } from "./core.mjs";
 import { buildBatchPrompt, cutSpans, planSpans } from "./tts-batch.mjs";
+import { discoverJaitts, jaittsTts } from "./jaitts.mjs";
+import { listClones, readClone } from "./voice-clones.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -61,6 +63,8 @@ export const VOICES = {
 
 export const DEFAULT_VOICE = {
   gemini: "Kore",
+  // เสียงโคลนไม่มีค่าตั้งต้นตายตัว ขึ้นกับว่าผู้ใช้อัดอะไรไว้ — หยิบตัวล่าสุดตอนเรียกใช้
+  jaitts: null,
   edge: "th-TH-PremwadeeNeural",
   mock: "mock-th",
   silence: "-",
@@ -71,6 +75,9 @@ export function resolveProvider(requested = "auto") {
   const has = {
     // นับทุกช่องคีย์ ไม่ใช่แค่ใบหลัก — ผู้ใช้ที่ลบใบแรกออกแต่ยังมีใบสำรองต้องใช้งานได้
     gemini: listGeminiKeys().length > 0,
+    // ต้องมีทั้งตัวโปรแกรมและเสียงต้นแบบอย่างน้อยหนึ่งเสียง ติดตั้งแล้วแต่ยังไม่ได้อัดเสียง
+    // ก็ยังพากย์ไม่ได้ เพราะ F5-TTS โคลนจากตัวอย่างเท่านั้น ไม่มีเสียงสำเร็จรูปให้เลือก
+    jaitts: discoverJaitts().ready && listClones().length > 0,
     edge: fs.existsSync(pythonBin()),
     mock: true,
     silence: true,
@@ -79,14 +86,17 @@ export function resolveProvider(requested = "auto") {
     if (!has[requested]) {
       const why = requested === "gemini"
         ? "ยังไม่ได้ตั้ง GEMINI_API_KEY ใน .env"
-        : requested === "edge"
-          ? "ยังไม่ได้ติดตั้ง edge-tts (ดู README)"
-          : `ไม่รู้จัก provider ${requested}`;
+        : requested === "jaitts"
+          ? (discoverJaitts().reason ?? "ยังไม่ได้อัดเสียงต้นแบบไว้สักเสียง")
+          : requested === "edge"
+            ? "ยังไม่ได้ติดตั้ง edge-tts (ดู README)"
+            : `ไม่รู้จัก provider ${requested}`;
       throw new Error(`ใช้ --tts ${requested} ไม่ได้: ${why}`);
     }
     return requested;
   }
-  return has.gemini ? "gemini" : has.edge ? "edge" : "mock";
+  // เสียงในเครื่องมาก่อน edge เพราะทำงานได้จริงโดยไม่ต้องต่อเน็ต
+  return has.gemini ? "gemini" : has.jaitts ? "jaitts" : has.edge ? "edge" : "mock";
 }
 
 function pythonBin() {
@@ -265,6 +275,32 @@ ${text}`;
 
 /* ---------- Edge (ฟรี ไม่ต้องมี key — สำหรับ spike เท่านั้น) ---------- */
 
+/* ---------- JaiTTS (เสียงโคลนที่รันในเครื่อง) ---------- */
+
+/**
+ * voice ของ provider นี้คือ id ของเสียงต้นแบบที่ผู้ใช้อัดไว้ ไม่ใช่ชื่อเสียงสำเร็จรูป
+ *
+ * ส่ง speed 1 เข้าโมเดลเสมอแล้วปล่อยให้ normalizeAudio เร่งด้วย atempo เหมือน gemini
+ * เพราะ atempo ย่อเวลาเป็นสัดส่วนตรง ๆ ตรงกับที่ตัวประเมินความเร็วพูดสมมติไว้
+ * ส่วน speed ของ F5-TTS เป็นการปรับ conditioning ซึ่งเปลี่ยนน้ำเสียงไปด้วยแบบเดาไม่ได้
+ */
+async function jaittsProviderTts({ text, voice, signal, timeoutMs }, rawFile) {
+  const clone = readClone(voice);
+  if (!clone) {
+    const error = new Error(`ไม่พบเสียงต้นแบบ “${voice}” — อาจถูกลบไปแล้ว เลือกเสียงใหม่อีกครั้ง`);
+    error.code = "VOICE_CLONE_NOT_FOUND";
+    throw error;
+  }
+  await jaittsTts({
+    text,
+    refWav: clone.wav,
+    refText: clone.text,
+    speed: 1,
+    signal,
+    timeoutMs,
+  }, rawFile);
+}
+
 async function edgeTts({ text, voice, speed, signal, timeoutMs }, rawFile) {
   const pct = Math.round((speed - 1) * 100);
   const rate = `${pct >= 0 ? "+" : ""}${pct}%`;
@@ -359,6 +395,8 @@ export async function synthesize({
   if (!text?.trim()) throw new Error("TTS text ต้องไม่ว่าง");
   if (!outFile) throw new Error("TTS ต้องระบุ outFile");
   provider = provider || resolveProvider("auto");
+  // เสียงโคลนไม่มีค่าตั้งต้นในโค้ด ต้องอ่านจากที่ผู้ใช้อัดไว้
+  if (provider === "jaitts" && !voice) voice = listClones()[0]?.id ?? null;
   voice = voice || DEFAULT_VOICE[provider];
   speed = Number(speed);
   if (!Number.isFinite(speed) || speed < 0.5 || speed > 2) {
@@ -391,6 +429,7 @@ export async function synthesize({
   try {
     const providerOpts = { text, voice, speed, styleHint, signal, timeoutMs, geminiEnv, onRequest };
     if (provider === "gemini") await geminiTts(providerOpts, rawFile);
+    else if (provider === "jaitts") await jaittsProviderTts(providerOpts, rawFile);
     else if (provider === "edge") await edgeTts(providerOpts, rawFile);
     else if (provider === "silence") await silenceTts(providerOpts, rawFile);
     else if (provider === "mock") await mockTts(providerOpts, rawFile);
@@ -418,6 +457,8 @@ export async function synthesize({
  */
 export function concurrencyFor(provider) {
   if (provider === "gemini") return Number(process.env.GEMINI_TTS_CONCURRENCY || 1);
+  // ทุกคำขอวิ่งผ่าน GPU ตัวเดียวกัน ยิงขนานมีแต่จะแย่ง VRAM กันเอง
+  if (provider === "jaitts") return 1;
   return 4;
 }
 
