@@ -144,7 +144,22 @@ export const localApi = {
   updateProject: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; project: LocalProject }>(`/api/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   // เซิร์ฟเวอร์ย้ายไป data/trash ไม่ได้ลบทิ้งถาวร จึงกู้คืนเองได้ถ้ากดพลาด
   deleteProject: (id: string) => apiFetch<{ ok: true; recoverable: boolean; message: string }>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  generateScripts: (id: string, body: Record<string, unknown>) => apiFetch<{ ok: true; scripts: LocalScript[]; brief?: Record<string, unknown>; updatedAt?: number }>(`/api/projects/${encodeURIComponent(id)}/script`, { method: "POST", body: JSON.stringify(body) }),
+  generateScripts: (
+    id: string,
+    body: Record<string, unknown>,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ) => {
+    // Server จะตัด CLI ของตัวเองก่อนครบเวลานี้ ส่วน watchdog ฝั่งหน้าเว็บกันกรณี
+    // connection หายแล้ว promise ไม่จบ ทำให้ปุ่มถูกล็อกค้างตลอดไป
+    const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? 90_000);
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, timeoutSignal])
+      : timeoutSignal;
+    return apiFetch<{ ok: true; scripts: LocalScript[]; brief?: Record<string, unknown>; updatedAt?: number }>(
+      `/api/projects/${encodeURIComponent(id)}/script`,
+      { method: "POST", body: JSON.stringify(body), signal },
+    );
+  },
   regenerateChunk: (id: string, variantId: string, index: number, body: Record<string, unknown>) => apiFetch<{ ok: true; chunk: string; scripts?: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script/${encodeURIComponent(variantId)}/chunk/${index}`, { method: "POST", body: JSON.stringify(body) }),
   voices: () => apiFetch<{ ok: true; voices: LocalVoice[] }>("/api/voices"),
   styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[]; colorSets?: LocalColorSet[] }>("/api/styles"),

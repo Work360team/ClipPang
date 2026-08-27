@@ -12,10 +12,13 @@
 // TTS ใช้ทางนี้ไม่ได้ — CLI ทั้งสามตัวคืนข้อความอย่างเดียว การพากย์เสียงยังต้องใช้ Gemini API key
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { toAbortError } from "./lib.mjs";
 
 const WORKSPACE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CLI_WORKSPACE = path.join(os.tmpdir(), "clip360-script-cli");
 
 /**
  * คีย์อาจอยู่ใน .env โดยที่ยังไม่ถูกโหลดเข้า process.env (เซิร์ฟเวอร์โหลดตอนรัน pipeline เท่านั้น)
@@ -104,7 +107,24 @@ export const SCRIPT_PROVIDERS = [
     kind: "cli",
     label: "Codex CLI (ใช้ subscription ที่ล็อกอินไว้)",
     command: "codex",
-    args: ["exec", "-"],
+    // งานนี้ต้องการเพียง JSON จาก prompt เดียว ไม่ควรโหลด MCP, plugin และ config ส่วนตัว
+    // ทั้งชุดของ Codex เพราะทำให้การเริ่มแต่ละครั้งช้าหลายนาทีได้ ทั้งหมดนี้มีผลเฉพาะ
+    // invocation นี้เท่านั้น และ --ignore-user-config ยังใช้สถานะล็อกอินเดิมจาก CODEX_HOME
+    args: [
+      "exec",
+      "--ignore-user-config",
+      "--strict-config",
+      "--ephemeral",
+      "--ignore-rules",
+      "--skip-git-repo-check",
+      "--sandbox", "read-only",
+      "-c", 'approval_policy="never"',
+      "-c", 'model_reasoning_effort="low"',
+      "-c", 'model_verbosity="low"',
+      "--color", "never",
+      "-",
+    ],
+    timeoutMs: 75_000,
     versionArgs: ["--version"],
     installUrl: "https://developers.openai.com/codex/cli",
   },
@@ -135,38 +155,129 @@ const readEnvKey = (provider, environment = process.env) => {
 /* ---------- ตรวจว่า CLI ติดตั้งไว้ไหม ---------- */
 
 const cliProbeCache = new Map();
+const windowsCommandCache = new Map();
 
-function runProcess(command, args, { input = null, timeoutMs = 8000, signal } = {}) {
+function resolveCommand(command) {
+  if (process.platform !== "win32") return { command, shell: false };
+  if (windowsCommandCache.has(command)) return windowsCommandCache.get(command);
+
+  const hasDirectory = path.isAbsolute(command) || /[\\/]/.test(command);
+  const directories = hasDirectory
+    ? [""]
+    : String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const extensions = path.extname(command)
+    ? [""]
+    : String(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  for (const directory of directories) {
+    const cleanDirectory = directory.replace(/^"|"$/g, "");
+    for (const extension of extensions) {
+      const candidate = hasDirectory ? `${command}${extension}` : path.join(cleanDirectory, `${command}${extension}`);
+      if (!fs.existsSync(candidate)) continue;
+      const result = { command: candidate, shell: /\.(?:cmd|bat|ps1)$/i.test(candidate) };
+      windowsCommandCache.set(command, result);
+      return result;
+    }
+  }
+
+  // ไม่พบใน PATH ให้ spawn ตรงเพื่อได้ ENOENT ที่ชัดเจน และไม่เปิด shell โดยไม่จำเป็น
+  // ไม่ cache ผลลบ เผื่อผู้ใช้เพิ่งติดตั้ง CLI แล้วกดตรวจใหม่โดยไม่ปิดโปรแกรม
+  return { command, shell: false };
+}
+
+function terminateProcessTree(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform !== "win32" || !Number.isInteger(child.pid)) {
+    child.kill("SIGTERM");
+    return;
+  }
+
+  // CLI บน Windows มักเปิดผ่าน cmd.exe การ kill เฉพาะ shell จะทิ้ง codex/claude ลูกไว้
+  // ให้ทำงานต่อและกินโควตา จึงต้องปิดทั้ง process tree ด้วย argument array ที่ไม่ผ่าน shell
+  try {
+    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+      shell: false,
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    const fallback = () => {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    };
+    killer.once("error", fallback);
+    killer.once("close", (code) => { if (code !== 0) fallback(); });
+  } catch {
+    child.kill("SIGKILL");
+  }
+}
+
+export function runProcess(command, args, { input = null, timeoutMs = 8000, signal, cwd } = {}) {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve({ ok: false, code: -1, stdout: "", stderr: "ยกเลิกแล้ว", aborted: true });
+      return;
+    }
     let child;
     try {
-      // shell: true จำเป็นบน Windows เพราะ CLI พวกนี้ติดตั้งมาเป็น .cmd/.ps1 shim
-      child = spawn(command, args, { shell: process.platform === "win32", windowsHide: true });
+      // ใช้ executable ตรงเมื่อมี เพื่อตัด shell ชั้นเกินและให้ปิด process tree ได้แน่นอน
+      // ส่วน CLI รุ่นที่ติดตั้งเป็น .cmd/.ps1 เท่านั้นจึงค่อย fallback ผ่าน shell
+      const executable = resolveCommand(command);
+      child = spawn(executable.command, args, { cwd, shell: executable.shell, windowsHide: true });
     } catch (error) {
       return resolve({ ok: false, code: -1, stdout: "", stderr: String(error?.message || error) });
     }
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let stopReason = null;
+    let hardStop = null;
+    let killEscalation = null;
+    let timer = null;
     const finish = (result) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      if (hardStop) clearTimeout(hardStop);
+      if (killEscalation) clearTimeout(killEscalation);
+      signal?.removeEventListener("abort", onAbort);
       resolve(result);
     };
-    const timer = setTimeout(() => {
-      child.kill();
-      finish({ ok: false, code: -1, stdout, stderr: `หมดเวลา ${Math.round(timeoutMs / 1000)} วินาที` });
+    const stoppedResult = () => ({
+      ok: false,
+      code: -1,
+      stdout,
+      stderr: stopReason?.message || stderr,
+      aborted: Boolean(stopReason?.aborted),
+      timedOut: Boolean(stopReason?.timedOut),
+    });
+    const stop = (reason) => {
+      if (settled || stopReason) return;
+      stopReason = reason;
+      terminateProcessTree(child);
+      // SIGTERM อาจถูก process บางตัวละเลย ส่วน taskkill อาจล้มเหลวบนเครื่องที่จำกัดสิทธิ์
+      killEscalation = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      }, 800);
+      killEscalation.unref?.();
+      hardStop = setTimeout(() => finish(stoppedResult()), 2_000);
+      hardStop.unref?.();
+    };
+    function onAbort() {
+      stop({ aborted: true, message: "ยกเลิกแล้ว" });
+    }
+
+    timer = setTimeout(() => {
+      stop({ timedOut: true, message: `หมดเวลา ${Math.round(timeoutMs / 1000)} วินาที` });
     }, timeoutMs);
-    signal?.addEventListener("abort", () => {
-      child.kill();
-      finish({ ok: false, code: -1, stdout, stderr: "ยกเลิกแล้ว" });
-    }, { once: true });
+    timer.unref?.();
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
     child.stderr?.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", (error) => finish({ ok: false, code: -1, stdout, stderr: String(error?.message || error) }));
-    child.on("close", (code) => finish({ ok: code === 0, code, stdout, stderr }));
+    child.on("error", (error) => finish(stopReason
+      ? stoppedResult()
+      : { ok: false, code: -1, stdout, stderr: String(error?.message || error) }));
+    child.on("close", (code) => finish(stopReason
+      ? stoppedResult()
+      : { ok: code === 0, code, stdout, stderr }));
 
     if (input != null) {
       child.stdin?.on("error", () => undefined);
@@ -279,14 +390,17 @@ export async function callOpenAICompatible(provider, { system, user, signal, tim
 }
 
 /** ส่ง prompt เข้า stdin ของ CLI แล้วอ่าน stdout — ไม่ผ่าน shell argument จึงไม่มีปัญหาการ escape */
-export async function callCliProvider(provider, { system, user, signal, timeoutMs = 120_000 }) {
+export async function callCliProvider(provider, { system, user, signal, timeoutMs }) {
   const probe = await probeCliProvider(provider);
   if (!probe.installed) throw new Error(`ยังไม่ได้ติดตั้ง ${provider.command} — ดูวิธีที่ ${provider.installUrl}`);
+  fs.mkdirSync(CLI_WORKSPACE, { recursive: true });
   const result = await runProcess(provider.command, provider.args ?? [], {
     input: `${system}\n\n${user}\n`,
-    timeoutMs,
+    timeoutMs: Number(timeoutMs ?? provider.timeoutMs ?? 120_000),
     signal,
+    cwd: CLI_WORKSPACE,
   });
+  if (result.aborted) throw toAbortError("ยกเลิกการเขียนสคริปต์แล้ว");
   if (!result.ok) {
     const detail = (result.stderr || result.stdout || "").trim().slice(0, 300);
     throw new Error(`${provider.label} ทำงานไม่สำเร็จ: ${detail || `exit ${result.code}`}`);

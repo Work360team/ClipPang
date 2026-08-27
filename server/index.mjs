@@ -417,14 +417,40 @@ async function assetFetch(request) {
   }
 }
 
-function toWebRequest(req, port) {
+export function connectionAbortSignal(req, res) {
+  const controller = new AbortController();
+  const cleanup = () => {
+    req.removeListener("aborted", onAborted);
+    res.removeListener("close", onClose);
+    res.removeListener("finish", onFinish);
+  };
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort();
+    cleanup();
+  };
+  function onAborted() { abort(); }
+  function onClose() {
+    // close หลัง writableEnded คือการปิดตามปกติ แต่ถ้ายังตอบไม่จบแปลว่าฝั่งเว็บ
+    // กดยกเลิก/ปิดแท็บ ต้องส่งสัญญาณลงไปหยุด Codex, TTS หรือ ffmpeg ที่กำลังรออยู่
+    if (!res.writableEnded) abort();
+    else cleanup();
+  }
+  function onFinish() { cleanup(); }
+
+  req.once("aborted", onAborted);
+  res.once("close", onClose);
+  res.once("finish", onFinish);
+  return controller.signal;
+}
+
+function toWebRequest(req, port, signal) {
   const host = req.headers.host || `${HOST}:${port}`;
   const headers = new Headers();
   for (const [name, value] of Object.entries(req.headers)) {
     if (Array.isArray(value)) value.forEach((item) => headers.append(name, item));
     else if (value != null) headers.set(name, value);
   }
-  const init = { method: req.method, headers };
+  const init = { method: req.method, headers, signal };
   if (req.method !== "GET" && req.method !== "HEAD") {
     init.body = Readable.toWeb(req);
     init.duplex = "half";
@@ -497,7 +523,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   const port = requestedPort ?? await availablePort(DEFAULT_PORT);
   const server = http.createServer({ requestTimeout: 0, headersTimeout: 30_000 }, async (req, res) => {
     try {
-      const request = toWebRequest(req, port);
+      const request = toWebRequest(req, port, connectionAbortSignal(req, res));
       const requestUrl = new URL(request.url);
       const ip = req.socket.remoteAddress || "?";
 

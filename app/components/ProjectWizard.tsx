@@ -81,6 +81,33 @@ const MAX_CLIPS = 12;
 const MAX_TIMELINE_CLIPS = 24;
 const MAX_TOTAL_DURATION_SEC = 60;
 
+const hasErrorName = (error: unknown, name: string) =>
+  error instanceof Error && error.name === name;
+
+const abortReason = (signal: AbortSignal) => {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error("ยกเลิกแล้ว");
+  error.name = "AbortError";
+  return error;
+};
+
+function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(abortReason(signal));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => { cleanup(); resolve(value); },
+      (error) => { cleanup(); reject(error); },
+    );
+  });
+}
+
 function formatDuration(seconds: number) {
   const safeSeconds = Math.max(0, Math.round(seconds));
   return `${String(Math.floor(safeSeconds / 60)).padStart(2, "0")}:${String(safeSeconds % 60).padStart(2, "0")}`;
@@ -348,6 +375,7 @@ export function ProjectWizard() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [operationMessage, setOperationMessage] = useState("");
   const [scriptBusy, setScriptBusy] = useState(false);
+  const [scriptElapsedSeconds, setScriptElapsedSeconds] = useState(0);
   const [activeStep, setActiveStep] = useState<WizardStep>(1);
   const [furthestStep, setFurthestStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<WizardStep[]>([]);
@@ -433,6 +461,7 @@ export function ProjectWizard() {
   }, []);
   const goNextLockRef = useRef(false);
   const scriptGenerationLockRef = useRef(false);
+  const scriptGenerationAbortRef = useRef<AbortController | null>(null);
   // ข้าม autosave รอบที่ state ถูก hydrate หรือถูกยืนยันและบันทึกโดย API แล้ว
   // เพื่อไม่ส่ง product snapshot เก่าทั้งก้อนกลับไปทับการแก้จากอีกแท็บ
   const skipNextProjectAutosaveRef = useRef(false);
@@ -456,6 +485,16 @@ export function ProjectWizard() {
   ));
   const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData?.chunks ?? NO_CHUNKS;
+
+  // แสดงเวลาที่ผ่านไปเพื่อให้รู้ว่า AI ยังทำงานอยู่ ไม่ใช่หน้าจอค้างเงียบ ๆ
+  useEffect(() => {
+    if (!scriptBusy) return undefined;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setScriptElapsedSeconds(Math.max(1, Math.floor((Date.now() - startedAt) / 1000)));
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [scriptBusy]);
 
   // เสียงไหนมีไฟล์ตัวอย่างพร้อมแล้วบ้าง — โหลดครั้งเดียวแทนการยิง 404 ทีละไฟล์
   useEffect(() => {
@@ -1105,6 +1144,8 @@ export function ProjectWizard() {
     });
     return () => {
       active = false;
+      scriptGenerationAbortRef.current?.abort();
+      scriptGenerationAbortRef.current = null;
       stopWatchingRenderRef.current?.();
       previewAudioRef.current?.pause();
       pendingUploadFilesRef.current = [];
@@ -1166,10 +1207,15 @@ export function ProjectWizard() {
     };
   };
 
-  const queueProjectUpdate = (id: string, body: Record<string, unknown>) => {
+  const queueProjectUpdate = (
+    id: string,
+    body: Record<string, unknown>,
+    options: { signal?: AbortSignal } = {},
+  ) => {
     const task = projectSaveChainRef.current
       .catch(() => undefined)
       .then(async () => {
+        options.signal?.throwIfAborted();
         const expectedUpdatedAt = projectUpdatedAtRef.current;
         const result = await localApi.updateProject(id, {
           ...body,
@@ -1179,7 +1225,10 @@ export function ProjectWizard() {
         return result;
       });
     projectSaveChainRef.current = task.then(() => undefined, () => undefined);
-    return task;
+    // ถ้ามี autosave ก่อนหน้าค้างอยู่ ผู้ใช้ต้องยกเลิกงานเขียนได้ทันทีโดยไม่ต้องรอคิวนี้
+    // แต่ PATCH ที่เริ่มส่งแล้วต้องปล่อยให้ตอบกลับและอัปเดต revision ไม่งั้นเซิร์ฟเวอร์อาจ
+    // commit สำเร็จแต่ client ถือ expectedUpdatedAt เก่า แล้วทุก autosave ถัดไปจะชน 409
+    return waitForAbort(task, options.signal);
   };
 
   /**
@@ -1809,6 +1858,13 @@ export function ProjectWizard() {
     }
   };
 
+  const cancelScriptGeneration = () => {
+    const controller = scriptGenerationAbortRef.current;
+    if (!controller || controller.signal.aborted) return;
+    setOperationMessage("กำลังยกเลิก…");
+    controller.abort();
+  };
+
   const goNext = async () => {
     if (goNextLockRef.current) return;
     if (activeStep === 1 && clipSelectionInvalid) {
@@ -1838,10 +1894,13 @@ export function ProjectWizard() {
     const needsGeneration = activeStep === 3
       && (!scriptVariants.length || scriptVoiceSignature !== currentScriptVoiceSignature);
     if (needsGeneration && scriptGenerationLockRef.current) return;
+    const generationController = needsGeneration ? new AbortController() : null;
     goNextLockRef.current = true;
     if (needsGeneration) {
       scriptGenerationLockRef.current = true;
+      scriptGenerationAbortRef.current = generationController;
       setScriptBusy(true);
+      setScriptElapsedSeconds(0);
       setOperationMessage("กำลังสร้างสคริปต์ 5 แบบ…");
     }
     try {
@@ -1863,10 +1922,10 @@ export function ProjectWizard() {
         // ต้องเลือกเสียงก่อนเขียน เพราะภาษาไทยใช้คำลงท้ายต่างกันตามเพศผู้พากย์
         await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 3 });
       } else if (activeStep === 3) {
-        await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 4 });
         // สร้างใหม่เฉพาะเมื่อยังไม่มี หรือผู้ใช้เปลี่ยนเสียง เพศ ความเร็ว หรือจังหวะ
         // เพื่อไม่ทับสคริปต์ที่แก้เองเมื่อย้อนกลับมาดูขั้นนี้เฉย ๆ
-        if (needsGeneration) await regenerateAllScripts(id);
+        if (needsGeneration) await regenerateAllScripts(id, generationController?.signal);
+        else await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: 4 });
       } else {
         await queueProjectUpdate(id, { title: projectTitle(), product: projectProduct(), wizardStep: Math.min(6, activeStep + 1) });
       }
@@ -1876,10 +1935,14 @@ export function ProjectWizard() {
         await beginRender(id);
       }
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "บันทึกขั้นตอนนี้ไม่สำเร็จ");
+      if (hasErrorName(error, "AbortError")) setToast("ยกเลิกการสร้างสคริปต์แล้ว");
+      else if (hasErrorName(error, "TimeoutError")) {
+        setUploadError("AI ใช้เวลานานเกิน 90 วินาที ระบบยกเลิกให้แล้ว กรุณาลองอีกครั้ง");
+      } else setUploadError(error instanceof Error ? error.message : "บันทึกขั้นตอนนี้ไม่สำเร็จ");
     } finally {
       goNextLockRef.current = false;
       if (needsGeneration) {
+        if (scriptGenerationAbortRef.current === generationController) scriptGenerationAbortRef.current = null;
         scriptGenerationLockRef.current = false;
         setScriptBusy(false);
       }
@@ -1986,36 +2049,49 @@ export function ProjectWizard() {
    */
   const runScriptRegeneration = () => {
     if (scriptBusy || scriptGenerationLockRef.current) return;
+    const generationController = new AbortController();
     scriptGenerationLockRef.current = true;
+    scriptGenerationAbortRef.current = generationController;
     setScriptBusy(true);
+    setScriptElapsedSeconds(0);
     setUploadError("");
     setOperationMessage("กำลังเขียนสคริปต์ใหม่ทั้งชุด…");
-    void regenerateAllScripts()
+    void regenerateAllScripts(undefined, generationController.signal)
       .then((count) => setToast(`เขียนสคริปต์ใหม่ ${count} แบบแล้ว`))
-      .catch((error) => setUploadError(error instanceof Error ? error.message : "เขียนสคริปต์ใหม่ไม่สำเร็จ"))
+      .catch((error) => {
+        if (hasErrorName(error, "AbortError")) setToast("ยกเลิกการสร้างสคริปต์แล้ว");
+        else if (hasErrorName(error, "TimeoutError")) {
+          setUploadError("AI ใช้เวลานานเกิน 90 วินาที ระบบยกเลิกให้แล้ว กรุณาลองอีกครั้ง");
+        } else setUploadError(error instanceof Error ? error.message : "เขียนสคริปต์ใหม่ไม่สำเร็จ");
+      })
       .finally(() => {
+        if (scriptGenerationAbortRef.current === generationController) scriptGenerationAbortRef.current = null;
         scriptGenerationLockRef.current = false;
         setScriptBusy(false);
         setOperationMessage("");
       });
   };
 
-  const regenerateAllScripts = async (knownProjectId?: string) => {
-    const id = knownProjectId ?? projectId ?? await ensureProject();
+  const regenerateAllScripts = async (knownProjectId?: string, signal?: AbortSignal) => {
+    // ครอบทั้งการสร้าง/บันทึกโปรเจกต์และการเรียก AI ไม่ใช่เริ่มนับเมื่อเข้าถึง AI แล้วเท่านั้น
+    const operationSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(90_000)])
+      : AbortSignal.timeout(90_000);
+    const id = knownProjectId ?? projectId ?? await waitForAbort(ensureProject(), operationSignal);
     // ปุ่มสร้างใหม่อาจถูกกดก่อน autosave รอบ 450ms ต้องบันทึกเสียงที่เลือกก่อนยิง AI
     // ไม่งั้น API จะอ่าน config เก่าและเขียนคำลงท้ายให้คนละเพศ
     await queueProjectUpdate(id, {
       title: projectTitle(),
       wizardStep: activeStep,
       product: projectProduct(),
-    });
+    }, { signal: operationSignal });
     const requestedBrief = briefForApi();
     const result = await localApi.generateScripts(id, {
       brief: requestedBrief,
       targetSec: selectedTotalSec,
       // API บันทึกค่านี้พร้อม scripts เอง หน้าเว็บจึงไม่ต้อง autosave product ทั้งก้อนซ้ำ
       scriptVoiceSignature: currentScriptVoiceSignature,
-    });
+    }, { signal: operationSignal });
     if (typeof result.updatedAt === "number") projectUpdatedAtRef.current = result.updatedAt;
     // ได้ศูนย์ชุดต้องดังขึ้นมา ไม่ใช่เงียบแล้วปล่อยให้หน้าจอค้างของเดิมไว้
     // ซึ่งเคยทำให้ผู้ใช้เห็นสคริปต์ของสินค้าคนละตัวโดยไม่รู้ตัว
@@ -2534,6 +2610,18 @@ export function ProjectWizard() {
                     <div className="control-note">{activePace.note}</div>
                   </div>
                 </div>
+                {scriptBusy && (
+                  <div className="analysis-box script-generation-status" role="status" aria-live="polite">
+                    <LoaderCircle size={18} className="spin" />
+                    <div>
+                      <b>{operationMessage || "กำลังเขียนสคริปต์…"}</b>
+                      <span>
+                        {scriptElapsedSeconds > 0 ? `ทำงานมาแล้ว ${scriptElapsedSeconds} วินาที` : "กำลังเริ่ม Codex…"}
+                        {" · "}ปกติใช้เวลาประมาณ 15–60 วินาที และกดยกเลิกได้ด้านล่าง
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2552,6 +2640,18 @@ export function ProjectWizard() {
                     {scriptBusy ? "กำลังเขียน…" : "สร้างใหม่ทั้งหมด"}
                   </button>
                 </div>
+                {scriptBusy && (
+                  <div className="analysis-box script-generation-status" role="status" aria-live="polite">
+                    <LoaderCircle size={18} className="spin" />
+                    <div>
+                      <b>{operationMessage || "กำลังเขียนสคริปต์ใหม่ทั้งชุด…"}</b>
+                      <span>
+                        {scriptElapsedSeconds > 0 ? `ทำงานมาแล้ว ${scriptElapsedSeconds} วินาที` : "กำลังเริ่ม Codex…"}
+                        {" · "}กดยกเลิกได้ด้านล่าง
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="script-tabs" role="tablist" aria-label="สคริปต์ 5 เวอร์ชัน">
                   {scriptVariants.map((script, index) => (
                     <button type="button" role="tab" aria-selected={selectedScript === script.id} className={selectedScript === script.id ? "active" : ""} onClick={() => setSelectedScript(script.id)} key={script.id}>
@@ -2807,7 +2907,12 @@ export function ProjectWizard() {
                 <button type="button" className="button button-primary" disabled={clipSelectionInvalid || analyzing || Boolean(operationMessage)} onClick={() => void finishTimelineEdit()}><Check size={17} /> เสร็จสิ้นการตัดต่อ</button>
               </> : <>
                 <button type="button" className="button button-quiet" disabled={activeStep === 1 || scriptBusy || voiceCloneActive} onClick={() => setActiveStep((activeStep - 1) as WizardStep)}><ArrowLeft size={16} /> ย้อนกลับ</button>
-                {activeStep < 6 ? <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || scriptBusy || voiceCloneActive || (activeStep === 1 && clipSelectionInvalid) || (activeStep === 3 && voiceEngine === "jaitts" && (!cloneVoice?.id || !cloneVoice.gender)) || (activeStep === 4 && !selectedScriptData)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? "ไปเลือกเสียง" : activeStep === 3 ? (scriptVariants.length && scriptVoiceSignature === currentScriptVoiceSignature ? "เลือกเสียงนี้" : "สร้างสคริปต์ด้วยเสียงนี้") : activeStep === 4 ? "ใช้สคริปต์นี้" : "สร้างคลิป"}<ArrowRight size={17} /></button> : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
+                {activeStep < 6 ? (scriptBusy ? (
+                  <button type="button" className="button button-quiet" disabled={operationMessage === "กำลังยกเลิก…"} onClick={cancelScriptGeneration}>
+                    {operationMessage === "กำลังยกเลิก…" ? <LoaderCircle size={17} className="spin" /> : <X size={17} />}
+                    {operationMessage === "กำลังยกเลิก…" ? "กำลังยกเลิก…" : `ยกเลิกการเขียน (${scriptElapsedSeconds} วิ)`}
+                  </button>
+                ) : <button type="button" className="button button-primary" disabled={Boolean(operationMessage) || analyzing || scriptBusy || voiceCloneActive || (activeStep === 1 && clipSelectionInvalid) || (activeStep === 3 && voiceEngine === "jaitts" && (!cloneVoice?.id || !cloneVoice.gender)) || (activeStep === 4 && !selectedScriptData)} onClick={() => void goNext()}>{activeStep === 1 ? "ใช้ Timeline นี้" : activeStep === 2 ? "ไปเลือกเสียง" : activeStep === 3 ? (scriptVariants.length && scriptVoiceSignature === currentScriptVoiceSignature ? "เลือกเสียงนี้" : "สร้างสคริปต์ด้วยเสียงนี้") : activeStep === 4 ? "ใช้สคริปต์นี้" : "สร้างคลิป"}<ArrowRight size={17} /></button>) : !renderDone && !rendering ? <button type="button" className="button button-primary" onClick={startRender}><Zap size={17} /> สร้างคลิป</button> : null}
               </>}
             </footer>
           </section>

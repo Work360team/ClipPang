@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { getProvider, runProcess as runProviderProcess } from "../providers.mjs";
 
 import {
   AlphaOverlayError,
@@ -78,6 +79,36 @@ test("child stderr capture is bounded", async () => {
       assert.match(error.stderr, /END$/);
       return true;
     },
+  );
+});
+
+test("Codex script provider runs isolated from personal config with a latency-oriented preset", () => {
+  const provider = getProvider("codex-cli");
+  assert.ok(provider);
+  assert.ok(provider.args.includes("--ignore-user-config"));
+  assert.ok(provider.args.includes("--ephemeral"));
+  assert.ok(provider.args.includes('model_reasoning_effort="low"'));
+  assert.equal(provider.args.at(-1), "-");
+  assert.ok(provider.timeoutMs > 0 && provider.timeoutMs < 120_000);
+});
+
+test("CLI provider abort stops its child process and reports cancellation", async () => {
+  const controller = new AbortController();
+  const pending = runProviderProcess("node", [
+    "-e",
+    "console.log(process.pid);setInterval(function(){},1000)",
+  ], { timeoutMs: 5_000, signal: controller.signal });
+  setTimeout(() => controller.abort(), 150);
+  const result = await pending;
+
+  assert.equal(result.aborted, true);
+  assert.equal(result.ok, false);
+  const childPid = Number(result.stdout.trim().split(/\s+/)[0]);
+  assert.ok(Number.isInteger(childPid) && childPid > 0);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.throws(
+    () => process.kill(childPid, 0),
+    (error) => error?.code === "ESRCH" || error?.code === "EINVAL",
   );
 });
 

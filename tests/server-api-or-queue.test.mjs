@@ -8,10 +8,11 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { EventEmitter } from "node:events";
 
 import { createApiHandler } from "../server/api.mjs";
 import { PATHS } from "../server/config.mjs";
-import { createLocalRuntime, createWebWorkerLoader, pickScript } from "../server/index.mjs";
+import { connectionAbortSignal, createLocalRuntime, createWebWorkerLoader, pickScript } from "../server/index.mjs";
 import { RenderQueue } from "../server/queue.mjs";
 import {
   MAX_SOURCE_ASSETS,
@@ -68,6 +69,23 @@ test("web worker loader switches to a rebuilt server bundle without restarting",
   writeFileSync(dependency, "export const build = 'two-after-rebuild';\n");
   writeFileSync(buildId, "build-two\n");
   assert.equal((await getWebWorker()).build, "two-after-rebuild");
+});
+
+test("HTTP connection cancellation propagates to long-running API work", () => {
+  const disconnectedRequest = new EventEmitter();
+  const disconnectedResponse = new EventEmitter();
+  disconnectedResponse.writableEnded = false;
+  const disconnectedSignal = connectionAbortSignal(disconnectedRequest, disconnectedResponse);
+  disconnectedResponse.emit("close");
+  assert.equal(disconnectedSignal.aborted, true);
+
+  const completedRequest = new EventEmitter();
+  const completedResponse = new EventEmitter();
+  completedResponse.writableEnded = true;
+  const completedSignal = connectionAbortSignal(completedRequest, completedResponse);
+  completedResponse.emit("finish");
+  completedResponse.emit("close");
+  assert.equal(completedSignal.aborted, false);
 });
 
 function apiRequest(handler, pathname, { method = "GET", body } = {}) {
