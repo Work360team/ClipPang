@@ -52,7 +52,8 @@ import { HardLink as Link } from "./HardLink";
 // ดึงมาจากที่เดียวกับที่ pipeline ใช้ จะได้ไม่มีสองชุดที่เพี้ยนจากกันได้
 import { DEFAULT_PACE, NARRATION_PACES, planNarrationFit, timingForPace, VOICE_TONES } from "../../pipeline/core.mjs";
 import { narrationMsFor } from "../../pipeline/speech-rate.mjs";
-import { unreadableWords } from "../../pipeline/thai-speech.mjs";
+import { toSpokenThai, unreadableWords } from "../../pipeline/thai-speech.mjs";
+import { MAX_SPEEDUP } from "../../pipeline/narration-fit.mjs";
 import { VoiceCloneStudio } from "./VoiceCloneStudio";
 import { type LocalVoiceClone } from "../lib/local-api";
 import {
@@ -392,6 +393,9 @@ export function ProjectWizard() {
   // เครื่องยนต์เสียงที่เลือกใช้ — Gemini คือคลาวด์ ส่วน jaitts คือเสียงโคลนในเครื่อง
   const [voiceEngine, setVoiceEngine] = useState<"gemini" | "jaitts">("gemini");
   const [cloneVoice, setCloneVoice] = useState<LocalVoiceClone | null>(null);
+  // AI เขียนสคริปต์ล้มแล้วระบบตกไปใช้เทมเพลตออฟไลน์ ซึ่งแค่หั่นช่อง "จุดขาย" มาเป็นท่อน ๆ
+  // ถ้าไม่บอก ผู้ใช้จะนึกว่านั่นคือฝีมือ AI แล้วเอาไปเรนเดอร์ทั้งอย่างนั้น
+  const [scriptFallbackFrom, setScriptFallbackFrom] = useState<string | null>(null);
   const [voiceCloneActive, setVoiceCloneActive] = useState(false);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
@@ -560,20 +564,36 @@ export function ProjectWizard() {
    * ผลลัพธ์จริงก่อนกดสร้าง ไม่ใช่เพิ่งมารู้ตอนเปิดไฟล์แล้วเจอครึ่งหลังเงียบ
    */
   const lengthPreview = useMemo(() => {
-    const baseMsPerGrapheme = voiceRates[selectedVoice];
+    // เสียงโคลนไม่ได้อยู่ในตารางเสียงของ Gemini ต้องอ่านอัตราจากตัวเสียงเอง
+    const baseMsPerGrapheme = voiceEngine === "jaitts" ? cloneVoice?.msPerGrapheme : voiceRates[selectedVoice];
     if (!baseMsPerGrapheme || !currentChunks.length || timelineTotalMs <= 0) return null;
     const timing = timingForPace(pace);
     // เร่งเสียง 1.2 เท่า = เวลาพูดสั้นลง 1.2 เท่า
     const model = { msPerGrapheme: baseMsPerGrapheme / (speed > 0 ? speed : 1) };
-    const narrationMs = narrationMsFor(model, currentChunks.map((text) => ({ text })), timing);
+    // เครื่องยนต์ในเครื่องพูด 20000mAh ว่า สองหมื่นมิลลิแอมป์ ต้องนับจากคำที่พูดจริง
+    // ไม่งั้นประเมินสั้นกว่าความจริงทุกครั้งที่สคริปต์มีตัวเลข
+    const spoken = voiceEngine === "jaitts"
+      ? currentChunks.map((text) => toSpokenThai(text).text)
+      : currentChunks;
+    const narrationMs = narrationMsFor(model, spoken.map((text) => ({ text })), timing);
     const plan = planNarrationFit({
       narrationMs,
       targetMs: timelineTotalMs,
       chunkCount: currentChunks.length,
       timing,
     });
-    return { narrationMs, action: plan.action as string, trimmedToMs: plan.targetMs as number };
-  }, [voiceRates, selectedVoice, speed, pace, currentChunks, timelineTotalMs]);
+    // เสียงยาวเกินคลิปเป็นคนละเรื่องกับเสียงสั้นกว่าคลิป planNarrationFit ไม่ได้ดูแล
+    // ทางนี้ (มี fitNarrationToTimeline เร่งเสียงให้ได้ถึง 1.15 เท่าตอนเรนเดอร์)
+    const overMs = narrationMs - timelineTotalMs;
+    return {
+      narrationMs,
+      action: plan.action as string,
+      trimmedToMs: plan.targetMs as number,
+      overMs,
+      // เกินเกินกว่าที่เร่งเสียงจะช่วยได้ = เรนเดอร์ไม่ผ่านแน่ ๆ ต้องแก้ก่อน
+      tooLong: overMs > 0 && narrationMs / timelineTotalMs > MAX_SPEEDUP,
+    };
+  }, [voiceEngine, cloneVoice?.msPerGrapheme, voiceRates, selectedVoice, speed, pace, currentChunks, timelineTotalMs]);
   const clipDurationInvalid = orderedTimelineClips.some((clip) => {
     const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
     return !asset || clip.trimStartMs < 0 || clip.trimEndMs <= clip.trimStartMs || clip.trimEndMs > asset.durationMs + 1;
@@ -2111,6 +2131,7 @@ export function ProjectWizard() {
       scriptVoiceSignature: currentScriptVoiceSignature,
     }, { signal: operationSignal });
     if (typeof result.updatedAt === "number") projectUpdatedAtRef.current = result.updatedAt;
+    setScriptFallbackFrom(typeof result.fallbackFrom === "string" ? result.fallbackFrom : null);
     // ได้ศูนย์ชุดต้องดังขึ้นมา ไม่ใช่เงียบแล้วปล่อยให้หน้าจอค้างของเดิมไว้
     // ซึ่งเคยทำให้ผู้ใช้เห็นสคริปต์ของสินค้าคนละตัวโดยไม่รู้ตัว
     if (!result.scripts.length) {
@@ -2715,6 +2736,18 @@ export function ProjectWizard() {
                       {scriptBusy ? "กำลังเขียน…" : "เขียนใหม่ทั้งชุด"}
                     </button>
                   </div>
+                  {scriptFallbackFrom && (
+                    <div className="length-note">
+                      <TriangleAlert size={15} />
+                      <div>
+                        <b>ชุดนี้ไม่ได้มาจาก AI — ตัวเขียนสคริปต์ล้ม ระบบเลยใช้ตัวสำรองออฟไลน์แทน</b>
+                        <small>
+                          ตัวสำรองแค่ตัดข้อความจากช่อง “จุดขาย” มาเรียงเป็นท่อน ไม่ได้เรียบเรียงใหม่
+                          ลองกดเขียนใหม่อีกครั้ง หรือเปลี่ยนผู้ให้บริการในหน้าตั้งค่า ({scriptFallbackFrom})
+                        </small>
+                      </div>
+                    </div>
+                  )}
                   {unreadableInScript.length > 0 && (
                     <div className="length-note">
                       <TriangleAlert size={15} />
@@ -2856,6 +2889,28 @@ export function ProjectWizard() {
                       <div><span><Mic2 size={15} /></span><div><small>เสียงพากย์</small><b>{activeVoiceName}</b></div></div>
                       <div><span><Captions size={15} /></span><div><small>สไตล์ซับ · ตำแหน่ง</small><b>{selectedStyleData.name} · {captionPosition}</b></div></div>
                     </div>
+                    {lengthPreview && lengthPreview.overMs > 0 && (
+                      <div className={`length-note${lengthPreview.tooLong ? "" : " length-note-stretch"}`}>
+                        {lengthPreview.tooLong ? <TriangleAlert size={15} /> : <Clock3 size={15} />}
+                        <div>
+                          <b>
+                            {lengthPreview.tooLong
+                              ? `เสียงจะยาวเกินคลิป ${formatDuration(lengthPreview.overMs / 1000)} — เรนเดอร์ไม่ผ่าน`
+                              : "เสียงยาวกว่าคลิปนิดหน่อย ระบบจะเร่งให้พอดีเอง"}
+                          </b>
+                          <small>
+                            {lengthPreview.tooLong
+                              ? `สคริปต์นี้พูดได้ ${formatDuration(lengthPreview.narrationMs / 1000)} แต่คลิปยาว ${formatDuration(selectedTotalSec)} ระบบเร่งเสียงให้ได้มากสุด ${MAX_SPEEDUP} เท่าซึ่งยังไม่พอ — ลดข้อความในสคริปต์ หรือเพิ่มช่วงคลิปให้ยาวขึ้น`
+                              : `พูดได้ ${formatDuration(lengthPreview.narrationMs / 1000)} เกินมานิดเดียว ระบบตัดความเงียบท้ายท่อนและเร่งจังหวะเล็กน้อยให้เอง ไม่มีคำไหนหาย`}
+                          </small>
+                        </div>
+                        {lengthPreview.tooLong && (
+                          <button type="button" className="button button-quiet" disabled={scriptBusy} onClick={() => { setActiveStep(4); }}>
+                            ไปแก้สคริปต์
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {lengthPreview && lengthPreview.action !== "keep" && (
                       <div className={`length-note length-note-${lengthPreview.action}`}>
                         <Clock3 size={15} />

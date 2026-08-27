@@ -630,7 +630,10 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,
         });
-        const scripts = normalizeScriptsForClient(generated);
+        // ตัวที่เสียบเข้ามาแทนตอนทดสอบยังคืน array อยู่ รับทั้งสองแบบไว้
+        const generatedVariants = Array.isArray(generated) ? generated : generated.variants;
+        const scriptFallbackFrom = Array.isArray(generated) ? null : (generated.fallbackFrom ?? null);
+        const scripts = normalizeScriptsForClient(generatedVariants);
         // AI อาจใช้เวลาหลายวินาที ระหว่างนั้น autosave/แท็บอื่นอาจแก้ config ได้
         // อ่านฉบับล่าสุดก่อนเขียนผลกลับ เพื่อไม่เอา snapshot เก่าทับเสียงหรือ timeline ใหม่
         const latestProject = store.getProject(project.id) ?? project;
@@ -657,7 +660,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         const savedProject = store.updateProject(project.id, { product, wizardStep: 4 });
         // ส่ง brief ฉบับที่บันทึกจริงกลับไปด้วย หากอีกแท็บแก้ระหว่างรอ AI
         // หน้าจอเดิมจะได้ autosave ต่อจากฉบับล่าสุด ไม่เขียน snapshot เก่าทับกลับมา
-        return json({ ok: true, scripts, brief: product.brief, updatedAt: savedProject.updatedAt });
+        return json({ ok: true, scripts, brief: product.brief, updatedAt: savedProject.updatedAt, fallbackFrom: scriptFallbackFrom });
       }
 
       // แคปชั่นใต้โพสต์ + แฮชแท็ก สำหรับเอาไปวางตอนอัปโหลดคลิป
@@ -712,10 +715,17 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       // เสียงต้นแบบที่ผู้ใช้อัดไว้เอง สำหรับเครื่องยนต์เสียงในเครื่อง
       if (pathname === "/api/voice-clones" && method === "GET") {
+        // แนบความเร็วพูดที่วัดได้ไปด้วยเหมือนเสียงของ Gemini ไม่งั้นหน้าสร้างคลิป
+        // ประเมินความยาวเสียงโคลนไม่ได้เลย แล้วผู้ใช้จะไม่มีทางรู้ว่าเสียงยาวเกินคลิป
+        // จนกว่าจะกดเรนเดอร์แล้วเจอ error
+        const withRate = (clone) => ({
+          ...clone,
+          msPerGrapheme: speechModelFor(store, { provider: "jaitts", voice: clone.id, speed: 1 }).msPerGrapheme,
+        });
         return json({
           ok: true,
-          speakers: listSpeakers(),
-          clones: listClones(),
+          speakers: listSpeakers().map((person) => ({ ...person, tones: person.tones.map(withRate) })),
+          clones: listClones().map(withRate),
           tones: VOICE_TONES,
           engine: discoverJaitts(),
           // ถอดข้อความเองไม่ได้ก็ต้องให้ผู้ใช้พิมพ์ หน้าจอต้องรู้ล่วงหน้า

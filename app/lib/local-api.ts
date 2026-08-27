@@ -155,7 +155,7 @@ export const localApi = {
     const signal = options.signal
       ? AbortSignal.any([options.signal, timeoutSignal])
       : timeoutSignal;
-    return apiFetch<{ ok: true; scripts: LocalScript[]; brief?: Record<string, unknown>; updatedAt?: number }>(
+    return apiFetch<{ ok: true; scripts: LocalScript[]; brief?: Record<string, unknown>; updatedAt?: number; fallbackFrom?: string | null }>(
       `/api/projects/${encodeURIComponent(id)}/script`,
       { method: "POST", body: JSON.stringify(body), signal },
     );
@@ -247,6 +247,7 @@ export interface LocalVoiceClone {
   label: string;
   text: string;
   durationMs: number | null;
+  msPerGrapheme?: number;
   createdAt: string | null;
   transcribedBy?: string;
 }

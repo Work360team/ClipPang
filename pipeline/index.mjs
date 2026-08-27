@@ -203,10 +203,10 @@ export async function generateScripts(input, options = {}) {
     timeoutMs: args.timeoutMs,
     signal: args.signal,
   });
-  // The local API stores this value directly in product.scripts and expects an
-  // array it can .find() by variant id. Provider metadata remains available via
-  // the low-level generateScript() export.
-  return result.variants;
+  // คืนเหตุผลตอนตกไปใช้เทมเพลตออฟไลน์มาด้วย ไม่งั้นผู้ใช้จะได้ข้อความที่หั่นมาจาก
+  // ช่อง "จุดขาย" ดิบ ๆ โดยไม่รู้เลยว่า AI ล้ม แล้วนึกว่านั่นคือสคริปต์ที่ AI เขียนให้
+  // ผู้เรียกเก่าที่คาดหวัง array ยังใช้ได้ เพราะฝั่ง API รับทั้งสองรูปแบบ
+  return { variants: result.variants, fallbackFrom: result.fallbackFrom ?? null };
 }
 
 function cloneScripts(scripts) {
