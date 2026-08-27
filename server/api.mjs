@@ -25,6 +25,7 @@ import {
   testGeminiApiKey,
 } from "./setup.mjs";
 import { installWhisper } from "./whisper-setup.mjs";
+import { getJaittsStatus, installJaitts } from "./jaitts-setup.mjs";
 import { generateCaptions } from "../pipeline/caption.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
@@ -361,6 +362,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   ensureDirectories();
   let ffmpegInstall = null;
   let whisperInstall = null;
+  let jaittsInstall = null;
   const generateScriptsImpl = services.generateScripts ?? generateScripts;
   const generateCaptionsImpl = services.generateCaptions ?? generateCaptions;
   const regenerateChunkImpl = services.regenerateChunk ?? regenerateChunk;
@@ -429,6 +431,12 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           whisperProgress: whisperInstall?.progress ?? null,
           whisperMessage: whisperInstall?.message ?? null,
           whisperError: whisperInstall?.error ?? null,
+          // เสียงพากย์ในเครื่อง — ไม่บังคับ แต่หน้าตั้งค่าต้องรู้ว่าติดตั้งไว้หรือยัง
+          jaitts: getJaittsStatus(),
+          jaittsInstalling: jaittsInstall?.running || false,
+          jaittsProgress: jaittsInstall?.progress ?? null,
+          jaittsMessage: jaittsInstall?.message ?? null,
+          jaittsError: jaittsInstall?.error ?? null,
           paths: { input: PATHS.input, projects: PATHS.projects },
         });
       }
@@ -467,6 +475,27 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           whisperInstall = { running: false, progress: 100, message: "ติดตั้ง whisper.cpp แล้ว", result };
         }).catch((error) => {
           whisperInstall = { running: false, progress: whisperInstall?.progress ?? 0, error: error.message, message: "ติดตั้ง whisper.cpp ไม่สำเร็จ" };
+        });
+        return json({ ok: true, status: "installing", progress: 0 }, { status: 202 });
+      }
+
+      if (method === "POST" && pathname === "/api/setup/jaitts") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "ติดตั้งโปรแกรมได้จากเครื่องที่รันระบบเท่านั้น");
+        if (jaittsInstall?.running) return json({ ok: true, status: "installing", progress: jaittsInstall.progress }, { status: 202 });
+        jaittsInstall = { running: true, progress: 0, message: "กำลังเตรียมติดตั้งเสียงพากย์ในเครื่อง" };
+        installJaitts({
+          onProgress(event) {
+            jaittsInstall = {
+              ...jaittsInstall,
+              ...event,
+              running: true,
+              progress: Number.isFinite(event?.percent) ? event.percent : jaittsInstall.progress,
+            };
+          },
+        }).then((result) => {
+          jaittsInstall = { running: false, progress: 100, message: "ติดตั้งเสียงพากย์ในเครื่องแล้ว", result };
+        }).catch((error) => {
+          jaittsInstall = { running: false, progress: jaittsInstall?.progress ?? 0, error: error.message, message: "ติดตั้งเสียงพากย์ในเครื่องไม่สำเร็จ" };
         });
         return json({ ok: true, status: "installing", progress: 0 }, { status: 202 });
       }

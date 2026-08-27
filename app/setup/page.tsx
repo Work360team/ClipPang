@@ -2,9 +2,9 @@
 
 import {
   ArrowRight,
-  CircleAlert,
   Check,
   CheckCircle2,
+  CircleAlert,
   Clapperboard,
   Cpu,
   Download,
@@ -16,6 +16,7 @@ import {
   HardDrive,
   KeyRound,
   LoaderCircle,
+  Mic2,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -30,7 +31,7 @@ import {
 } from "../lib/local-api";
 import styles from "./setup.module.css";
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
 const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ Clip360 พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
 
 const steps = [
@@ -55,8 +56,14 @@ const steps = [
   {
     id: 4 as Step,
     title: "ประหยัดโควตา",
-    description: "ไม่บังคับ · ข้ามได้",
+    description: "จำเป็น · ได้คลิปมากขึ้น 15 เท่า",
     icon: Gauge,
+  },
+  {
+    id: 5 as Step,
+    title: "เสียงของคุณเอง",
+    description: "ไม่บังคับ · ข้ามได้",
+    icon: Mic2,
   },
 ];
 
@@ -81,6 +88,17 @@ type DetailedSetupStatus = Omit<SetupStatus, "node" | "ffmpeg"> & {
   whisperProgress?: number | null;
   whisperMessage?: string | null;
   whisperError?: string | null;
+  jaitts?: {
+    installed?: boolean;
+    supported?: boolean;
+    gpu?: boolean;
+    approxBytes?: number | null;
+    reason?: string | null;
+  };
+  jaittsInstalling?: boolean;
+  jaittsProgress?: number | null;
+  jaittsMessage?: string | null;
+  jaittsError?: string | null;
   ffmpeg?: boolean | {
     ready?: boolean;
     found?: boolean;
@@ -133,6 +151,12 @@ export default function SetupPage() {
   const [whisperProgress, setWhisperProgress] = useState(0);
   const [whisperMessage, setWhisperMessage] = useState("");
   const [whisperError, setWhisperError] = useState("");
+  const [jaittsReady, setJaittsReady] = useState(false);
+  const [jaittsSupported, setJaittsSupported] = useState(true);
+  const [jaittsInstalling, setJaittsInstalling] = useState(false);
+  const [jaittsProgress, setJaittsProgress] = useState(0);
+  const [jaittsMessage, setJaittsMessage] = useState("");
+  const [jaittsError, setJaittsError] = useState("");
 
   const applySetupStatus = useCallback((result: DetailedSetupStatus, chooseStep = false) => {
     const nodeReady = isReady(result.node);
@@ -159,6 +183,14 @@ export default function SetupPage() {
     setWhisperProgress(whisper?.ready ? 100 : Math.max(0, Math.min(100, Number(result.whisperProgress ?? 0))));
     setWhisperMessage(result.whisperMessage ?? "");
     setWhisperError(result.whisperError ?? "");
+
+    const jaitts = result.jaitts;
+    setJaittsReady(Boolean(jaitts?.installed));
+    setJaittsSupported(jaitts?.supported !== false);
+    setJaittsInstalling(Boolean(result.jaittsInstalling));
+    setJaittsProgress(jaitts?.installed ? 100 : Math.max(0, Math.min(100, Number(result.jaittsProgress ?? 0))));
+    setJaittsMessage(result.jaittsMessage ?? "");
+    setJaittsError(result.jaittsError ?? "");
 
     if (chooseStep) {
       setCurrentStep(!nextSystemReady ? 1 : !nextFfmpegReady ? 2 : 3);
@@ -201,6 +233,32 @@ export default function SetupPage() {
       if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
     };
   }, [voicePreviewUrl]);
+
+  // ติดตั้งเสียงพากย์ในเครื่องใช้เวลาหลายนาทีและดาวน์โหลดหลายกิกะไบต์
+  // ถามสถานะเป็นระยะแทนการค้างรอ ผู้ใช้จะได้ปิดหน้านี้ไปทำอย่างอื่นได้
+  useEffect(() => {
+    if (!jaittsInstalling || engineState !== "connected") return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const result = await localApi.setupStatus() as DetailedSetupStatus;
+        if (!active) return;
+        applySetupStatus(result);
+        if (result.jaitts?.installed) {
+          setJaittsInstalling(false);
+          setJaittsProgress(100);
+          setJaittsError("");
+        } else if (!result.jaittsInstalling) {
+          setJaittsInstalling(false);
+          setJaittsError(result.jaittsError || "ติดตั้งไม่สำเร็จ กดลองใหม่ได้");
+        }
+      } catch {
+        // เน็ตสะดุดระหว่าง poll ไม่ใช่เหตุให้เลิกติดตั้ง รอบหน้าค่อยถามใหม่
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 2500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [jaittsInstalling, engineState, applySetupStatus]);
 
   useEffect(() => {
     if (!whisperInstalling || engineState !== "connected") return;
@@ -279,6 +337,22 @@ export default function SetupPage() {
     } catch (error) {
       setInstalling(false);
       setInstallError(messageFrom(error, "สั่งติดตั้ง FFmpeg ไม่สำเร็จ กรุณาลองอีกครั้ง"));
+    }
+  };
+
+  const startJaittsInstall = async () => {
+    if (engineState !== "connected") {
+      setJaittsError("หน้านี้เป็นเว็บตัวอย่าง กรุณาเปิด Clip360 Local บนคอมก่อนติดตั้ง");
+      return;
+    }
+    setJaittsProgress(0);
+    setJaittsError("");
+    setJaittsInstalling(true);
+    try {
+      await localApi.installJaitts();
+    } catch (error) {
+      setJaittsInstalling(false);
+      setJaittsError(messageFrom(error, "สั่งติดตั้งไม่สำเร็จ กรุณาลองอีกครั้ง"));
     }
   };
 
@@ -844,7 +918,7 @@ export default function SetupPage() {
                     <Gauge size={22} aria-hidden="true" />
                   </span>
                   <div>
-                    <span className={styles.stepKicker}>ขั้นที่ 4 · ไม่บังคับ</span>
+                    <span className={styles.stepKicker}>ขั้นที่ 4 · จำเป็น</span>
                     <h2>ประหยัดโควตา Gemini</h2>
                     <p>ติดตั้ง whisper.cpp เพื่อสร้างคลิปได้มากขึ้นต่อวัน</p>
                   </div>
@@ -884,8 +958,8 @@ export default function SetupPage() {
                       </p>
                       <ul>
                         <li>เก็บไว้ใน data/bin เหมือน FFmpeg ไม่แก้ระบบของเครื่อง</li>
-                        <li>ข้ามตอนนี้ได้ กลับมาติดตั้งทีหลังจากหน้านี้ก็ได้</li>
-                        <li>ไม่มีก็ยังทำคลิปได้ตามปกติ แค่เปลืองโควตามากกว่า</li>
+                        <li>ติดตั้งครั้งเดียว ใช้ได้ตลอด ไม่ต้องต่อเน็ตตอนทำคลิป</li>
+                        <li>ใช้ตอนอัดเสียงตัวเองด้วย — ถอดข้อความให้อัตโนมัติ</li>
                       </ul>
                     </div>
                   </div>
@@ -932,14 +1006,18 @@ export default function SetupPage() {
                 )}
 
                 <div className={styles.actions}>
-                  <button
-                    type="button"
-                    className={styles.textButton}
-                    onClick={goHome}
-                    disabled={whisperInstalling}
-                  >
-                    {whisperReady ? "ไปหน้าแรก" : "ข้ามไปก่อน"}
-                  </button>
+                  {/* ทางออกเหลือไว้เฉพาะเครื่องที่ติดตั้งอัตโนมัติไม่ได้ ไม่งั้นผู้ใช้จะติดค้าง
+                      อยู่ตรงนี้ตลอดไปโดยไม่มีทางไปต่อ ส่วนเครื่องที่ติดตั้งได้ให้ติดตั้งก่อน */}
+                  {(whisperReady || !whisperSupported) && (
+                    <button
+                      type="button"
+                      className={styles.textButton}
+                      onClick={goHome}
+                      disabled={whisperInstalling}
+                    >
+                      {whisperReady ? "ไปหน้าแรก" : "ข้ามไปก่อน"}
+                    </button>
+                  )}
                   {!whisperReady && whisperSupported && (
                     <button
                       type="button"
@@ -956,6 +1034,127 @@ export default function SetupPage() {
                     </button>
                   )}
                   {whisperReady && (
+                    <button type="button" className={styles.primaryButton} onClick={() => setCurrentStep(5)}>
+                      ต่อไป: เสียงของคุณเอง
+                      <ArrowRight size={18} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 5 && (
+              <div className={styles.panelInner}>
+                <div className={styles.sectionHeading}>
+                  <span className={styles.sectionIcon}>
+                    <Mic2 size={22} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <span className={styles.stepKicker}>ขั้นที่ 5 · ไม่บังคับ</span>
+                    <h2>ใช้เสียงของคุณเองพากย์</h2>
+                    <p>โคลนเสียงจากคลิปสั้น ๆ ที่อัดเอง ทำงานในเครื่อง ไม่ใช้โควตา</p>
+                  </div>
+                </div>
+
+                <p>
+                  ติดตั้งแล้วจะมีตัวเลือก “เสียงของฉัน” เพิ่มขึ้นมาในขั้นเลือกเสียง
+                  อัดเสียงตัวเอง 3–15 วินาที แล้วให้ระบบพากย์ด้วยเสียงนั้นได้ทุกคลิป
+                  โดยไม่นับโควตา Gemini เลย
+                </p>
+
+                {!jaittsSupported && (
+                  <div className={styles.errorMessage} role="status">
+                    <CircleAlert size={18} aria-hidden="true" />
+                    <span>
+                      <strong>เครื่องนี้ยังไม่มีตัวติดตั้งอัตโนมัติ</strong>
+                      {setupStatus?.jaitts?.reason ?? "ติดตั้งเองแล้วตั้ง JAITTS_HOME ใน .env ได้"}
+                    </span>
+                  </div>
+                )}
+
+                {jaittsSupported && !jaittsReady && !jaittsInstalling && (
+                  <div className={styles.installIntro}>
+                    <div className={styles.toolTile} aria-hidden="true">
+                      <HardDrive size={32} />
+                      <span>J</span>
+                    </div>
+                    <div>
+                      <h3>ต้องดาวน์โหลดราว 7 GB</h3>
+                      <p>ใหญ่กว่าขั้นอื่นมาก เพราะต้องลงชุดคำนวณของ Python ทั้งชุด</p>
+                      <ul>
+                        <li>เก็บใน data/bin เหมือนตัวอื่น ไม่แก้ระบบของเครื่อง</li>
+                        <li>ข้ามได้ กลับมาติดตั้งทีหลังจากหน้านี้ก็ได้</li>
+                        <li>ไม่ติดตั้งก็ยังทำคลิปได้ตามปกติด้วยเสียง Gemini</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {jaittsInstalling && (
+                  <div className={styles.progressBlock} aria-live="polite">
+                    <div className={styles.progressTopline}>
+                      <span>{jaittsMessage || "กำลังติดตั้ง…"}</span>
+                      <strong>{jaittsProgress}%</strong>
+                    </div>
+                    <div
+                      className={styles.progressTrack}
+                      role="progressbar"
+                      aria-label="ความคืบหน้าการติดตั้งเสียงพากย์ในเครื่อง"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={jaittsProgress}
+                    >
+                      <span style={{ width: `${jaittsProgress}%` }} />
+                    </div>
+                    <div className={styles.progressMeta}>
+                      <span>ใช้เวลาหลายนาที ขึ้นกับความเร็วเน็ต</span>
+                      <span>ปิดหน้านี้ได้ งานยังทำต่อบนเครื่อง</span>
+                    </div>
+                  </div>
+                )}
+
+                {jaittsReady && (
+                  <div className={styles.goodMessage} role="status">
+                    <CheckCircle2 size={19} aria-hidden="true" />
+                    <span>
+                      <strong>เสียงพากย์ในเครื่องพร้อมใช้งานแล้ว</strong>
+                      ไปอัดเสียงตัวเองได้ที่ขั้นเลือกเสียงตอนสร้างคลิป
+                    </span>
+                  </div>
+                )}
+
+                {jaittsError && (
+                  <div className={styles.errorMessage} role="alert">
+                    <CircleAlert size={18} aria-hidden="true" />
+                    <span><strong>ติดตั้งไม่สำเร็จ</strong>{jaittsError}</span>
+                  </div>
+                )}
+
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    onClick={goHome}
+                    disabled={jaittsInstalling}
+                  >
+                    {jaittsReady ? "ไปหน้าแรก" : "ข้ามไปก่อน"}
+                  </button>
+                  {!jaittsReady && jaittsSupported && (
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={() => void startJaittsInstall()}
+                      disabled={jaittsInstalling || engineState !== "connected"}
+                    >
+                      {jaittsInstalling ? (
+                        <LoaderCircle className={styles.spin} size={18} aria-hidden="true" />
+                      ) : (
+                        <Download size={18} aria-hidden="true" />
+                      )}
+                      {jaittsInstalling ? "กำลังติดตั้ง…" : "ดาวน์โหลดและติดตั้ง"}
+                    </button>
+                  )}
+                  {jaittsReady && (
                     <button type="button" className={styles.primaryButton} onClick={goHome}>
                       เริ่มทำคลิป
                       <ArrowRight size={18} aria-hidden="true" />

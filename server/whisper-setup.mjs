@@ -13,8 +13,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { SecurityError } from "./security.mjs";
+import { downloadTo, extractArchive, findFile, report, runCli } from "./installer-lib.mjs";
 import { ensureDirectories, paths } from "./config.mjs";
 
 // ตรึงรุ่นไว้เพื่อให้ทุกเครื่องได้ของชุดเดียวกัน — ถ้าจะอัปเกรดให้แก้ที่นี่ที่เดียว
@@ -26,7 +27,6 @@ const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${M
 const INSTALL_DIRNAME = "whisper";
 const MAX_BINARY_BYTES = 1024 * 1024 * 1024;
 const MAX_MODEL_BYTES = 4 * 1024 * 1024 * 1024;
-const VERIFY_TIMEOUT_MS = 30_000;
 
 export let whisperCliPath = null;
 export let whisperModelPath = null;
@@ -121,25 +121,6 @@ function activate(cli, model, environment) {
   }
 }
 
-function runCli(command, args, timeoutMs = VERIFY_TIMEOUT_MS) {
-  return new Promise((resolve) => {
-    let child;
-    try {
-      child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-    } catch (error) {
-      resolve({ code: -1, out: "", err: String(error?.message ?? error) });
-      return;
-    }
-    let out = "";
-    let err = "";
-    const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
-    child.stdout?.on("data", (chunk) => { if (out.length < 65_536) out += chunk; });
-    child.stderr?.on("data", (chunk) => { if (err.length < 65_536) err += chunk; });
-    child.on("error", (error) => { clearTimeout(timer); resolve({ code: -1, out, err: String(error.message) }); });
-    child.on("close", (code) => { clearTimeout(timer); resolve({ code, out, err }); });
-  });
-}
-
 /**
  * หาว่าติดตั้งไว้แล้วหรือยัง — ดูใน data/bin ก่อน แล้วค่อยดูค่าที่ตั้งมาจาก .env
  *
@@ -198,119 +179,6 @@ export async function discoverWhisper(options = {}) {
   };
 }
 
-function report(callback, update) {
-  if (typeof callback !== "function") return;
-  try { callback(Object.freeze({ ...update })); } catch { /* ผู้ฟังหลุดไปแล้ว ไม่ใช่เรื่องผิดปกติ */ }
-}
-
-/** ดาวน์โหลดไฟล์เดียวพร้อมรายงานความคืบหน้า — ใช้ทั้งกับไบนารีและโมเดล */
-async function downloadTo(url, destination, options = {}) {
-  const {
-    fetchImpl = globalThis.fetch,
-    signal,
-    maxBytes,
-    onProgress,
-    label = "ไฟล์",
-  } = options;
-
-  const target = new URL(url);
-  if (target.protocol !== "https:") {
-    throw new SecurityError(`อนุญาตให้ดาวน์โหลด${label}ผ่าน HTTPS เท่านั้น`, {
-      code: "INSECURE_DOWNLOAD_URL", statusCode: 403,
-    });
-  }
-
-  const response = await fetchImpl(target, { redirect: "follow", signal });
-  if (!response.ok || !response.body) throw new Error(`ดาวน์โหลด${label}ไม่สำเร็จ (HTTP ${response.status})`);
-  if (response.url && new URL(response.url).protocol !== "https:") {
-    throw new SecurityError(`ปลายทางดาวน์โหลด${label}ไม่ได้ใช้ HTTPS`, {
-      code: "INSECURE_DOWNLOAD_REDIRECT", statusCode: 403,
-    });
-  }
-
-  const announced = Number.parseInt(response.headers.get("content-length") || "", 10);
-  if (Number.isFinite(announced) && announced > maxBytes) {
-    await response.body.cancel();
-    throw new Error(`${label}มีขนาดใหญ่ผิดปกติ`);
-  }
-
-  const handle = await fs.promises.open(destination, "w", 0o600);
-  let received = 0;
-  let lastPercent = -1;
-  try {
-    const reader = response.body.getReader();
-    while (true) {
-      if (signal?.aborted) {
-        const error = new Error("ยกเลิกการทำงานแล้ว");
-        error.name = "AbortError";
-        throw error;
-      }
-      const { done, value } = await reader.read();
-      if (done) break;
-      received += value.byteLength;
-      if (received > maxBytes) {
-        await reader.cancel();
-        throw new Error(`${label}มีขนาดใหญ่ผิดปกติ`);
-      }
-      await handle.write(Buffer.from(value));
-      const percent = Number.isFinite(announced) && announced > 0
-        ? Math.min(100, Math.floor((received / announced) * 100))
-        : null;
-      if (percent !== lastPercent) {
-        lastPercent = percent;
-        report(onProgress, { phase: "downloading", label, receivedBytes: received, totalBytes: Number.isFinite(announced) ? announced : null, percent });
-      }
-    }
-  } catch (error) {
-    await handle.close();
-    await fs.promises.rm(destination, { force: true });
-    throw error;
-  }
-  await handle.close();
-  return { path: destination, receivedBytes: received };
-}
-
-async function extract(archivePath, outputDirectory, spec, options = {}) {
-  if (typeof options.extractor === "function") {
-    await options.extractor({ archivePath, outputDirectory, spec, signal: options.signal });
-    return;
-  }
-  const commands = spec.archive === "tar.gz"
-    ? [["tar", ["-xzf", archivePath, "-C", outputDirectory]]]
-    : [
-      ["tar.exe", ["-xf", archivePath, "-C", outputDirectory]],
-      ["tar", ["-xf", archivePath, "-C", outputDirectory]],
-      ["unzip", ["-q", archivePath, "-d", outputDirectory]],
-    ];
-
-  let lastError = null;
-  for (const [command, args] of commands) {
-    const result = await runCli(command, args, 300_000);
-    if (result.code === 0) return;
-    lastError = new Error(`แตกไฟล์ whisper.cpp ไม่สำเร็จ: ${String(result.err).slice(0, 200)}`);
-  }
-  throw lastError ?? new Error("ไม่พบเครื่องมือสำหรับแตกไฟล์ whisper.cpp");
-}
-
-/** หาไฟล์ตามชื่อในโฟลเดอร์ที่แตกไว้ */
-async function findFile(root, wanted) {
-  const pending = [root];
-  let visited = 0;
-  while (pending.length > 0 && visited < 10_000) {
-    const directory = pending.shift();
-    let entries = [];
-    try { entries = await fs.promises.readdir(directory, { withFileTypes: true }); } catch { continue; }
-    for (const entry of entries) {
-      visited += 1;
-      if (entry.isSymbolicLink()) continue;
-      const full = path.join(directory, entry.name);
-      if (entry.isFile() && entry.name.toLowerCase() === wanted) return full;
-      if (entry.isDirectory()) pending.push(full);
-    }
-  }
-  return null;
-}
-
 /**
  * ติดตั้ง whisper.cpp ให้พร้อมใช้ — โหลดไบนารีและโมเดล แล้วตรวจว่าเรียกได้จริง
  *
@@ -362,7 +230,7 @@ export async function installWhisper(options = {}) {
       });
 
       report(onProgress, { phase: "extracting", percent: 16, step: "binary", message: "กำลังแตกไฟล์โปรแกรม" });
-      await extract(archivePath, extractDir, spec, { signal, extractor });
+      await extractArchive(archivePath, extractDir, { signal, extractor, archive: spec.archive, label: " whisper.cpp" });
 
       const extractedCli = await findFile(extractDir, cliName(platform).toLowerCase());
       if (!extractedCli) throw new Error("ไฟล์ที่โหลดมาไม่มี whisper-cli ตามที่คาดไว้");

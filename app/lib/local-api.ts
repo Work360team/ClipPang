@@ -98,6 +98,7 @@ async function uploadAssetFile(file: File, onProgress?: (progress: number) => vo
 export const localApi = {
   setupStatus: () => apiFetch<SetupStatus>("/api/setup/status"),
   installFfmpeg: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/ffmpeg", { method: "POST", body: "{}" }),
+  installJaitts: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/jaitts", { method: "POST", body: "{}" }),
   installWhisper: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/whisper", { method: "POST", body: "{}" }),
 
   // เสียงต้นแบบที่ผู้ใช้อัดเองไว้ให้เครื่องยนต์เสียงในเครื่องโคลนตาม
