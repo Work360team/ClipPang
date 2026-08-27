@@ -34,6 +34,7 @@ import {
 } from "./media.mjs";
 import { estimateMs, generateScript } from "./script.mjs";
 import { sampleChunks, speechKey } from "./speech-rate.mjs";
+import { toSpokenThai } from "./thai-speech.mjs";
 import { CAPTION_COLOR_SETS, applyColorSet, captionColorSet } from "./caption-colors.mjs";
 import {
   DEFAULT_VOICE,
@@ -937,7 +938,13 @@ export async function runPipeline(options = {}) {
       durationMs: timeline.durationMs,
       // สถิติความเร็วพูดของงานนี้ ใช้ประเมินความยาวสคริปต์ครั้งต่อไปให้แม่นขึ้น
       speechSample: reuse ? null : (() => {
-        const sample = sampleChunks(timeline.chunks);
+        // นับตัวอักษรจากข้อความที่ "พูดจริง" ไม่ใช่ที่แสดงบนซับ — เสียงในเครื่องอ่าน
+        // 20000mAh ว่า สองหมื่นมิลลิแอมป์ ถ้านับจากแปดตัวอักษรแต่จับเวลาของสิบแปด
+        // ตัวอักษร อัตราที่วัดได้จะเพี้ยนไปทั้งชุด
+        const spoken = timeline.chunks.map((chunk) => (
+          provider === "jaitts" ? { ...chunk, text: toSpokenThai(chunk.text).text } : chunk
+        ));
+        const sample = sampleChunks(spoken);
         return sample ? { key: speechKey({ provider, voice, speed }), ...sample } : null;
       })(),
       selectedTotalMs: sourcePlan?.totalMs ?? null,

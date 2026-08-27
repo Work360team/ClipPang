@@ -27,6 +27,7 @@ import {
   Scissors,
   Sparkles,
   Trash2,
+  TriangleAlert,
   UploadCloud,
   WandSparkles,
   X,
@@ -51,6 +52,7 @@ import { HardLink as Link } from "./HardLink";
 // ดึงมาจากที่เดียวกับที่ pipeline ใช้ จะได้ไม่มีสองชุดที่เพี้ยนจากกันได้
 import { DEFAULT_PACE, NARRATION_PACES, planNarrationFit, timingForPace, VOICE_TONES } from "../../pipeline/core.mjs";
 import { narrationMsFor } from "../../pipeline/speech-rate.mjs";
+import { unreadableWords } from "../../pipeline/thai-speech.mjs";
 import { VoiceCloneStudio } from "./VoiceCloneStudio";
 import { type LocalVoiceClone } from "../lib/local-api";
 import {
@@ -587,6 +589,22 @@ export function ProjectWizard() {
   // "เลือกแล้ว" = เคยเดินผ่านขั้นนั้นมาแล้ว ไม่ใช่แค่มีค่า default ค้างอยู่ใน state
   // ใช้ขั้นที่ไปไกลสุด ไม่ใช่ขั้นปัจจุบัน ไม่งั้นย้อนกลับมาขั้น 1 แล้วค่าที่เลือกไว้จะหายไป
   const voiceChosen = furthestStep > 3;
+  /**
+   * คำที่เครื่องยนต์ในเครื่องอ่านไม่ออก
+   *
+   * ตัวเลขกับหน่วยระบบแปลงเป็นคำอ่านไทยให้เองตอนพากย์ แต่ชื่อแบรนด์อย่าง Eloop
+   * ถอดเป็นไทยแทนไม่ได้ (จะอ่านว่าอีลูปหรือเอลูปก็ได้) ปล่อยไว้แล้วโมเดลจะข้ามไป
+   * เงียบ ๆ คนดูไม่ได้ยินคำนั้นเลย จึงต้องบอกให้แก้เองก่อนเรนเดอร์
+   */
+  const unreadableInScript = useMemo(() => {
+    if (voiceEngine !== "jaitts") return [];
+    return [...new Set(currentChunks.flatMap((chunk) => unreadableWords(chunk)))];
+  }, [voiceEngine, currentChunks]);
+  // ชื่อเสียงที่โชว์ต้องตามเครื่องยนต์ที่เลือกอยู่ ไม่งั้นเลือกเสียงที่อัดเองไว้แล้ว
+  // แต่แผงพรีวิวยังขึ้นชื่อเสียง Gemini ทำให้ดูเหมือนระบบไม่ได้บันทึกเสียงนั้นให้
+  const activeVoiceName = voiceEngine === "jaitts"
+    ? (cloneVoice?.speaker ? `${cloneVoice.speaker} · ${cloneVoice.tone}` : "เสียงของฉัน")
+    : selectedVoiceData.name;
   const styleChosen = furthestStep > 4;
   const previewVideoUrl = activeClip?.previewUrl || activeClip?.url || videoUrl;
   const timelinePreviewUrl = selectedTimelineAsset?.previewUrl || selectedTimelineAsset?.url || "/clip360-sample.mp4";
@@ -2697,6 +2715,18 @@ export function ProjectWizard() {
                       {scriptBusy ? "กำลังเขียน…" : "เขียนใหม่ทั้งชุด"}
                     </button>
                   </div>
+                  {unreadableInScript.length > 0 && (
+                    <div className="length-note">
+                      <TriangleAlert size={15} />
+                      <div>
+                        <b>เสียงในเครื่องจะอ่านคำเหล่านี้ไม่ออก: {unreadableInScript.join(" · ")}</b>
+                        <small>
+                          ตัวเลขกับหน่วยระบบแปลงเป็นคำอ่านไทยให้เองแล้ว แต่คำภาษาอังกฤษจะถูกข้ามไปเงียบ ๆ
+                          ลองพิมพ์เป็นคำอ่านไทยแทน เช่น Eloop เป็น อีลูป
+                        </small>
+                      </div>
+                    </div>
+                  )}
                   <div className="chunk-list">
                     {currentChunks.map((chunk, index) => (
                       <div className="chunk" key={`${selectedScript}-${index}`}>
@@ -2823,7 +2853,7 @@ export function ProjectWizard() {
                   <>
                     <div className="render-checklist">
                       <div><span><Film size={15} /></span><div><small>คลิปและ Timeline</small><b>{orderedTimelineClips.length} ช่วง · {formatDuration(selectedTotalSec)}</b></div></div>
-                      <div><span><Mic2 size={15} /></span><div><small>เสียงพากย์</small><b>{selectedVoiceData.name}</b></div></div>
+                      <div><span><Mic2 size={15} /></span><div><small>เสียงพากย์</small><b>{activeVoiceName}</b></div></div>
                       <div><span><Captions size={15} /></span><div><small>สไตล์ซับ · ตำแหน่ง</small><b>{selectedStyleData.name} · {captionPosition}</b></div></div>
                     </div>
                     {lengthPreview && lengthPreview.action !== "keep" && (
@@ -3068,7 +3098,7 @@ export function ProjectWizard() {
             <div className="preview-config">
               <div className={voiceChosen ? "" : "is-pending"}>
                 <span className="config-icon" style={voiceChosen ? { background: selectedVoiceData.color } : undefined}><Mic2 size={15}/></span>
-                <p><small>เสียงพากย์</small><b>{voiceChosen ? `${selectedVoiceData.name} · ${speed.toFixed(1)}×` : "ยังไม่ได้เลือก"}</b></p>
+                <p><small>เสียงพากย์</small><b>{voiceChosen ? `${activeVoiceName} · ${speed.toFixed(1)}×` : "ยังไม่ได้เลือก"}</b></p>
               </div>
               <div className={styleChosen ? "" : "is-pending"}>
                 <span className={`config-icon${styleChosen ? " yellow" : ""}`}><Captions size={15}/></span>

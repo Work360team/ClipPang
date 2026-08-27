@@ -271,7 +271,7 @@ export function VoiceCloneStudio({
         <div className="field">
           <span>เพศของเสียง</span>
           <div className="tone-options">
-            {VOICE_GENDERS.map((item: VoiceGender) => (
+            {(VOICE_GENDERS as VoiceGender[]).map((item) => (
               <button
                 type="button"
                 key={item}
@@ -370,7 +370,7 @@ export function VoiceCloneStudio({
                     <div className="clone-gender-fix">
                       <small>เสียงนี้อัดไว้ก่อนมีตัวเลือกเพศ กรุณาระบุก่อนนำไปสร้างสคริปต์</small>
                       <div>
-                        {VOICE_GENDERS.map((item: VoiceGender) => (
+                        {(VOICE_GENDERS as VoiceGender[]).map((item) => (
                           <button
                             type="button"
                             key={item}

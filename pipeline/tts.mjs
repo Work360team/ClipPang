@@ -12,6 +12,7 @@ import { graphemeCount } from "./core.mjs";
 import { buildBatchPrompt, cutSpans, planSpans } from "./tts-batch.mjs";
 import { discoverJaitts, jaittsTts } from "./jaitts.mjs";
 import { listClones, readClone } from "./voice-clones.mjs";
+import { toSpokenThai } from "./thai-speech.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -405,7 +406,12 @@ export async function synthesize({
   ensureDir(path.dirname(outFile));
   if (cacheDir) ensureDir(cacheDir);
 
-  const key = cacheKeyFor({ provider, voice, speed, styleHint, text });
+  // เครื่องยนต์ไทยในเครื่องอ่านตัวเลขและอังกฤษไม่ออก มันข้ามไปเงียบ ๆ ไม่ใช่อ่านเพี้ยน
+  // จึงต้องแปลงเป็นคำอ่านไทยก่อนส่งเข้าโมเดล ส่วนซับไตเติลยังใช้ข้อความเดิมที่มีตัวเลข
+  // ปกติ เพราะบนจอ 20000mAh อ่านง่ายกว่า สองหมื่นมิลลิแอมป์
+  const spokenText = provider === "jaitts" ? toSpokenThai(text).text : text;
+  // คีย์แคชผูกกับข้อความที่พูดจริง ปรับตัวแปลงเมื่อไหร่เสียงเก่าก็ไม่ถูกหยิบมาใช้ซ้ำ
+  const key = cacheKeyFor({ provider, voice, speed, styleHint, text: spokenText });
   const cached = cacheDir ? path.join(cacheDir, `${key}.wav`) : null;
 
   if (cached && fs.existsSync(cached)) {
@@ -427,7 +433,7 @@ export async function synthesize({
 
   const rawFile = `${outFile}.raw.wav`;
   try {
-    const providerOpts = { text, voice, speed, styleHint, signal, timeoutMs, geminiEnv, onRequest };
+    const providerOpts = { text: spokenText, voice, speed, styleHint, signal, timeoutMs, geminiEnv, onRequest };
     if (provider === "gemini") await geminiTts(providerOpts, rawFile);
     else if (provider === "jaitts") await jaittsProviderTts(providerOpts, rawFile);
     else if (provider === "edge") await edgeTts(providerOpts, rawFile);
