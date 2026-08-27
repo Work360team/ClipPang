@@ -4796,6 +4796,48 @@ img.mini-project-thumb::after { content: none; }
 .render-checklist small { display: block; font-size: 11.5px; color: var(--ink-faint); }
 .render-checklist b { display: block; margin-top: 2px; font-size: 13.5px; font-weight: 620; overflow-wrap: anywhere; }
 
+/* บอกล่วงหน้าว่าเสียงกับคลิปยาวไม่เท่ากันและระบบจะทำอะไรให้
+   ก่อนหน้านี้ผู้ใช้เพิ่งมารู้ตอนเปิดไฟล์แล้วเจอครึ่งหลังเงียบ */
+.length-note {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e6dcc0;
+  border-radius: 13px;
+  background: #fdf8e8;
+  color: #5c4f22;
+}
+
+.length-note > svg { flex: 0 0 auto; }
+.length-note > div { min-width: 0; flex: 1; }
+.length-note b { display: block; font-size: 13px; font-weight: 600; }
+.length-note small { display: block; margin-top: 3px; color: #7b6e40; font-size: 12px; line-height: 1.5; }
+.length-note button { flex: 0 0 auto; }
+
+/* เกลี่ยช่องว่างเป็นเรื่องที่ระบบจัดการเองได้ ไม่ต้องเรียกร้องความสนใจเท่าการตัดคลิป */
+.length-note-stretch {
+  border-color: #dde3da;
+  background: #f7faf6;
+  color: #46523f;
+}
+
+.length-note-stretch small { color: #6a7563; }
+
+@media (max-width: 720px) {
+  /* ปุ่มที่อยู่ข้างข้อความบีบคอลัมน์ข้อความจนเหลือไม่กี่คำต่อบรรทัด ย้ายลงมาไว้ข้างล่าง */
+  .length-note {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+  }
+
+  .length-note > svg { margin-top: 2px; }
+  .length-note button { grid-column: 1 / -1; width: 100%; }
+}
+
 .render-summary {
   display: flex;
   align-items: center;

@@ -122,15 +122,32 @@ try {
     processTimeoutMs: 120_000,
   });
   const orderedMedia = await probe(ordered.outputs.video.path);
-  assert.ok(Math.abs(orderedMedia.durationMs - 4_000) <= (1000 / 15) + 2);
-  assert.equal(ordered.timeline.durationMs, 4_000);
+  // สคริปต์ท่อนเดียวพูดไม่ถึง 4 วินาที คลิปจึงต้องถูกตัดให้พอดีเสียง
+  // ไม่ใช่ปล่อยให้ครึ่งหลังเงียบเหมือนที่เคยเป็น
+  const lengthFit = ordered.report.tts.lengthFit;
+  assert.equal(lengthFit.action, "trim");
+  assert.equal(lengthFit.slackMs, 4_000 - lengthFit.targetMs + 800);
+  assert.ok(ordered.timeline.durationMs < 4_000, "ไทม์ไลน์ต้องสั้นลงจริง");
+  assert.equal(ordered.timeline.fit.trimmedToMs, ordered.timeline.durationMs);
+  // ความยาวที่ผู้ใช้เลือกไว้ต้องยังถูกบันทึกไว้ ใช้เทียบว่าร่างเก่ายังใช้ได้ไหม
+  assert.equal(ordered.timeline.fit.selectedTotalMs, 4_000);
+  assert.equal(ordered.report.selectedTotalMs, 4_000);
+  // เหลือความเงียบท้ายไว้ให้ซับอ่านจบเท่านั้น ไม่ใช่หลายวินาที
+  assert.equal(ordered.timeline.narrationFit.paddedMs, 800);
+  assert.ok(Math.abs(orderedMedia.durationMs - ordered.timeline.durationMs) <= (1000 / 15) + 2);
   assert.equal(ordered.timeline.editPlanHash, editPlanHash);
   assert.equal(ordered.timeline.narrationFit.mode, "pad-silence");
+  // ทุกช็อตที่ผู้ใช้เลือกต้องยังอยู่ครบและเรียงเหมือนเดิม แค่สั้นลงตามสัดส่วน
   assert.deepEqual(ordered.report.timelineClips.map((clip) => clip.id), ["first", "second"]);
   assert.deepEqual(ordered.report.timelineClips.map((clip) => clip.trimStartMs), [500, 4_000]);
-  assert.deepEqual(ordered.report.timelineClips.map((clip) => clip.durationMs), [2_500, 1_500]);
-  assert.equal(ordered.report.selectedTotalMs, 4_000);
-  assert.ok(Math.abs(ordered.report.outputDurationMs - 4_000) <= (1000 / 15) + 2);
+  assert.equal(
+    ordered.report.timelineClips.reduce((total, clip) => total + clip.durationMs, 0),
+    ordered.timeline.fit.trimmedToMs,
+  );
+  for (const [index, clip] of ordered.report.timelineClips.entries()) {
+    assert.ok(clip.durationMs < [2_500, 1_500][index], "ทุกช็อตต้องถูกหดจริง");
+  }
+  assert.ok(Math.abs(ordered.report.outputDurationMs - ordered.timeline.durationMs) <= (1000 / 15) + 2);
   assert.equal(fs.readdirSync(path.join(orderedProject, "work")).length, 0);
 
   const abortProject = path.join(projectDir, "abort-case");

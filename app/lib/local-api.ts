@@ -209,7 +209,7 @@ export interface LocalScript {
   estDurationMs?: number;
   chunks: string[];
 }
-export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string }
+export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string; msPerGrapheme?: number }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
 export interface LocalColorSet { id: string; name: string; primary: string; secondary: string; hint?: string }
 export interface LocalUser {

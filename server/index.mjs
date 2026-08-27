@@ -21,6 +21,7 @@ import { keySourceFor } from "./user-keys.mjs";
 import { prepareSources } from "./sources.mjs";
 import { createStore } from "./store/index.mjs";
 import { RenderQueue } from "./queue.mjs";
+import { recordSpeechSample } from "./speech-stats.mjs";
 import { getSetupStatus } from "./setup.mjs";
 import { discoverWhisper } from "./whisper-setup.mjs";
 import { configureQuotaStore } from "../pipeline/tts-quota.mjs";
@@ -237,7 +238,7 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
     // จะยิงเข้าโควตาตัวเอง ส่วนคนที่ยังไม่ใส่ก็ใช้คีย์ของเครื่องเหมือนเดิม
     const ownerId = project.ownerId ?? project.owner_id ?? null;
     const keySource = keySourceFor(store, ownerId);
-    return runPipeline({
+    const result = await runPipeline({
       projectDir: safeProjectPath(project.id),
       sourceFile: prepared.sourceFiles[0],
       sourceFiles: prepared.sourceFiles,
@@ -270,6 +271,10 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       signal: render.signal,
       onProgress: render.onProgress,
     });
+    // ความเร็วพูดจริงของงานนี้ ใช้ประเมินความยาวสคริปต์ครั้งต่อไป — ค่าที่วัดเอง
+    // แม่นกว่าค่าคงที่ที่ฝังไว้ เพราะขึ้นกับเสียง ความเร็ว และรุ่นของ pipeline เสียง
+    recordSpeechSample(store, result?.report?.speechSample);
+    return result;
   });
 
   const queue = new RenderQueue({ store, processor: renderProcessor });

@@ -166,9 +166,13 @@ export function buildChunkTimeline(takes, timing = DEFAULT_TIMING) {
 }
 
 /**
- * The edit timeline is authoritative. Narration may be padded with silence to
- * reach it, but speech is never truncated and the user's visual trim points
- * are never stretched or reordered.
+ * เติมความเงียบให้ไทม์ไลน์ยาวเท่าเป้าหมาย และไม่ตัดคำพูดทิ้งเด็ดขาด
+ *
+ * ตัวนี้ไม่ตัดสินใจอะไรเอง ผู้เรียกเป็นคนกำหนดเป้าหมายมาแล้วผ่าน planNarrationFit
+ * ว่าจะใช้ความยาวเดิมหรือความยาวที่ตัดให้พอดีเสียง ที่นี่แค่เติมส่วนต่างที่เหลือ
+ * ซึ่งตอนนี้เป็นแค่หางท้ายสั้น ๆ ไม่ใช่ความเงียบหลายวินาทีเหมือนเดิม
+ *
+ * ลำดับช็อตและจุดเริ่มของแต่ละช็อตที่ผู้ใช้เลือกยังไม่ถูกแตะเหมือนเดิม
  */
 export function padNarrationTimeline(timeline, targetDurationMs, attempted = []) {
   const target = Math.round(Number(targetDurationMs));
@@ -203,6 +207,111 @@ export function padNarrationTimeline(timeline, targetDurationMs, attempted = [])
       paddedMs: target - narrationMs,
       targetDurationMs: target,
     },
+  };
+}
+
+/**
+ * ความเงียบท้ายคลิปที่ยอมให้เหลือได้
+ *
+ * ไม่ใช่ศูนย์เพราะซับท่อนสุดท้ายต้องมีเวลาให้อ่านจบ และคลิปที่ตัดจบทันทีที่เสียงหยุด
+ * ดูเหมือนไฟล์ขาด ที่เกินจากนี้คือความเงียบที่ไม่ได้ทำหน้าที่อะไร
+ */
+export const TAIL_SILENCE_BUDGET_MS = 800;
+
+/** ยืดช่องว่างระหว่างท่อนรวมกันได้ไม่เกินเท่านี้ มากกว่านี้ฟังออกว่าเสียงค้าง */
+export const MAX_STRETCH_MS = 1500;
+
+/** และแต่ละช่องเพิ่มได้ไม่เกินเท่านี้ ไม่งั้นคลิปที่มีสองท่อนจะเว้นทีเดียวยาวผิดหู */
+export const MAX_EXTRA_GAP_MS = 250;
+
+/** ชิ้นวิดีโอที่สั้นกว่านี้กลายเป็นภาพแวบเดียวที่ดูไม่ทัน */
+export const MIN_SEGMENT_MS = 400;
+
+/**
+ * ตัดสินว่าจะทำอย่างไรเมื่อเสียงพากย์สั้นกว่าคลิปที่ผู้ใช้เลือกไว้
+ *
+ * เดิมระบบเติมความเงียบท้ายคลิปเสมอไม่ว่าจะขาดไปเท่าไหร่ วัดจากงานจริง 23 ชิ้น
+ * พบว่าเติมทุกชิ้น ตั้งแต่ 5% ถึง 50% ของความยาวคลิป — ครึ่งคลิปเป็นความเงียบ
+ * โดยไม่มีอะไรบอกผู้ใช้เลยสักคำ
+ *
+ * บันไดสามขั้น เรียงตามความเสียหายที่เกิดกับงานของผู้ใช้จากน้อยไปมาก:
+ *   keep    — ขาดนิดเดียว ปล่อยเป็นหางท้ายตามเดิม
+ *   stretch — ขาดไม่มาก เกลี่ยเข้าไปในช่องว่างระหว่างท่อน ไม่มีใครดูออก
+ *             และไม่ต้องแตะภาพที่ผู้ใช้เลือกมาเลย
+ *   trim    — ขาดเยอะ ตัดคลิปให้พอดีเสียง เพราะคลิปสั้นที่แน่นทั้งคลิป
+ *             ดีกว่าคลิปยาวที่เงียบครึ่งหลัง
+ */
+export function planNarrationFit({ narrationMs = 0, targetMs = 0, chunkCount = 0, timing = DEFAULT_TIMING } = {}) {
+  const narration = Math.round(Number(narrationMs));
+  const target = Math.round(Number(targetMs));
+  const slackMs = target - narration;
+  // เสียงยาวเกินคลิปเป็นคนละเรื่อง มี fitNarrationToTimeline ดูแลอยู่แล้ว
+  if (!Number.isFinite(slackMs) || slackMs <= TAIL_SILENCE_BUDGET_MS) {
+    return { action: "keep", targetMs: target, slackMs };
+  }
+
+  const excess = slackMs - TAIL_SILENCE_BUDGET_MS;
+  const gaps = Math.max(0, Math.round(Number(chunkCount)) - 1);
+  if (excess <= MAX_STRETCH_MS && gaps > 0) {
+    const extraGapMs = Math.floor(excess / gaps);
+    if (extraGapMs > 0 && extraGapMs <= MAX_EXTRA_GAP_MS) {
+      const padMs = Math.round(Number(timing?.padMs ?? DEFAULT_TIMING.padMs)) + extraGapMs;
+      return { action: "stretch", targetMs: target, slackMs, extraGapMs, padMs };
+    }
+  }
+  return { action: "trim", targetMs: narration + TAIL_SILENCE_BUDGET_MS, slackMs };
+}
+
+/**
+ * หดไทม์ไลน์ภาพให้พอดีกับเสียง
+ *
+ * หดทุกชิ้นตามสัดส่วนแทนที่จะตัดชิ้นท้ายทิ้ง เพราะแต่ละชิ้นคือมุมสินค้าคนละมุม
+ * ที่ผู้ใช้ตั้งใจเลือกมา ตัดทิ้งทั้งชิ้นเท่ากับลบของที่เขาเลือกไว้ ส่วนการหดคือ
+ * ทุกมุมยังอยู่ครบ แค่อยู่บนจอสั้นลง — และตัดจากปลายของแต่ละชิ้นเพราะจังหวะที่
+ * ตั้งใจถ่ายมักอยู่ต้นช็อต
+ *
+ * ชิ้นที่สั้นอยู่แล้วไม่ถูกหั่นต่อ ถ้าหดทุกชิ้นจนถึงขั้นต่ำแล้วยังไม่พอ
+ * ค่อยตัดชิ้นท้ายทิ้ง
+ */
+export function trimSourcePlan(sourcePlan, targetMs, { minSegmentMs = MIN_SEGMENT_MS } = {}) {
+  const segments = sourcePlan?.segments;
+  const total = Math.round(Number(sourcePlan?.totalMs));
+  const target = Math.round(Number(targetMs));
+  if (!Array.isArray(segments) || !segments.length) return sourcePlan;
+  if (!Number.isFinite(target) || target <= 0 || !Number.isFinite(total) || target >= total) return sourcePlan;
+
+  const floorOf = (segment) => Math.min(segment.srcDurMs, minSegmentMs);
+  const kept = segments.slice();
+  while (kept.length > 1 && kept.reduce((sum, segment) => sum + floorOf(segment), 0) > target) kept.pop();
+
+  const floors = kept.map(floorOf);
+  const floorTotal = floors.reduce((sum, value) => sum + value, 0);
+  const available = kept.reduce((sum, segment) => sum + segment.srcDurMs, 0);
+  const wanted = Math.max(floorTotal, Math.min(target, available));
+  const shrinkable = available - floorTotal;
+  const remove = available - wanted;
+
+  let acc = 0;
+  const trimmed = kept.map((segment, index) => {
+    const floor = floors[index];
+    const room = segment.srcDurMs - floor;
+    const cut = shrinkable > 0 ? Math.round(remove * (room / shrinkable)) : 0;
+    // ชิ้นสุดท้ายรับเศษจากการปัดของชิ้นก่อนหน้า ผลรวมจะได้ตรงเป๊ะ
+    const raw = index === kept.length - 1 ? wanted - acc : segment.srcDurMs - cut;
+    const durationMs = Math.min(segment.srcDurMs, Math.max(floor, Math.round(raw)));
+    const startMs = acc;
+    acc += durationMs;
+    return { ...segment, srcDurMs: durationMs, outMs: durationMs, startMs, trimEndMs: segment.inMs + durationMs };
+  });
+
+  return {
+    ...sourcePlan,
+    segments: trimmed,
+    totalMs: acc,
+    mode: "narration-trim",
+    ratio: Number((acc / total).toFixed(3)),
+    trimmedFromMs: total,
+    droppedSegments: segments.length - kept.length,
   };
 }
 

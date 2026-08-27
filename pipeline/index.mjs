@@ -21,6 +21,8 @@ import {
   fitToDuration,
   normalizeAnchor,
   padNarrationTimeline,
+  planNarrationFit,
+  trimSourcePlan,
 } from "./core.mjs";
 import {
   detectBurnedCaptions as detectBurnedCaptionsInFile,
@@ -31,6 +33,7 @@ import {
   shotScore,
 } from "./media.mjs";
 import { estimateMs, generateScript } from "./script.mjs";
+import { sampleChunks, speechKey } from "./speech-rate.mjs";
 import { CAPTION_COLOR_SETS, applyColorSet, captionColorSet } from "./caption-colors.mjs";
 import {
   DEFAULT_VOICE,
@@ -175,6 +178,10 @@ export async function generateScripts(input, options = {}) {
     variants: Number(args.variants ?? 5),
     provider: process.env.CLIP360_MOCK_TTS === "1" ? "template" : args.provider ?? "auto",
     charsPerSec: args.charsPerSec,
+    // ความเร็วพูดที่วัดได้จริงของเสียงที่จะใช้ และจังหวะเว้นวรรคที่ผู้ใช้เลือก
+    // สองอย่างนี้กำหนดว่าสคริปต์ควรยาวแค่ไหนถึงจะพูดเต็มคลิปพอดี
+    speech: args.speech,
+    timing: args.timing,
     timeoutMs: args.timeoutMs,
     signal: args.signal,
   });
@@ -588,6 +595,8 @@ export async function runPipeline(options = {}) {
           targetSec,
           variants: Number(options.variants || 5),
           provider: options.mockTts ? "template" : options.scriptProvider || "auto",
+          speech: options.speech,
+          timing: options.timing,
           signal,
         }));
       } else {
@@ -607,6 +616,7 @@ export async function runPipeline(options = {}) {
     let speed;
     let takes = [];
     let narrationFitResult = null;
+    let narrationPlan = null;
     if (reuse) {
       provider = reuse.report?.tts?.provider || requestedVoice.provider || "reused";
       voice = reuse.report?.tts?.voice || requestedVoice.id || null;
@@ -662,7 +672,10 @@ export async function runPipeline(options = {}) {
         error.status = 409;
         throw error;
       }
-      if (sourcePlan && Math.round(Number(timeline.durationMs)) !== sourcePlan.totalMs) {
+      // ร่างที่ถูกตัดให้พอดีเสียงจะสั้นกว่าช่วงที่ผู้ใช้เลือก จึงต้องเทียบกับ
+      // ความยาวที่เลือกไว้ตอนนั้น ไม่ใช่ความยาวของไทม์ไลน์หลังตัด
+      const reusedSelectedMs = Math.round(Number(timeline.fit?.selectedTotalMs ?? timeline.durationMs));
+      if (sourcePlan && reusedSelectedMs !== sourcePlan.totalMs) {
         const error = new Error("ร่างเดิมใช้ไทม์ไลน์คนละเวอร์ชัน กรุณาสร้างร่างใหม่ก่อนสร้างตัวจริง");
         error.code = "STALE_DRAFT";
         error.status = 409;
@@ -682,19 +695,48 @@ export async function runPipeline(options = {}) {
             timeoutMs: options.ttsTimeoutMs,
           });
         }
-        let value = buildChunkTimeline(variant.chunks.map((chunk, index) => ({
+        const takeItems = variant.chunks.map((chunk, index) => ({
           ...chunk,
           audioFile: takes[index].file,
           durationMs: takes[index].durationMs,
-        })), options.timing);
+        }));
+        let value = buildChunkTimeline(takeItems, options.timing);
         if (sourcePlan) {
-          value = padNarrationTimeline(value, sourcePlan.totalMs, narrationFitResult?.applied ?? []);
+          // เสียงสั้นกว่าคลิปคือเรื่องปกติ ไม่ใช่ข้อยกเว้น — จัดการก่อนที่ส่วนต่าง
+          // จะกลายเป็นความเงียบท้ายคลิปเหมือนที่เป็นมาทุกงาน
+          narrationPlan = planNarrationFit({
+            narrationMs: value.durationMs,
+            targetMs: sourcePlan.totalMs,
+            chunkCount: takeItems.length,
+            timing: options.timing,
+          });
+          if (narrationPlan.action === "stretch") {
+            value = buildChunkTimeline(takeItems, { ...options.timing, padMs: narrationPlan.padMs });
+          }
+          const videoPlan = narrationPlan.action === "trim"
+            ? trimSourcePlan(sourcePlan, narrationPlan.targetMs)
+            : sourcePlan;
+          // บันทึกไว้ในรายงานว่าไฟล์ที่ได้ไม่ตรงกับที่ผู้ใช้เลือกไว้ตอนแรกเพราะอะไร
+          if (narrationPlan.action === "trim") {
+            warnings.push(
+              `เสียงพากย์สั้นกว่าคลิปที่เลือก ${(narrationPlan.slackMs / 1000).toFixed(1)} วินาที `
+              + `จึงตัดคลิปจาก ${(sourcePlan.totalMs / 1000).toFixed(1)} เหลือ ${(videoPlan.totalMs / 1000).toFixed(1)} วินาที`,
+            );
+          } else if (narrationPlan.action === "stretch") {
+            warnings.push(
+              `เสียงพากย์สั้นกว่าคลิปเล็กน้อย จึงเว้นจังหวะระหว่างท่อนเพิ่มท่อนละ ${narrationPlan.extraGapMs}ms`,
+            );
+          }
+          value = padNarrationTimeline(value, videoPlan.totalMs, narrationFitResult?.applied ?? []);
           value.editPlanHash = options.editPlanHash || null;
-          value.segments = sourcePlan.segments;
+          value.segments = videoPlan.segments;
           value.fit = {
-            mode: sourcePlan.mode,
-            ratio: sourcePlan.ratio,
+            mode: videoPlan.mode,
+            ratio: videoPlan.ratio,
+            // ความยาวที่ผู้ใช้เลือกไว้ ไม่ใช่ความยาวหลังตัด — ใช้เทียบว่าร่างเก่า
+            // ยังตรงกับช่วงคลิปที่เลือกอยู่หรือเปล่า
             selectedTotalMs: sourcePlan.totalMs,
+            ...(videoPlan !== sourcePlan ? { trimmedToMs: videoPlan.totalMs } : {}),
           };
         } else {
           const pieces = buildPieces(assets, options.pieces);
@@ -795,7 +837,9 @@ export async function runPipeline(options = {}) {
       outputMeta = await probe(path.join(runDir, "final.mp4"), processOptions);
       if (sourcePlan) {
         const frameMs = 1000 / fps;
-        const deltaMs = Math.abs(outputMeta.durationMs - sourcePlan.totalMs);
+        // เทียบกับไทม์ไลน์ที่ประกอบจริง ไม่ใช่ความยาวที่ผู้ใช้เลือกไว้ตอนแรก
+        // เพราะไทม์ไลน์อาจถูกตัดให้พอดีเสียงไปแล้ว
+        const deltaMs = Math.abs(outputMeta.durationMs - timeline.durationMs);
         if (deltaMs > frameMs + 2) {
           const error = new Error(
             `วิดีโอที่ประกอบแล้วคลาดจากไทม์ไลน์ ${Math.round(deltaMs)}ms กรุณาลองเรนเดอร์ใหม่`,
@@ -864,10 +908,17 @@ export async function runPipeline(options = {}) {
         batchReason: reuse ? null : (takes.batchReason ?? null),
         // ระบบต้องย่อเสียงให้ลงไทม์ไลน์ไหม และย่อด้วยวิธีอะไร
         narrationFit: narrationFitResult?.applied?.length ? narrationFitResult.applied : null,
+        // ทำอะไรกับส่วนที่เสียงสั้นกว่าคลิป — keep/stretch/trim พร้อมส่วนต่างตั้งต้น
+        lengthFit: narrationPlan,
         reused: Boolean(reuse),
         sourceRenderId: reuse?.renderId || null,
       },
       durationMs: timeline.durationMs,
+      // สถิติความเร็วพูดของงานนี้ ใช้ประเมินความยาวสคริปต์ครั้งต่อไปให้แม่นขึ้น
+      speechSample: reuse ? null : (() => {
+        const sample = sampleChunks(timeline.chunks);
+        return sample ? { key: speechKey({ provider, voice, speed }), ...sample } : null;
+      })(),
       selectedTotalMs: sourcePlan?.totalMs ?? null,
       outputDurationMs: outputMeta?.durationMs ?? null,
       fit: timeline.fit,
@@ -879,7 +930,8 @@ export async function runPipeline(options = {}) {
         score: asset.score,
         burnedCaptions: asset.burned,
       })),
-      timelineClips: sourcePlan?.segments.map((segment) => ({
+      // ช่วงคลิปที่ใช้จริงหลังปรับให้พอดีเสียงแล้ว ไม่ใช่ช่วงที่เลือกไว้ตอนแรก
+      timelineClips: (timeline.segments ?? sourcePlan?.segments)?.map((segment) => ({
         id: segment.id,
         assetName: segment.assetName,
         order: segment.order,

@@ -30,6 +30,9 @@ import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
 import { hashPassword, verifyPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
+import { timingForPace } from "../pipeline/core.mjs";
+import { readSpeechRates, speechModelFor } from "./speech-stats.mjs";
+import { lookupSpeechModel } from "../pipeline/speech-rate.mjs";
 import {
   CAPTION_COLOR_SETS,
   generateScripts,
@@ -591,10 +594,19 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         const body = await readJson(request);
         const existingProduct = parseMaybeJson(project.product ?? project.product_json, {});
         const brief = body.brief ?? existingProduct.brief ?? existingProduct;
+        // ความยาวสคริปต์ที่ถูกต้องขึ้นกับเสียงที่จะใช้พากย์และจังหวะเว้นวรรค
+        // ไม่ใช่แค่ความยาวคลิป — เสียงเร็วต้องใช้คำมากกว่าเพื่อเวลาเท่ากัน
+        const voiceConfig = existingProduct.config ?? {};
         const generated = await generateScriptsImpl({
           brief,
           targetSec: Number(body.targetSec ?? 28),
           variants: 5,
+          speech: speechModelFor(store, {
+            provider: voiceConfig.provider,
+            voice: voiceConfig.voiceId,
+            speed: voiceConfig.speed,
+          }),
+          timing: timingForPace(voiceConfig.pace),
           // ผู้ใช้เลือกผู้ให้บริการไว้ในหน้าตั้งค่า — auto = ตัวแรกที่ใช้ได้จริง (CLI มาก่อน API)
           provider: String(readStoreSettings(store).scriptProvider ?? "auto"),
           signal: request.signal,
@@ -649,7 +661,16 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         });
       }
 
-      if (method === "GET" && pathname === "/api/voices") return json({ ok: true, voices: await listVoices() });
+      if (method === "GET" && pathname === "/api/voices") {
+        // แนบความเร็วพูดที่วัดได้ของแต่ละเสียงไปด้วย หน้าสร้างคลิปจะได้บอกล่วงหน้าได้ว่า
+        // สคริปต์ที่เลือกไว้จะพูดได้กี่วินาที เทียบกับคลิปที่ตัดไว้กี่วินาที
+        const rates = readSpeechRates(store);
+        const voices = (await listVoices()).map((voice) => ({
+          ...voice,
+          msPerGrapheme: lookupSpeechModel(rates, { provider: voice.provider, voice: voice.id, speed: 1 }).msPerGrapheme,
+        }));
+        return json({ ok: true, voices });
+      }
       // ส่งชุดสีไปพร้อมสไตล์ หน้าเลือกสไตล์ใช้ทั้งสองอย่างในจอเดียวกัน ไม่ต้องยิงซ้ำ
       if (method === "GET" && pathname === "/api/styles") {
         return json({ ok: true, styles: await listStyles(), colorSets: CAPTION_COLOR_SETS });

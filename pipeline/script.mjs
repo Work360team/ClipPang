@@ -1,5 +1,6 @@
 // script — brief → สคริปต์ขายของภาษาไทย 5 เวอร์ชัน  →  อนาคตคือ packages/ai
-import { chunkText, graphemeCount } from "./core.mjs";
+import { chunkText, DEFAULT_TIMING, graphemeCount } from "./core.mjs";
+import { characterBudget, chunkMs } from "./speech-rate.mjs";
 import {
   callCliProvider,
   callOpenAICompatible,
@@ -43,8 +44,8 @@ function normalizeBrief(brief) {
   return { ...brief, features: asList(brief?.features), avoid: asList(brief?.avoid) };
 }
 
-function userPrompt(brief, targetSec, variants, charsPerSec) {
-  return `เขียนสคริปต์พากย์เสียงขายสินค้า ${variants} เวอร์ชัน ความยาวพูดจริงประมาณ ${targetSec} วินาที (≈ ${Math.round(targetSec * charsPerSec)} ตัวอักษรต่อเวอร์ชัน)
+function userPrompt(brief, targetSec, variants, budget) {
+  return `เขียนสคริปต์พากย์เสียงขายสินค้า ${variants} เวอร์ชัน ความยาวพูดจริงประมาณ ${targetSec} วินาที (≈ ${budget} ตัวอักษรต่อเวอร์ชัน)
 
 สินค้า: ${brief.name}
 ราคา: ${brief.price ?? "-"}
@@ -61,7 +62,7 @@ ${brief.avoid?.length ? `ห้ามใช้คำ: ${brief.avoid.join(", ")}`
 
 /* ---------- ผู้ให้บริการ ---------- */
 
-async function withClaude(brief, targetSec, variants, { charsPerSec, signal, timeoutMs = 45_000 } = {}) {
+async function withClaude(brief, targetSec, variants, { budget, signal, timeoutMs = 45_000 } = {}) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model = process.env.SCRIPT_MODEL || "claude-sonnet-5";
   const signals = [signal, AbortSignal.timeout(timeoutMs)].filter(Boolean);
@@ -76,7 +77,7 @@ async function withClaude(brief, targetSec, variants, { charsPerSec, signal, tim
       model,
       max_tokens: 4000,
       system: SYSTEM,
-      messages: [{ role: "user", content: userPrompt(brief, targetSec, variants, charsPerSec) }],
+      messages: [{ role: "user", content: userPrompt(brief, targetSec, variants, budget) }],
     }),
     signal: signals.length === 1 ? signals[0] : AbortSignal.any(signals),
   });
@@ -88,7 +89,7 @@ async function withClaude(brief, targetSec, variants, { charsPerSec, signal, tim
   return { provider: `claude:${model}`, variants: parsed.variants };
 }
 
-async function withGemini(brief, targetSec, variants, { charsPerSec, signal, timeoutMs = 45_000 } = {}) {
+async function withGemini(brief, targetSec, variants, { budget, signal, timeoutMs = 45_000 } = {}) {
   const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const model = process.env.GEMINI_SCRIPT_MODEL || "gemini-2.5-flash";
   const signals = [signal, AbortSignal.timeout(timeoutMs)].filter(Boolean);
@@ -96,7 +97,7 @@ async function withGemini(brief, targetSec, variants, { charsPerSec, signal, tim
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: `${SYSTEM}\n\n${userPrompt(brief, targetSec, variants, charsPerSec)}` }] }],
+      contents: [{ parts: [{ text: `${SYSTEM}\n\n${userPrompt(brief, targetSec, variants, budget)}` }] }],
       generationConfig: { responseMimeType: "application/json", temperature: 0.9 },
     }),
     signal: signals.length === 1 ? signals[0] : AbortSignal.any(signals),
@@ -113,13 +114,13 @@ async function withGemini(brief, targetSec, variants, { charsPerSec, signal, tim
  * เรียกผู้ให้บริการตามทะเบียนใน providers.mjs
  * claude/gemini ยังใช้ฟังก์ชันเดิมเพราะรูปแบบ request ต่างจาก OpenAI
  */
-async function runProvider(id, brief, targetSec, variants, { charsPerSec, signal, timeoutMs } = {}) {
-  if (id === "claude") return withClaude(brief, targetSec, variants, { charsPerSec, signal, timeoutMs });
-  if (id === "gemini") return withGemini(brief, targetSec, variants, { charsPerSec, signal, timeoutMs });
+async function runProvider(id, brief, targetSec, variants, { budget, signal, timeoutMs } = {}) {
+  if (id === "claude") return withClaude(brief, targetSec, variants, { budget, signal, timeoutMs });
+  if (id === "gemini") return withGemini(brief, targetSec, variants, { budget, signal, timeoutMs });
 
   const provider = getProvider(id);
   if (!provider) throw new Error(`ไม่รู้จักผู้ให้บริการ "${id}"`);
-  const payload = { system: SYSTEM, user: userPrompt(brief, targetSec, variants, charsPerSec), signal, timeoutMs };
+  const payload = { system: SYSTEM, user: userPrompt(brief, targetSec, variants, budget), signal, timeoutMs };
   const { text, model } = provider.kind === "cli"
     ? await callCliProvider(provider, payload)
     : await callOpenAICompatible(provider, payload);
@@ -134,7 +135,7 @@ async function runProvider(id, brief, targetSec, variants, { charsPerSec, signal
  * ตัวสร้างสคริปต์แบบออฟไลน์ — ไม่ต้องมี API key
  * ใช้เพื่อพิสูจน์ pipeline และเป็น fallback เวลา LLM ล่ม ไม่ได้ตั้งใจให้แทน LLM
  */
-function withTemplate(brief, targetSec, variants, charsPerSec) {
+function withTemplate(brief, targetSec, variants, budget) {
   const f = (brief.features || []).filter(Boolean);
   const price = brief.price ? `${brief.price}` : null;
   const cta = brief.cta || "กดตะกร้าส้มด้านล่างเลย";
@@ -168,7 +169,6 @@ function withTemplate(brief, targetSec, variants, charsPerSec) {
     ];
 
     // ตัดให้ลงความยาวเป้าหมาย โดยไม่ทิ้ง hook และ cta
-    const budget = targetSec * charsPerSec;
     let used = chunks.reduce((a, c) => a + graphemeCount(c.text), 0);
     while (used > budget) {
       const idx = chunks.findLastIndex((c) => c.role === "body");
@@ -190,23 +190,30 @@ function withTemplate(brief, targetSec, variants, charsPerSec) {
 
 export async function generateScript(
   brief,
-  { targetSec = 30, variants = 5, provider = "auto", charsPerSec, signal, timeoutMs } = {},
+  { targetSec = 30, variants = 5, provider = "auto", charsPerSec, speech, timing, signal, timeoutMs } = {},
 ) {
   if (!brief?.name) throw new Error("ข้อมูลสินค้าต้องมี brief.name");
   brief = normalizeBrief(brief);
   const rate = speakingRate(charsPerSec);
+  const model = speech?.msPerGrapheme > 0 ? speech : { msPerGrapheme: 1000 / rate, graphemesPerSec: rate };
+  // งบตัวอักษรต้องหักเวลาที่ไม่ใช่การพูดออกก่อน — เงียบนำหน้า หางท้าย และช่องว่าง
+  // ระหว่างท่อนตามจังหวะที่ผู้ใช้เลือก ของเดิมคิดแค่ targetSec × อัตรา จึงขอสั้นเกินจริง
+  const budget = characterBudget(model, {
+    targetMs: Math.round(targetSec * 1000),
+    timing: timing ?? DEFAULT_TIMING,
+  });
   const pick = provider === "template" ? "template" : await pickAvailableProvider({ preferred: provider });
 
   let result;
   if (pick === "template") {
-    result = withTemplate(brief, targetSec, variants, rate);
+    result = withTemplate(brief, targetSec, variants, budget);
   } else {
     try {
-      result = await runProvider(pick, brief, targetSec, variants, { charsPerSec: rate, signal, timeoutMs });
+      result = await runProvider(pick, brief, targetSec, variants, { budget, signal, timeoutMs });
     } catch (e) {
       if (e?.name === "AbortError") throw e;
       // ยังได้สคริปต์เสมอ แต่ต้องบอกให้รู้ว่าตกมาใช้ตัวสำรอง ไม่ใช่เงียบ ๆ
-      result = { ...withTemplate(brief, targetSec, variants, rate), fallbackFrom: `${pick} (${e.message.slice(0, 160)})` };
+      result = { ...withTemplate(brief, targetSec, variants, budget), fallbackFrom: `${pick} (${e.message.slice(0, 160)})` };
     }
   }
 
@@ -223,7 +230,7 @@ export async function generateScript(
         });
       }
     }
-    const estMs = chunks.reduce((a, c) => a + estimateMs(c.text, rate), 0);
+    const estMs = chunks.reduce((a, c) => a + chunkMs(model, c.text), 0);
     return { id: v.id || `v${vi + 1}`, hookType: v.hookType || "-", chunks, estDurationMs: estMs };
   });
   return result;

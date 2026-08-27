@@ -49,7 +49,8 @@ import { StyleCaptionPreview, stylePreviewVars, type StylePreviewParams } from "
 import { HardLink as Link } from "./HardLink";
 // core.mjs ไม่มี import และไม่แตะ I/O จึงใช้ในเบราว์เซอร์ได้ตรง ๆ
 // ดึงมาจากที่เดียวกับที่ pipeline ใช้ จะได้ไม่มีสองชุดที่เพี้ยนจากกันได้
-import { DEFAULT_PACE, NARRATION_PACES } from "../../pipeline/core.mjs";
+import { DEFAULT_PACE, NARRATION_PACES, planNarrationFit, timingForPace } from "../../pipeline/core.mjs";
+import { narrationMsFor } from "../../pipeline/speech-rate.mjs";
 import {
   detectLocalEngine,
   localApi,
@@ -330,6 +331,9 @@ export function ProjectWizard() {
   const [uploadError, setUploadError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [voiceLibrary, setVoiceLibrary] = useState(voices);
+  // ความเร็วพูดจริงของแต่ละเสียงที่ speed 1 หน่วยเป็นมิลลิวินาทีต่อตัวอักษร
+  // วัดจากงานที่เรนเดอร์ไปแล้ว ไม่ใช่ค่าที่เดาไว้ในโค้ด
+  const [voiceRates, setVoiceRates] = useState<Record<string, number>>({});
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
   captionStylesRef.current = captionStyles;
@@ -439,6 +443,28 @@ export function ProjectWizard() {
     [orderedTimelineClips],
   );
   const selectedTotalSec = timelineTotalMs / 1000;
+
+  /**
+   * สคริปต์ที่เลือกไว้จะพูดได้กี่วินาที เทียบกับคลิปที่ตัดไว้กี่วินาที
+   *
+   * ใช้ planNarrationFit ตัวเดียวกับที่ pipeline ใช้ตอนเรนเดอร์ ผู้ใช้จะได้เห็น
+   * ผลลัพธ์จริงก่อนกดสร้าง ไม่ใช่เพิ่งมารู้ตอนเปิดไฟล์แล้วเจอครึ่งหลังเงียบ
+   */
+  const lengthPreview = useMemo(() => {
+    const baseMsPerGrapheme = voiceRates[selectedVoice];
+    if (!baseMsPerGrapheme || !currentChunks.length || timelineTotalMs <= 0) return null;
+    const timing = timingForPace(pace);
+    // เร่งเสียง 1.2 เท่า = เวลาพูดสั้นลง 1.2 เท่า
+    const model = { msPerGrapheme: baseMsPerGrapheme / (speed > 0 ? speed : 1) };
+    const narrationMs = narrationMsFor(model, currentChunks.map((text) => ({ text })), timing);
+    const plan = planNarrationFit({
+      narrationMs,
+      targetMs: timelineTotalMs,
+      chunkCount: currentChunks.length,
+      timing,
+    });
+    return { narrationMs, action: plan.action as string, trimmedToMs: plan.targetMs as number };
+  }, [voiceRates, selectedVoice, speed, pace, currentChunks, timelineTotalMs]);
   const clipDurationInvalid = orderedTimelineClips.some((clip) => {
     const asset = orderedClipAssets.find((item) => item.name === clip.assetName);
     return !asset || clip.trimStartMs < 0 || clip.trimEndMs <= clip.trimStartMs || clip.trimEndMs > asset.durationMs + 1;
@@ -965,6 +991,11 @@ export function ProjectWizard() {
             initials: voice.initials || (voice.name || voice.id).slice(0, 1),
             provider: voice.provider || "gemini",
           })));
+          setVoiceRates(Object.fromEntries(
+            geminiVoices
+              .map((voice: LocalVoice) => [voice.id, Number(voice.msPerGrapheme)] as const)
+              .filter(([, ms]) => Number.isFinite(ms) && ms > 0),
+          ));
         }
         // คลังสไตล์ต้องมาจาก engine เหมือนหน้า /styles ไม่งั้นสองหน้าจะไม่ตรงกัน
         try {
@@ -2500,6 +2531,28 @@ export function ProjectWizard() {
                       <div><span><Mic2 size={15} /></span><div><small>เสียงพากย์</small><b>{selectedVoiceData.name}</b></div></div>
                       <div><span><Captions size={15} /></span><div><small>สไตล์ซับ · ตำแหน่ง</small><b>{selectedStyleData.name} · {captionPosition}</b></div></div>
                     </div>
+                    {lengthPreview && lengthPreview.action !== "keep" && (
+                      <div className={`length-note length-note-${lengthPreview.action}`}>
+                        <Clock3 size={15} />
+                        <div>
+                          <b>
+                            {lengthPreview.action === "trim"
+                              ? `คลิปจะถูกตัดเหลือ ${formatDuration(lengthPreview.trimmedToMs / 1000)} ให้พอดีกับเสียง`
+                              : "จะเว้นจังหวะระหว่างท่อนเพิ่มอีกนิดให้เต็มคลิปพอดี"}
+                          </b>
+                          <small>
+                            {lengthPreview.action === "trim"
+                              ? `คลิปที่เลือกไว้ยาว ${formatDuration(selectedTotalSec)} แต่สคริปต์นี้พูดจบก่อน ส่วนที่เหลือจะเป็นความเงียบ จึงตัดออกให้ — อยากได้ความยาวเต็มก็เขียนสคริปต์ให้ยาวขึ้นได้`
+                              : "สคริปต์นี้พูดสั้นกว่าคลิปนิดเดียว ระบบเกลี่ยให้เองไม่ต้องแก้อะไร"}
+                          </small>
+                        </div>
+                        {lengthPreview.action === "trim" && (
+                          <button type="button" className="button button-quiet" disabled={scriptBusy} onClick={() => { setActiveStep(2); }}>
+                            เขียนสคริปต์ใหม่
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <div className="render-summary"><div><span><Clock3 size={15} /> ใช้เวลาประมาณ 1–3 นาที</span><span><Zap size={15} /> สร้างเป็นไฟล์คุณภาพเต็มพร้อมโพสต์</span></div><button className="button button-primary" type="button" onClick={startRender}><Zap size={17} /> สร้างคลิป</button></div>
                   </>
                 )}
