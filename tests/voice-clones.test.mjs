@@ -4,10 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { DEFAULT_TONE, VOICE_TONES } from "../pipeline/core.mjs";
 import {
   cloneIdFor,
   deleteClone,
+  findClone,
   listClones,
+  listSpeakers,
   readClone,
   saveClone,
 } from "../pipeline/voice-clones.mjs";
@@ -25,14 +28,64 @@ test("id ผูกกับเนื้อไฟล์เสียง ไม่�
 
 test("บันทึกแล้วอ่านกลับมาได้ครบ พร้อม path ของไฟล์เสียง", () => {
   const dir = tempDir();
-  const saved = saveClone({ wavBuffer: wav("x"), text: "สวัสดีครับ วันนี้อากาศดี", name: "เสียงพี่หนึ่ง" }, { dir });
+  const saved = saveClone(
+    { wavBuffer: wav("x"), text: "สวัสดีครับ วันนี้อากาศดี", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" },
+    { dir },
+  );
   assert.equal(saved.provider, "jaitts");
+  assert.equal(saved.label, "พี่หนึ่ง · ตื่นเต้น", "ชื่อที่โชว์ต้องบอกทั้งคนและโทน");
   assert.ok(fs.existsSync(saved.wav), "ต้องเขียนไฟล์เสียงลงดิสก์จริง");
 
   const read = readClone(saved.id, { dir });
-  assert.equal(read.name, "เสียงพี่หนึ่ง");
+  assert.equal(read.speaker, "พี่หนึ่ง");
+  assert.equal(read.tone, "ตื่นเต้น");
   assert.equal(read.text, "สวัสดีครับ วันนี้อากาศดี");
-  assert.equal(read.wav, saved.wav);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("โทนที่ไม่รู้จักต้องกลายเป็นโทนปกติ ไม่ใช่เก็บค่ามั่ว ๆ ไว้", () => {
+  const dir = tempDir();
+  const saved = saveClone({ wavBuffer: wav("t"), text: "ทดสอบ", tone: "โทนที่ไม่มีอยู่จริง" }, { dir });
+  assert.equal(saved.tone, DEFAULT_TONE);
+  assert.ok(VOICE_TONES.some((tone) => tone.id === saved.tone));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("คนเดียวกันอัดได้หลายโทน และจัดกลุ่มตามคนได้", () => {
+  const dir = tempDir();
+  saveClone({ wavBuffer: wav("a1"), text: "หนึ่ง", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" }, { dir });
+  saveClone({ wavBuffer: wav("a2"), text: "สอง", speaker: "พี่หนึ่ง", tone: "สุขุม" }, { dir });
+  saveClone({ wavBuffer: wav("b1"), text: "สาม", speaker: "พี่สอง", tone: "ตื่นเต้น" }, { dir });
+
+  const speakers = listSpeakers({ dir });
+  assert.equal(speakers.length, 2);
+  const first = speakers.find((item) => item.speaker === "พี่หนึ่ง");
+  assert.equal(first.tones.length, 2);
+  assert.deepEqual(new Set(first.tones.map((clone) => clone.tone)), new Set(["ตื่นเต้น", "สุขุม"]));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("เลือกตัวอย่างตามคนและโทน ถ้าไม่มีโทนนั้นใช้โทนอื่นของคนเดิมแทน", () => {
+  const dir = tempDir();
+  saveClone({ wavBuffer: wav("c1"), text: "หนึ่ง", speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" }, { dir });
+  saveClone({ wavBuffer: wav("c2"), text: "สอง", speaker: "พี่สอง", tone: "สุขุม" }, { dir });
+
+  const exact = findClone({ speaker: "พี่หนึ่ง", tone: "ตื่นเต้น" }, { dir });
+  assert.equal(exact.speaker, "พี่หนึ่ง");
+  assert.equal(exact.matchedTone, true);
+
+  // โทนไม่ตรงต้องยังได้เสียงของคนเดิม ไม่ใช่ข้ามไปคนอื่นหรือปฏิเสธไม่ให้เรนเดอร์
+  const fallback = findClone({ speaker: "พี่หนึ่ง", tone: "น่าเชื่อถือ" }, { dir });
+  assert.equal(fallback.speaker, "พี่หนึ่ง");
+  assert.equal(fallback.matchedTone, false);
+
+  assert.equal(findClone({ speaker: "ไม่มีคนนี้", tone: "สุขุม" }, { dir }).matchedTone, true, "ไม่มีคนที่เลือกก็ยังต้องได้เสียงสักตัว");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("ไม่มีตัวอย่างสักอันต้องคืน null ไม่ใช่พัง", () => {
+  const dir = tempDir();
+  assert.equal(findClone({ speaker: "ใครก็ได้", tone: "สุขุม" }, { dir }), null);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -84,6 +137,15 @@ test("ลบแล้วหายจริง และลบซ้ำไม่�
   assert.equal(readClone(saved.id, { dir }), null);
   assert.equal(deleteClone(saved.id, { dir }), false);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("ทุกโทนต้องมีประโยคตัวอย่างให้อ่านตอนอัด", () => {
+  assert.ok(VOICE_TONES.length >= 4);
+  for (const tone of VOICE_TONES) {
+    assert.ok(tone.id?.trim(), "โทนต้องมีชื่อ");
+    assert.ok(tone.sample?.trim().length > 20, `${tone.id} ต้องมีประโยคตัวอย่างที่ยาวพอจะจับโทนได้`);
+  }
+  assert.equal(new Set(VOICE_TONES.map((tone) => tone.id)).size, VOICE_TONES.length, "ห้ามมีโทนซ้ำ");
 });
 
 test("ยังไม่ได้ติดตั้งต้องบอกเหตุผลที่แก้ตามได้ ไม่ใช่แค่ false", () => {

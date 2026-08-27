@@ -4209,6 +4209,144 @@ img.mini-project-thumb::after { content: none; }
   cursor: pointer;
 }
 
+/* ---------- เลือกเครื่องยนต์เสียง และคลังเสียงต้นแบบที่อัดเอง ---------- */
+
+.engine-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.engine-switch button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--card);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease;
+}
+
+.engine-switch button b { font-size: 13.5px; font-weight: 600; }
+.engine-switch button small { color: var(--ink-faint); font-size: 12px; }
+.engine-switch button:hover:not(.active) { border-color: var(--line-strong); }
+
+.engine-switch button.active {
+  border-color: var(--yellow-dark);
+  background: #fffaea;
+}
+
+.engine-switch button.active small { color: #8a7430; }
+
+.clone-studio {
+  display: grid;
+  gap: 16px;
+}
+
+.clone-recorder {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--card);
+}
+
+/* ประโยคที่ให้อ่าน ต้องเด่นพอให้อ่านจากระยะที่ถือมือถืออัดได้ */
+.clone-script {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f6f7f3;
+}
+
+.clone-script small { color: var(--ink-faint); font-size: 12px; }
+.clone-script p { margin: 6px 0 0; font-size: 15px; line-height: 1.6; }
+
+.clone-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.clone-actions small { color: var(--ink-faint); font-size: 12px; }
+.clone-note { margin: 0; color: #8a7430; font-size: 12px; line-height: 1.55; }
+.clone-error { margin: 0; color: var(--red); font-size: 12.5px; }
+
+.clone-library { display: grid; gap: 12px; }
+.clone-person h4 { display: flex; align-items: center; gap: 7px; margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.clone-person h4 em { color: var(--ink-faint); font-size: 12px; font-style: normal; font-weight: 400; }
+.clone-takes { display: grid; gap: 8px; }
+
+.clone-take {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.clone-take.active { border-color: var(--yellow-dark); background: #fffaea; }
+
+.clone-pick {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.clone-tone { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; }
+
+/* ข้อความที่ถอดได้อาจยาว ตัดบรรทัดเดียวพอให้รู้ว่าอัดอะไรไว้ */
+.clone-pick small {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clone-remove {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.clone-remove:hover:not(:disabled) { color: var(--red); background: #fbeeed; }
+
+.clone-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 15px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.clone-empty b { color: var(--ink); font-size: 13.5px; }
+.clone-empty p { margin: 0; font-size: 12.5px; line-height: 1.55; }
+
+@media (max-width: 720px) {
+  /* สองปุ่มเรียงกันบนจอแคบทำให้ข้อความอธิบายเหลือคำเดียวต่อบรรทัด */
+  .engine-switch { grid-template-columns: 1fr; }
+}
+
 .voice-controls {
   display: grid;
   grid-template-columns: 1fr 1fr;

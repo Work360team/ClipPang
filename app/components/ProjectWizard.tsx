@@ -49,8 +49,10 @@ import { StyleCaptionPreview, stylePreviewVars, type StylePreviewParams } from "
 import { HardLink as Link } from "./HardLink";
 // core.mjs ไม่มี import และไม่แตะ I/O จึงใช้ในเบราว์เซอร์ได้ตรง ๆ
 // ดึงมาจากที่เดียวกับที่ pipeline ใช้ จะได้ไม่มีสองชุดที่เพี้ยนจากกันได้
-import { DEFAULT_PACE, NARRATION_PACES, planNarrationFit, timingForPace } from "../../pipeline/core.mjs";
+import { DEFAULT_PACE, NARRATION_PACES, planNarrationFit, timingForPace, VOICE_TONES } from "../../pipeline/core.mjs";
 import { narrationMsFor } from "../../pipeline/speech-rate.mjs";
+import { VoiceCloneStudio } from "./VoiceCloneStudio";
+import { type LocalVoiceClone } from "../lib/local-api";
 import {
   detectLocalEngine,
   localApi,
@@ -334,6 +336,9 @@ export function ProjectWizard() {
   // ความเร็วพูดจริงของแต่ละเสียงที่ speed 1 หน่วยเป็นมิลลิวินาทีต่อตัวอักษร
   // วัดจากงานที่เรนเดอร์ไปแล้ว ไม่ใช่ค่าที่เดาไว้ในโค้ด
   const [voiceRates, setVoiceRates] = useState<Record<string, number>>({});
+  // เครื่องยนต์เสียงที่เลือกใช้ — Gemini คือคลาวด์ ส่วน jaitts คือเสียงโคลนในเครื่อง
+  const [voiceEngine, setVoiceEngine] = useState<"gemini" | "jaitts">("gemini");
+  const [cloneVoice, setCloneVoice] = useState<LocalVoiceClone | null>(null);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
   captionStylesRef.current = captionStyles;
@@ -821,7 +826,11 @@ export function ProjectWizard() {
       setSelectedScript(restored.id);
       setScriptTexts(Object.fromEntries(savedScripts.map((script) => [script.id, [...script.chunks]])));
     }
-    if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
+    if (config.provider === "jaitts") {
+      setVoiceEngine("jaitts");
+      // เก็บแค่ id ไว้ก่อน รายละเอียดของเสียงมาจาก VoiceCloneStudio ตอนโหลดรายการ
+      if (typeof config.voiceId === "string") setCloneVoice({ id: config.voiceId } as LocalVoiceClone);
+    } else if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
@@ -1082,7 +1091,11 @@ export function ProjectWizard() {
       timelineClips: savedTimeline,
       ...(legacyAsset ? { asset: legacyAsset } : {}),
       scripts: scriptVariants.map((script) => ({ ...script, chunks: scriptTexts[script.id] ?? script.chunks })),
-      config: { voiceId: selectedVoice, provider: selectedVoiceData.provider || "gemini", speed, tone, pace, scriptId: selectedScript, styleId: selectedStyle, position: captionPosition, captionColor },
+      config: {
+        voiceId: voiceEngine === "jaitts" ? (cloneVoice?.id ?? null) : selectedVoice,
+        provider: voiceEngine === "jaitts" ? "jaitts" : (selectedVoiceData.provider || "gemini"),
+        speed, tone, pace, scriptId: selectedScript, styleId: selectedStyle, position: captionPosition, captionColor,
+      },
       ...extra,
     };
   };
@@ -1149,7 +1162,7 @@ export function ProjectWizard() {
   }, [
     clipAssets, timelineClips, projectId, engineState,
     selectedScript, scriptTexts, scriptVariants,
-    selectedVoice, speed, tone, pace,
+    selectedVoice, speed, tone, pace, voiceEngine, cloneVoice,
     selectedStyle, captionPosition, captionColor,
   ]);
 
@@ -2277,8 +2290,34 @@ export function ProjectWizard() {
               <div className="step-panel">
                 <div className="step-panel-heading inline-heading">
                   <div><span className="step-kicker">ขั้นที่ 3 จาก 6</span><h2>เลือกเสียงที่เป็นตัวคุณ</h2><p>กดฟังตัวอย่างได้ทันที แล้วปรับความเร็วให้เข้ากับจังหวะคลิป</p></div>
-                  <span className="library-count">{voiceLibrary.length} เสียง</span>
+                  <span className="library-count">{voiceEngine === "jaitts" ? "เสียงในเครื่อง" : `${voiceLibrary.length} เสียง`}</span>
                 </div>
+
+                {/* สองเครื่องยนต์ทำงานคนละแบบ — Gemini มีเสียงสำเร็จรูปให้เลือก
+                    ส่วนในเครื่องต้องอัดเสียงต้นแบบเองก่อนถึงจะมีเสียงให้ใช้ */}
+                <div className="engine-switch" role="group" aria-label="เลือกเครื่องยนต์เสียง">
+                  <button
+                    type="button"
+                    className={voiceEngine === "gemini" ? "active" : ""}
+                    aria-pressed={voiceEngine === "gemini"}
+                    onClick={() => setVoiceEngine("gemini")}
+                  >
+                    <b>เสียง AI สำเร็จรูป</b><small>Gemini · เลือกได้ {voiceLibrary.length} เสียง</small>
+                  </button>
+                  <button
+                    type="button"
+                    className={voiceEngine === "jaitts" ? "active" : ""}
+                    aria-pressed={voiceEngine === "jaitts"}
+                    onClick={() => setVoiceEngine("jaitts")}
+                  >
+                    <b>เสียงของฉัน</b><small>โคลนจากเสียงที่อัดเอง · ไม่ใช้โควตา</small>
+                  </button>
+                </div>
+
+                {voiceEngine === "jaitts" ? (
+                  <VoiceCloneStudio selectedId={cloneVoice?.id ?? null} onSelect={setCloneVoice} />
+                ) : (
+                <>
                 <div className="filter-row">
                   {VOICE_FILTERS.map((filter) => {
                     const count = filter === "ทั้งหมด"
@@ -2310,11 +2349,13 @@ export function ProjectWizard() {
                   ))}
                 </div>
                 <button className="show-more" type="button" onClick={() => setVoiceFilter("ทั้งหมด")}>ดูเสียงทั้งหมด {voiceLibrary.length} แบบ <ChevronDown size={15} /></button>
+                </>
+                )}
 
                 <div className="voice-controls">
                   <div className="control-block">
                     <div className="control-label"><span>โทนการพูด</span><b>{tone}</b></div>
-                    <div className="tone-options">{['เป็นกันเอง','มั่นใจ','ตื่นเต้น','นุ่มนวล'].map((item) => <button type="button" className={tone === item ? "active" : ""} onClick={() => setTone(item)} key={item}>{item}</button>)}</div>
+                    <div className="tone-options">{VOICE_TONES.map((item) => <button type="button" className={tone === item.id ? "active" : ""} onClick={() => setTone(item.id)} key={item.id}>{item.id}</button>)}</div>
                   </div>
                   <div className="control-block">
                     <div className="control-label"><span>ความเร็ว</span><b>{speed.toFixed(1)}×</b></div>

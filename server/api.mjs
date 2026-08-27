@@ -30,7 +30,11 @@ import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
 import { hashPassword, verifyPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
-import { timingForPace } from "../pipeline/core.mjs";
+import { timingForPace, VOICE_TONES } from "../pipeline/core.mjs";
+import { deleteClone, listClones, listSpeakers } from "../pipeline/voice-clones.mjs";
+import { discoverJaitts } from "../pipeline/jaitts.mjs";
+import { whisperReady } from "../pipeline/whisper.mjs";
+import { intakeVoiceClone } from "./voice-clone-intake.mjs";
 import { readSpeechRates, speechModelFor } from "./speech-stats.mjs";
 import { lookupSpeechModel } from "../pipeline/speech-rate.mjs";
 import {
@@ -661,6 +665,39 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         });
       }
 
+      // เสียงต้นแบบที่ผู้ใช้อัดไว้เอง สำหรับเครื่องยนต์เสียงในเครื่อง
+      if (pathname === "/api/voice-clones" && method === "GET") {
+        return json({
+          ok: true,
+          speakers: listSpeakers(),
+          clones: listClones(),
+          tones: VOICE_TONES,
+          engine: discoverJaitts(),
+          // ถอดข้อความเองไม่ได้ก็ต้องให้ผู้ใช้พิมพ์ หน้าจอต้องรู้ล่วงหน้า
+          canTranscribe: whisperReady(),
+        });
+      }
+
+      if (pathname === "/api/voice-clones" && method === "POST") {
+        const params = new URL(request.url).searchParams;
+        const buffer = Buffer.from(await request.arrayBuffer());
+        const clone = await intakeVoiceClone({
+          buffer,
+          speaker: params.get("speaker"),
+          tone: params.get("tone"),
+          fallbackText: params.get("text"),
+          signal: request.signal,
+        });
+        return json({ ok: true, clone });
+      }
+
+      const clonePrefix = "/api/voice-clones/";
+      const voiceCloneMatch = pathname.startsWith(clonePrefix) ? pathname.slice(clonePrefix.length) : null;
+      if (voiceCloneMatch && !voiceCloneMatch.includes("/") && method === "DELETE") {
+        const removed = deleteClone(decodeURIComponent(voiceCloneMatch));
+        if (!removed) return apiError(404, "VOICE_CLONE_NOT_FOUND", "ไม่พบเสียงต้นแบบนี้");
+        return json({ ok: true });
+      }
       if (method === "GET" && pathname === "/api/voices") {
         // แนบความเร็วพูดที่วัดได้ของแต่ละเสียงไปด้วย หน้าสร้างคลิปจะได้บอกล่วงหน้าได้ว่า
         // สคริปต์ที่เลือกไว้จะพูดได้กี่วินาที เทียบกับคลิปที่ตัดไว้กี่วินาที

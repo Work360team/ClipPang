@@ -99,6 +99,15 @@ export const localApi = {
   setupStatus: () => apiFetch<SetupStatus>("/api/setup/status"),
   installFfmpeg: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/ffmpeg", { method: "POST", body: "{}" }),
   installWhisper: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/whisper", { method: "POST", body: "{}" }),
+
+  // เสียงต้นแบบที่ผู้ใช้อัดเองไว้ให้เครื่องยนต์เสียงในเครื่องโคลนตาม
+  voiceClones: () => apiFetch<VoiceCloneLibrary>("/api/voice-clones"),
+  addVoiceClone: (audio: Blob, fields: { speaker: string; tone: string; text?: string }) => {
+    const params = new URLSearchParams({ speaker: fields.speaker, tone: fields.tone });
+    if (fields.text) params.set("text", fields.text);
+    return apiFetch<{ ok: true; clone: LocalVoiceClone }>(`/api/voice-clones?${params}`, { method: "POST", body: audio });
+  },
+  deleteVoiceClone: (id: string) => apiFetch<{ ok: true }>(`/api/voice-clones/${encodeURIComponent(id)}`, { method: "DELETE" }),
   saveKey: (key: string) => apiFetch<{ ok: true; key: { configured: boolean; last4: string; masked: string } }>("/api/setup/key", { method: "POST", body: JSON.stringify({ key }) }),
   listInput: () => apiFetch<{ ok: true; files: LocalAsset[] }>("/api/input"),
   uploadAsset: uploadAssetFile,
@@ -209,6 +218,26 @@ export interface LocalScript {
   estDurationMs?: number;
   chunks: string[];
 }
+export interface LocalVoiceClone {
+  id: string;
+  speaker: string;
+  tone: string;
+  label: string;
+  text: string;
+  durationMs: number | null;
+  createdAt: string | null;
+  transcribedBy?: string;
+}
+
+export interface VoiceCloneLibrary {
+  ok: true;
+  speakers: { speaker: string; tones: LocalVoiceClone[] }[];
+  clones: LocalVoiceClone[];
+  tones: { id: string; sample: string }[];
+  engine: { ready: boolean; reason: string | null };
+  canTranscribe: boolean;
+}
+
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string; msPerGrapheme?: number }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
 export interface LocalColorSet { id: string; name: string; primary: string; secondary: string; hint?: string }
