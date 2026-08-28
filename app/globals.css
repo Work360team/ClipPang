@@ -5234,6 +5234,12 @@ img.mini-project-thumb::after { content: none; }
   cursor: pointer;
 }
 
+/* รอแตะยืนยัน — ต้องเห็นชัดว่าแตะอีกครั้งแล้วงานหายจริง ไม่ใช่แค่ข้อความเปลี่ยน */
+.render-copy > button.armed {
+  color: #ffb4a2;
+}
+
+
 .final-result {
   --final-video-max-h: min(68vh, 600px);
   display: grid;
@@ -6762,6 +6768,11 @@ a.notification-link:hover { background: #fafbf8; }
     color: #cfd4cd;
     font-size: 14px;
     text-decoration: none;
+  }
+
+  .render-progress-card.expanded .render-copy > button.armed {
+    border-color: #6b4038;
+    background: rgba(255, 120, 90, 0.08);
   }
 
   .render-progress-collapse { display: grid; }

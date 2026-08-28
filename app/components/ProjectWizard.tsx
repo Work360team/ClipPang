@@ -401,6 +401,10 @@ export function ProjectWizard() {
   // บนมือถือความคืบหน้าครองทั้งจอเหมือนหน้ากำลังประมวลผลของแอพ
   // ย่อลงมาดูอย่างอื่นได้ เพราะงานทำต่อบนเครื่องอยู่แล้วไม่ได้ผูกกับหน้านี้
   const [progressExpanded, setProgressExpanded] = useState(true);
+  // ยกเลิกต้องแตะสองครั้ง — บนหน้าที่เต็มจอมันคือปุ่มเดียวที่กดได้ และแตะพลาดครั้งเดียว
+  // คือทิ้งงานที่ทำมาหลายนาทีโดยไม่มีทางเอากลับ
+  const [cancelArmed, setCancelArmed] = useState(false);
+  const cancelArmRef = useRef<number | null>(null);
   const [voiceCloneActive, setVoiceCloneActive] = useState(false);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
@@ -625,11 +629,15 @@ export function ProjectWizard() {
   useEffect(() => {
     if (!rendering) return;
     setProgressExpanded(true);
+    setCancelArmed(false);
     const card = renderProgressRef.current;
     if (!card) return;
     const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     card.scrollIntoView({ behavior: motion?.matches ? "auto" : "smooth", block: "start" });
   }, [rendering]);
+
+  // ตัวจับเวลาปลดล็อกปุ่มยกเลิกต้องไม่ค้างหลังออกจากหน้า
+  useEffect(() => () => { if (cancelArmRef.current) window.clearTimeout(cancelArmRef.current); }, []);
 
   // ย่อลงมาแล้วต้องเห็นการ์ดอยู่ตรงหน้า ไม่ใช่กลับไปโผล่ตรงตำแหน่งที่หน้าค้างไว้
   // ก่อนเปิดเต็มจอ ซึ่งอาจเลื่อนไปไกลจนดูเหมือนความคืบหน้าหายไปเฉย ๆ
@@ -1035,12 +1043,21 @@ export function ProjectWizard() {
     // โปรเจกต์ที่มีคลิปตัวจริงเสร็จแล้ว เปิดกลับมาต้องเห็นผลลัพธ์ทันที ไม่ใช่ไปโผล่
     // ขั้นที่เผลอกดค้างไว้ก่อนออกจากหน้า เพราะสิ่งที่คนกลับเข้ามาทำคือดาวน์โหลดคลิป
     // ไม่ใช่แก้ต่อ — ยกเว้นงานที่ stale เพราะคลิปนั้นไม่ตรงกับ timeline ปัจจุบันแล้ว
-    const finished = renders.some((render) => render.kind === "final" && render.state === "ready" && !render.stale);
+    const ready = renders.find((render) => render.kind === "final" && render.state === "ready" && !render.stale);
     const savedStep = Math.max(1, Math.min(6, Number(project.wizard_step ?? 1))) as WizardStep;
-    setActiveStep(finished ? 6 : savedStep);
-    // ร่างไม่ถูกสร้างอีกแล้ว แต่โปรเจกต์เก่าอาจมีค้างอยู่ ถ้าหยิบมาแสดงจะกลายเป็นว่า
-    // เปิดโปรเจกต์เก่าขึ้นมาแล้วเห็นร่างเป็น "คลิปที่เสร็จแล้ว" ทั้งที่ยังไม่ได้สร้างตัวจริง
-    const latest = running ?? renders.find((render) => !render.stale && render.kind !== "draft");
+    setActiveStep(ready ? 6 : savedStep);
+    /**
+     * ตัวที่หยิบมาแสดงต้องเป็นตัวเดียวกับที่ใช้ตัดสินใจพาไปขั้นที่ 6
+     *
+     * เดิมหยิบ "งานล่าสุดที่ไม่ stale" ซึ่งเป็นคนละตัวกับที่เช็คว่าเสร็จแล้ว พอครั้งล่าสุด
+     * ถูกยกเลิกหรือล้มเหลว หน้าจะเด้งไปขั้นที่ 6 เพราะมีคลิปเสร็จอยู่จริง แต่ไปเรียกคืน
+     * งานที่ยกเลิก ซึ่งไม่เข้าเงื่อนไขไหนเลยใน restoreRender ผลคือได้หน้า "ตรวจดูก่อน
+     * สร้างคลิป" เปล่า ๆ ทั้งที่คลิปที่ทำเสร็จแล้วยังอยู่ครบ
+     *
+     * ร่างไม่ถูกสร้างอีกแล้ว แต่โปรเจกต์เก่าอาจมีค้างอยู่ ถ้าหยิบมาแสดงจะกลายเป็นว่า
+     * เปิดโปรเจกต์เก่าขึ้นมาแล้วเห็นร่างเป็น "คลิปที่เสร็จแล้ว" ทั้งที่ยังไม่ได้สร้างตัวจริง
+     */
+    const latest = running ?? ready ?? renders.find((render) => !render.stale && render.kind !== "draft");
     if (latest) restoreRender(latest);
   }
 
@@ -1109,6 +1126,9 @@ export function ProjectWizard() {
         setRendering(false);
         setRenderProgress(0);
         setOperationMessage("");
+        // ไม่งั้นหน้าความคืบหน้าหายไปเฉย ๆ แล้วกลับมาที่หน้าตรวจดูโดยไม่บอกอะไรเลย
+        // ซึ่งดูเหมือนงานเสร็จแล้วแต่คลิปหาย มากกว่าจะดูเหมือนงานถูกยกเลิก
+        setToast("ยกเลิกงานสร้างคลิปแล้ว");
       }
     }, () => {
       window.setTimeout(async () => {
@@ -2282,6 +2302,22 @@ export function ProjectWizard() {
     setRendering(true);
   };
 
+  /**
+   * แตะแรกคือถาม แตะที่สองคือยกเลิกจริง
+   *
+   * ปลดล็อกเองใน 4 วินาทีถ้าไม่แตะซ้ำ จะได้ไม่ค้างเป็นปุ่มอันตรายไว้ทั้งงาน
+   */
+  const requestCancel = () => {
+    if (cancelArmRef.current) window.clearTimeout(cancelArmRef.current);
+    if (cancelArmed) {
+      setCancelArmed(false);
+      void cancelRender();
+      return;
+    }
+    setCancelArmed(true);
+    cancelArmRef.current = window.setTimeout(() => setCancelArmed(false), 4_000);
+  };
+
   const cancelRender = async () => {
     if (engineState === "connected" && renderId) {
       try { await localApi.cancelRender(renderId); } catch (error) { setToast(error instanceof Error ? error.message : "ยกเลิกงานไม่สำเร็จ"); }
@@ -3025,7 +3061,7 @@ export function ProjectWizard() {
                           );
                         })}
                       </ol>
-                      <button type="button" onClick={() => void cancelRender()}>ยกเลิกงาน</button>
+                      <button type="button" className={cancelArmed ? "armed" : ""} onClick={requestCancel}>{cancelArmed ? "แตะอีกครั้งเพื่อทิ้งงานนี้" : "ยกเลิกงาน"}</button>
                     </div>
                   </div>
                 )}
