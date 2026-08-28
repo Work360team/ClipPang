@@ -449,11 +449,22 @@ export default function SetupPage() {
   const kanitReady = isReady(setupStatus?.kanit);
   const directoriesReady = Boolean(setupStatus?.paths?.input && setupStatus?.paths?.projects);
 
+  /**
+   * ขั้นที่ติ๊กถูกคือขั้นที่ "ติดตั้งเสร็จจริง" ไม่ใช่ขั้นที่เดินผ่านมาแล้ว
+   *
+   * สองขั้นหลังเพิ่งเพิ่มเข้ามาทีหลังและตกหล่นจากรายการนี้ ผลคือ whisper.cpp
+   * ติดตั้งเสร็จแล้วแต่ในแถบซ้ายยังเป็นเลข 4 อยู่ ดูไม่ออกว่าทำไปถึงไหนแล้ว
+   */
   const completedSteps = new Set<Step>([
     ...(systemReady ? ([1] as Step[]) : []),
     ...(ffmpegReady ? ([2] as Step[]) : []),
     ...(keyValid ? ([3] as Step[]) : []),
+    ...(whisperReady ? ([4] as Step[]) : []),
+    ...(jaittsReady ? ([5] as Step[]) : []),
   ]);
+  // เครื่องที่รัน whisper.cpp ไม่ได้ ข้ามขั้นนั้นได้ จึงไม่นับเป็นเงื่อนไขของคำว่าพร้อม
+  // ส่วนเสียงโคลนเป็นของเสริม ไม่ติดตั้งก็ใช้ Gemini พากย์ได้ตามปกติ
+  const requiredDone = systemReady && ffmpegReady && keyValid && (whisperReady || !whisperSupported);
 
   return (
     <div className={styles.page}>
@@ -501,7 +512,7 @@ export default function SetupPage() {
           <aside className={styles.stepRail}>
             <div className={styles.railHeading}>
               <span>ความคืบหน้า</span>
-              <strong>{keyValid ? "พร้อมแล้ว" : `${currentStep} / 3`}</strong>
+              <strong>{requiredDone ? "พร้อมแล้ว" : `${currentStep} / ${steps.length}`}</strong>
             </div>
             <ol className={styles.stepList}>
               {steps.map((step) => {
