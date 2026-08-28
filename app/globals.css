@@ -5128,6 +5128,7 @@ img.mini-project-thumb::after { content: none; }
 }
 
 .render-progress-card {
+  position: relative;
   /* แถบบนติดอยู่ตลอด ถ้าเลื่อนมาชิดขอบบนพอดีหัวการ์ดจะถูกบัง */
   scroll-margin-top: 70px;
   min-height: 360px;
@@ -5140,6 +5141,25 @@ img.mini-project-thumb::after { content: none; }
   border-radius: 18px;
   background: #191d19;
   color: #fff;
+}
+
+/* ปุ่มย่อ/ขยายชั้นความคืบหน้า — มีความหมายเฉพาะบนมือถือที่การ์ดกลายเป็นเต็มจอ
+   บนจอใหญ่การ์ดอยู่ในหน้าอยู่แล้วจึงไม่มีอะไรให้ย่อ */
+.render-progress-collapse {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  display: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: #242a24;
+  color: #cfd4cd;
+  cursor: pointer;
 }
 
 .render-orbit {
@@ -6518,6 +6538,7 @@ a.notification-link:hover { background: #fafbf8; }
   :root {
     --app-nav-h: 58px;
     --app-safe-b: env(safe-area-inset-bottom, 0px);
+    --app-safe-t: env(safe-area-inset-top, 0px);
   }
 
   /* iOS ซูมหน้าจอเองทุกครั้งที่แตะช่องที่ตัวอักษรเล็กกว่า 16px
@@ -6658,4 +6679,94 @@ a.notification-link:hover { background: #fafbf8; }
   .projects-list .project-thumb { width: 56px; height: 74px; }
   .projects-list .project-main h3 { font-size: 15px; }
   .projects-list .project-delete { width: 44px; height: 44px; }
+
+  /* ---- ขั้นตอนสร้างคลิป: ยึดทั้งจอเหมือนหน้ากำลังประมวลผลของแอพ ----
+
+     บนจอเล็ก การ์ดความคืบหน้าที่แทรกอยู่กลางหน้าทำให้ผู้ใช้ยังต้องเลื่อนหา
+     และเห็นหัวข้ออื่นของ wizard ปนอยู่ ทั้งที่ตอนนั้นทำอะไรไม่ได้แล้วนอกจากรอ
+     ยกขึ้นมาเป็นชั้นเต็มจอ งานเดียวบนจอเดียว แบบหน้ากำลังประมวลผลของแอพ
+     ย่อกลับลงไปได้ด้วยปุ่มมุมซ้ายบน เพราะงานทำต่อบนเครื่องไม่ได้ผูกกับหน้านี้ */
+  .render-progress-card.expanded {
+    position: fixed;
+    /* เหนือแถบล่าง (40) และแถบปุ่มท้าย wizard */
+    z-index: 60;
+    inset: 0;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    padding: calc(var(--app-safe-t) + 60px) 20px calc(20px + var(--app-safe-b));
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    border-radius: 0;
+    animation: render-sheet-in 0.18s ease-out;
+    overscroll-behavior: contain;
+  }
+
+  /* ชั้นเต็มจอเปลี่ยนได้แค่ความทึบ ถ้าเลื่อนตัวมันเองขึ้นมาจะเห็นหน้าข้างหลัง
+     โผล่เป็นแถบที่ขอบล่างระหว่างที่ยังเลื่อนไม่สุด ให้เนื้อหาข้างในเลื่อนแทน */
+  @keyframes render-sheet-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes render-sheet-rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .render-progress-card.expanded .render-copy {
+    animation: render-sheet-rise 0.28s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .render-progress-card.expanded,
+    .render-progress-card.expanded .render-copy { animation: none; }
+  }
+
+  .render-progress-card.expanded .render-orbit {
+    width: 148px;
+    height: 148px;
+    flex: 0 0 auto;
+    align-self: center;
+  }
+
+  .render-progress-card.expanded .render-orbit span { font-size: 26px; }
+
+  /* คอลัมน์เดียวที่กินความสูงที่เหลือ รายการขั้นตอนยืดเต็มช่องว่างแล้วเลื่อนในตัวเอง
+     ปุ่มยกเลิกจึงติดอยู่ก้นจอเสมอไม่ว่ารายการจะยาวแค่ไหน */
+  .render-progress-card.expanded .render-copy {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .render-progress-card.expanded .render-copy h3 { font-size: 21px; }
+
+  .render-progress-card.expanded .render-stage-list {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    text-align: left;
+    overscroll-behavior: contain;
+  }
+
+  /* ลิงก์ตัวเล็กใต้เนื้อหาใช้ได้ตอนอยู่ในการ์ด แต่พอเต็มจอมันคือปุ่มเดียวที่กดได้
+     จึงต้องเป็นปุ่มเต็มความกว้างให้นิ้วโดนง่ายและเห็นว่าเป็นทางออก */
+  .render-progress-card.expanded .render-copy > button {
+    margin-top: 14px;
+    padding: 13px;
+    border: 1px solid #3a413a;
+    border-radius: 13px;
+    color: #cfd4cd;
+    font-size: 14px;
+    text-decoration: none;
+  }
+
+  .render-progress-collapse { display: grid; }
+
+  .render-progress-card.expanded .render-progress-collapse {
+    top: calc(var(--app-safe-t) + 12px);
+  }
 }

@@ -9,6 +9,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
   Clock3,
   Download,
@@ -397,6 +398,9 @@ export function ProjectWizard() {
   // ถ้าไม่บอก ผู้ใช้จะนึกว่านั่นคือฝีมือ AI แล้วเอาไปเรนเดอร์ทั้งอย่างนั้น
   const [scriptFallbackFrom, setScriptFallbackFrom] = useState<string | null>(null);
   const renderProgressRef = useRef<HTMLDivElement | null>(null);
+  // บนมือถือความคืบหน้าครองทั้งจอเหมือนหน้ากำลังประมวลผลของแอพ
+  // ย่อลงมาดูอย่างอื่นได้ เพราะงานทำต่อบนเครื่องอยู่แล้วไม่ได้ผูกกับหน้านี้
+  const [progressExpanded, setProgressExpanded] = useState(true);
   const [voiceCloneActive, setVoiceCloneActive] = useState(false);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
@@ -620,11 +624,37 @@ export function ProjectWizard() {
    */
   useEffect(() => {
     if (!rendering) return;
+    setProgressExpanded(true);
     const card = renderProgressRef.current;
     if (!card) return;
     const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     card.scrollIntoView({ behavior: motion?.matches ? "auto" : "smooth", block: "start" });
   }, [rendering]);
+
+  // ย่อลงมาแล้วต้องเห็นการ์ดอยู่ตรงหน้า ไม่ใช่กลับไปโผล่ตรงตำแหน่งที่หน้าค้างไว้
+  // ก่อนเปิดเต็มจอ ซึ่งอาจเลื่อนไปไกลจนดูเหมือนความคืบหน้าหายไปเฉย ๆ
+  useEffect(() => {
+    if (!rendering || progressExpanded) return;
+    renderProgressRef.current?.scrollIntoView({ block: "center" });
+  }, [rendering, progressExpanded]);
+
+  // หน้าข้างหลังต้องไม่เลื่อนตามนิ้วตอนชั้นเต็มจอเปิดอยู่ ไม่งั้นย่อกลับมาแล้ว
+  // เนื้อหาไปโผล่คนละที่ ซึ่งเป็นอาการที่บอกทันทีว่านี่ไม่ใช่แอพ
+  //
+  // เฉพาะจอเล็กที่การ์ดกลายเป็นชั้นเต็มจอเท่านั้น บนจอใหญ่การ์ดยังอยู่ในหน้า
+  // ถ้าล็อกด้วยจะกลายเป็นเลื่อนอ่านอะไรไม่ได้เลยทั้งที่ยังเห็นเนื้อหาอยู่ครบ
+  useEffect(() => {
+    if (!rendering || !progressExpanded) return;
+    const root = document.documentElement;
+    const phone = window.matchMedia("(max-width: 720px)");
+    const sync = () => { root.style.overflow = phone.matches ? "hidden" : ""; };
+    sync();
+    phone.addEventListener("change", sync);
+    return () => {
+      phone.removeEventListener("change", sync);
+      root.style.overflow = "";
+    };
+  }, [rendering, progressExpanded]);
 
   const voiceChosen = furthestStep > 3;
   /**
@@ -2963,7 +2993,15 @@ export function ProjectWizard() {
                 )}
 
                 {rendering && (
-                  <div className="render-progress-card" ref={renderProgressRef}>
+                  <div className={`render-progress-card${progressExpanded ? " expanded" : ""}`} ref={renderProgressRef}>
+                    <button
+                      type="button"
+                      className="render-progress-collapse"
+                      aria-label={progressExpanded ? "ย่อหน้าความคืบหน้า" : "ดูความคืบหน้าเต็มจอ"}
+                      onClick={() => setProgressExpanded((open) => !open)}
+                    >
+                      {progressExpanded ? <ChevronDown size={19} /> : <ChevronUp size={19} />}
+                    </button>
                     <div className="render-orbit"><span>{renderProgress}%</span></div>
                     <div className="render-copy">
                       <span className="live-pill dark"><i /> กำลังสร้างคลิป</span>
