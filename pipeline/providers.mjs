@@ -3,9 +3,9 @@
 // มีสองชนิด:
 //   api  — เรียก REST ด้วย API key ของผู้ใช้ (ผู้ใช้จ่ายตามการใช้งาน)
 //   cli  — เรียกเครื่องมือทางการที่ผู้ใช้ติดตั้งและล็อกอินไว้เองบนเครื่อง
-//          (claude / codex / gemini) ผู้ใช้ที่มี subscription อยู่แล้วจึงไม่ต้องจ่ายค่า API เพิ่ม
+//          (claude / codex / grok) ผู้ใช้ที่มี subscription อยู่แล้วจึงไม่ต้องจ่ายค่า API เพิ่ม
 //
-// หมายเหตุสำคัญ: ไม่มีทางที่แอปภายนอกจะล็อกอิน subscription ของ Claude / ChatGPT / Gemini
+// หมายเหตุสำคัญ: ไม่มีทางที่แอปภายนอกจะล็อกอิน subscription ของ Claude / ChatGPT / Grok
 // ได้โดยตรง — ไม่มี OAuth สาธารณะให้ third-party และการหาทางลัดผิดเงื่อนไขการใช้งาน
 // เส้นทาง cli ข้างล่างคือ "ผู้ใช้รันเครื่องมือของตัวเองบนเครื่องตัวเอง" ซึ่งถูกต้องตามกติกา
 //
@@ -132,13 +132,23 @@ export const SCRIPT_PROVIDERS = [
     installUrl: "https://developers.openai.com/codex/cli",
   },
   {
-    id: "gemini-cli",
+    id: "grok-cli",
     kind: "cli",
-    label: "Gemini CLI (ใช้ subscription ที่ล็อกอินไว้)",
-    command: "gemini",
-    args: [],
+    label: "Grok CLI (ใช้ subscription ที่ล็อกอินไว้)",
+    command: "grok",
+    // --prompt-file สั่งงานรอบเดียวแล้วพิมพ์คำตอบออก stdout เหมือน -p แต่รับพรอมป์ทางไฟล์
+    // ซึ่งจำเป็นเพราะ grok ไม่อ่าน stdin (ส่ง - ไปมันตอบว่าได้ขีดมาอันเดียว) และพรอมป์
+    // ของเรายาวเกินกว่าจะฝากไว้ใน argv ของ Windows ได้อย่างปลอดภัย
+    //
+    // --verbatim ให้ส่งพรอมป์ตามที่เขียนไว้เป๊ะ ๆ ไม่ตีความใหม่ ส่วน --no-plan ตัดโหมด
+    // วางแผนออกเพราะงานนี้ต้องการแค่ JSON ก้อนเดียวกลับมา ไม่ได้ให้ไปแก้โค้ดอะไร
+    args: ["--output-format", "plain", "--verbatim", "--no-plan"],
+    promptFileFlag: "--prompt-file",
+    // วัดจริงบนเครื่องที่ล็อกอินไว้: พรอมป์สั้น ๆ ใช้ 12 วินาที ของจริงยาวกว่านั้นมาก
+    // ให้เวลาเท่ากับ Codex CLI ไม่งั้นจะหมดเวลาแล้วตกไปใช้เทมเพลตออฟไลน์
+    timeoutMs: 180_000,
     versionArgs: ["--version"],
-    installUrl: "https://github.com/google-gemini/gemini-cli",
+    installUrl: "https://docs.x.ai",
   },
 ];
 
@@ -351,7 +361,7 @@ export async function pickAvailableProvider({ preferred = "auto", environment = 
     if (chosen) throw new Error(`ใช้ ${chosen.label} ไม่ได้: ${chosen.reason}`);
   }
   // CLI มาก่อนเพราะผู้ใช้จ่าย subscription ไปแล้ว เรียกเพิ่มไม่มีค่าใช้จ่ายต่อครั้ง
-  const order = ["claude-cli", "codex-cli", "gemini-cli", "claude", "openai", "openrouter", "gemini"];
+  const order = ["claude-cli", "codex-cli", "grok-cli", "claude", "openai", "openrouter", "gemini"];
   for (const id of order) {
     if (statuses.find((status) => status.id === id)?.available) return id;
   }
@@ -392,17 +402,35 @@ export async function callOpenAICompatible(provider, { system, user, signal, tim
   return { text, model };
 }
 
-/** ส่ง prompt เข้า stdin ของ CLI แล้วอ่าน stdout — ไม่ผ่าน shell argument จึงไม่มีปัญหาการ escape */
+/**
+ * ส่ง prompt ให้ CLI แล้วอ่าน stdout — ไม่ผ่าน shell argument จึงไม่มีปัญหาการ escape
+ *
+ * ปกติส่งเข้า stdin แต่บาง CLI ไม่รับทางนั้น (grok) ตัวที่ประกาศ promptFileFlag ไว้
+ * จะได้พรอมป์เป็นไฟล์ชั่วคราวแทน ซึ่งเลี่ยงทั้งการ escape และเพดานความยาวของ argv
+ */
 export async function callCliProvider(provider, { system, user, signal, timeoutMs }) {
   const probe = await probeCliProvider(provider);
   if (!probe.installed) throw new Error(`ยังไม่ได้ติดตั้ง ${provider.command} — ดูวิธีที่ ${provider.installUrl}`);
   fs.mkdirSync(CLI_WORKSPACE, { recursive: true });
-  const result = await runProcess(provider.command, provider.args ?? [], {
-    input: `${system}\n\n${user}\n`,
-    timeoutMs: Number(timeoutMs ?? provider.timeoutMs ?? 120_000),
-    signal,
-    cwd: CLI_WORKSPACE,
-  });
+  const prompt = `${system}\n\n${user}\n`;
+  const args = [...(provider.args ?? [])];
+  let promptFile = null;
+  if (provider.promptFileFlag) {
+    promptFile = path.join(CLI_WORKSPACE, `prompt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.txt`);
+    fs.writeFileSync(promptFile, prompt, "utf8");
+    args.push(provider.promptFileFlag, promptFile);
+  }
+  let result;
+  try {
+    result = await runProcess(provider.command, args, {
+      input: promptFile ? null : prompt,
+      timeoutMs: Number(timeoutMs ?? provider.timeoutMs ?? 120_000),
+      signal,
+      cwd: CLI_WORKSPACE,
+    });
+  } finally {
+    if (promptFile) fs.rmSync(promptFile, { force: true });
+  }
   if (result.aborted) throw toAbortError("ยกเลิกการเขียนสคริปต์แล้ว");
   if (!result.ok) {
     const detail = (result.stderr || result.stdout || "").trim().slice(0, 300);
