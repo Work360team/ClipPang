@@ -1,0 +1,15 @@
+{
+  "slug": "paper-collage",
+  "name": "กระดาษตัดปะ สต็อปโมชัน",
+  "tagline": "งานฝีมือจับต้องได้ ตัดกับฟีดที่เต็มไปด้วยภาพ AI",
+  "description": "กระดาษฉีกซ้อนกันหลายชั้น เห็นขอบขาดและเนื้อกระดาษ ขยับแบบสต็อปโมชันทีละเฟรม เหมาะกับเรื่องเล่าที่อยากให้รู้สึกอบอุ่นและตั้งใจทำ",
+  "tags": [
+    "งานฝีมือ",
+    "อบอุ่น",
+    "มาแรง 2026"
+  ],
+  "promptFragment": "paper collage stop-motion animation style, layered torn construction paper cutouts with visible fibrous edges and paper grain, hand-cut shapes, subtle drop shadows between paper layers on a textured paper background, matte flat lighting, slight imperfection like a handmade craft, muted warm palette",
+  "motionFragment": "stop-motion feel, small stepped movements, paper layers shifting slightly, gentle parallax between cutout layers",
+  "negative": "no photorealism, no 3D render, no glossy surfaces, no text",
+  "preview": "previews/paper-collage.jpg"
+}

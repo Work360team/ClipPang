@@ -1,0 +1,15 @@
+{
+  "slug": "claymation",
+  "name": "ดินปั้น สต็อปโมชัน",
+  "tagline": "อุ่น ๆ แบบ Wallace & Gromit คนดูจนจบมากกว่าปกติ",
+  "description": "ตัวละครและฉากเป็นดินน้ำมันปั้นมือ เห็นรอยนิ้วบนเนื้อดิน แสงนุ่ม เหมาะกับเรื่องที่มีตัวละครและอารมณ์",
+  "tags": [
+    "งานฝีมือ",
+    "น่ารัก",
+    "มาแรง 2026"
+  ],
+  "promptFragment": "claymation stop-motion style, handmade plasticine clay models with visible fingerprints and tool marks in the clay, soft studio lighting, shallow depth of field, miniature practical set, slightly uneven handmade surfaces, warm saturated colors",
+  "motionFragment": "stop-motion cadence, slightly jerky stepped motion, subtle clay surface wobble, small camera push",
+  "negative": "no smooth CGI, no photorealistic humans, no text",
+  "preview": "previews/claymation.jpg"
+}

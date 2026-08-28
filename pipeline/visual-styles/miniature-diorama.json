@@ -1,0 +1,15 @@
+{
+  "slug": "miniature-diorama",
+  "name": "โมเดลจำลอง",
+  "tagline": "มองจากมุมสูง เหมือนดูโลกทั้งใบในกล่อง",
+  "description": "ฉากจำลองขนาดเล็กแบบโมเดล เลนส์ tilt-shift ทำให้ดูเหมือนของเล่น เหมาะกับเรื่องที่เล่าภาพรวมของชีวิตหรือเมือง",
+  "tags": [
+    "แปลกตา",
+    "ภาพรวม",
+    "น่ามอง"
+  ],
+  "promptFragment": "miniature diorama photographed with a tilt-shift lens, tiny handcrafted model set with visible material texture, strong depth-of-field falloff at top and bottom, bright directional key light, slightly elevated three-quarter view, toy-like scale cues",
+  "motionFragment": "slow orbit around the model, tiny elements moving, tilt-shift blur band staying fixed",
+  "negative": "no full-scale realism, no text",
+  "preview": "previews/miniature-diorama.jpg"
+}

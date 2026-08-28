@@ -1,0 +1,15 @@
+{
+  "slug": "cinematic-real",
+  "name": "ภาพยนตร์เสมือนจริง",
+  "tagline": "ปลอดภัยที่สุด ใช้ได้กับทุกเรื่อง",
+  "description": "ภาพถ่ายเสมือนจริงแบบหนัง ระยะชัดตื้น แสงธรรมชาติ บรรยากาศไทยร่วมสมัย เหมาะกับเรื่องเล่าจริงจังและคดีจริง",
+  "tags": [
+    "สมจริง",
+    "จริงจัง",
+    "ใช้ได้ทุกเรื่อง"
+  ],
+  "promptFragment": "cinematic photograph, shallow depth of field with creamy bokeh, natural available light, anamorphic feel, contemporary Thai setting, filmic color grading with lifted shadows, 35mm lens perspective, documentary framing",
+  "motionFragment": "slow cinematic push in, subtle handheld drift, natural ambient movement",
+  "negative": "no illustration, no cartoon, no recognizable real people, no text",
+  "preview": "previews/cinematic-real.jpg"
+}

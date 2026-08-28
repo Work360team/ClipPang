@@ -1,0 +1,15 @@
+{
+  "slug": "felt-craft",
+  "name": "ผ้าสักหลาด งานเย็บมือ",
+  "tagline": "นุ่ม อบอุ่น เหมาะกับนิทานและคอนเทนต์เด็ก",
+  "description": "ทุกอย่างทำจากผ้าสักหลาดและด้ายเย็บมือ เห็นขนผ้าและรอยด้าย เหมาะกับนิทานก่อนนอนและเรื่องอบอุ่นในครอบครัว",
+  "tags": [
+    "งานฝีมือ",
+    "เด็ก",
+    "อบอุ่น"
+  ],
+  "promptFragment": "handmade felt craft scene, everything sewn from wool felt with visible fuzzy fiber texture and hand stitching, embroidered details, soft diffused light, tactile layered fabric shapes on a felt background, cozy pastel palette",
+  "motionFragment": "gentle stop-motion steps, fabric edges lifting slightly, soft camera push",
+  "negative": "no photorealism, no 3D render, no text",
+  "preview": "previews/felt-craft.jpg"
+}

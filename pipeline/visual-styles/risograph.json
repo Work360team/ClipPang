@@ -1,0 +1,15 @@
+{
+  "slug": "risograph",
+  "name": "ริโซกราฟ",
+  "tagline": "สิ่งพิมพ์ย้อนยุค สีทับกันแบบโรงพิมพ์",
+  "description": "งานพิมพ์ริโซสองถึงสามสี หมึกทับกันเห็นเป็นสีที่สาม เนื้อเม็ดหยาบ เหลื่อมเล็กน้อย เหมาะกับคอนเทนต์วัยรุ่นและสายครีเอทีฟ",
+  "tags": [
+    "ย้อนยุค",
+    "กราฟิก",
+    "วัยรุ่น"
+  ],
+  "promptFragment": "risograph print style, two or three spot inks overprinting to create a third color, heavy paper grain and halftone dot texture, slight registration misalignment between layers, flat bold shapes, limited fluorescent pink and blue palette on off-white stock",
+  "motionFragment": "print layers shifting slightly out of register, grain shimmering, simple step motion",
+  "negative": "no photorealism, no smooth gradients, no text",
+  "preview": "previews/risograph.jpg"
+}

@@ -1,0 +1,15 @@
+{
+  "slug": "flat-editorial",
+  "name": "ภาพประกอบ Editorial",
+  "tagline": "อ่านง่ายที่สุด เหมาะกับเรื่องเงิน ประกัน สุขภาพ",
+  "description": "ภาพประกอบแบนแบบคอลัมน์นิตยสาร รูปทรงเรียบง่าย สีจำกัด สื่อความหมายด้วยสัญลักษณ์ เหมาะกับคอนเทนต์ที่ต้องอธิบายแนวคิด",
+  "tags": [
+    "เข้าใจง่าย",
+    "สุขุม",
+    "อธิบายความรู้"
+  ],
+  "promptFragment": "flat editorial illustration in the style of a financial magazine feature, simplified geometric shapes, limited palette of three colors plus a neutral ground, bold symbolic composition, subtle paper grain texture, no gradients, generous negative space",
+  "motionFragment": "clean geometric motion, shapes sliding and scaling, steady slow camera move",
+  "negative": "no photorealism, no 3D, no faces in detail, no text",
+  "preview": "previews/flat-editorial.jpg"
+}

@@ -1,0 +1,15 @@
+{
+  "slug": "thai-watercolor",
+  "name": "สีน้ำไทย",
+  "tagline": "อ่อนโยน เหมาะกับเรื่องครอบครัวและความทรงจำ",
+  "description": "สีน้ำบนกระดาษหยาบ ขอบสีซึม เว้นพื้นที่ขาวเยอะ บรรยากาศไทยร่วมสมัย เหมาะกับเรื่องที่พูดถึงคนในบ้าน",
+  "tags": [
+    "อ่อนโยน",
+    "ไทย",
+    "อารมณ์"
+  ],
+  "promptFragment": "traditional watercolor painting on rough cold-press paper, soft bleeding edges and visible pigment granulation, generous white space, delicate ink linework, contemporary Thai everyday setting, gentle natural light, restrained palette",
+  "motionFragment": "very slow drift, watercolor washes breathing subtly, gentle camera float",
+  "negative": "no harsh outlines, no digital gradients, no photorealism, no text",
+  "preview": "previews/thai-watercolor.jpg"
+}
