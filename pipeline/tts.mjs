@@ -321,6 +321,21 @@ async function edgeTts({ text, voice, speed, signal, timeoutMs }, rawFile) {
 
 /* ---------- Silence (ออฟไลน์ล้วน ใช้ตรวจว่า pipeline ทั้งเส้นเดินได้) ---------- */
 
+/**
+ * ความเงียบแทนท่อนที่เครื่องยนต์ไม่ยอมออกเสียง
+ *
+ * ยาวพอ ๆ กับที่คนอ่านข้อความนั้นจริง เพื่อให้ซับยังขึ้นนานพอให้อ่านทัน
+ * ไม่ใช่แวบเดียวแล้วหายไป
+ */
+async function writeSilence(file, ms, { signal, timeoutMs } = {}) {
+  await ffmpeg([
+    "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+    "-t", (Math.max(300, ms) / 1000).toFixed(3),
+    "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+    "-y", file,
+  ], { signal, timeoutMs });
+}
+
 async function silenceTts({ text, signal, timeoutMs }, rawFile) {
   const sec = Math.max(0.6, graphemeCount(text) / 13);
   await ffmpeg([
@@ -446,13 +461,32 @@ export async function synthesize({
     fs.rmSync(rawFile, { force: true });
   }
 
-  if (cached) fs.copyFileSync(outFile, cached);
+  /**
+   * เครื่องยนต์เสียงไทยไม่ออกเสียงข้อความที่ไม่มีอักษรไทยเลย เช่นท่อนที่มีแต่ "PD"
+   * ผลคือได้แต่ความเงียบ แล้วตัวตัดความเงียบใน normalizeAudio ลบทิ้งจนไม่เหลืออะไร
+   * ffprobe จึงอ่านความยาวไม่ได้และทั้งงานล้มด้วยข้อความที่บอกแค่ path ของไฟล์
+   *
+   * ใส่ความเงียบยาวเท่าที่ควรใช้อ่านแทน คลิปจะได้เดินต่อและซับยังขึ้นครบ ส่วนเรื่อง
+   * ที่คำนั้นไม่ถูกอ่านออกเสียง ผู้เรียกเอา unspoken ไปเตือนผู้ใช้ได้
+   */
+  let spokenMs = await durationMs(outFile, { signal }).catch(() => 0);
+  const unspoken = !(spokenMs > 0);
+  if (unspoken) {
+    spokenMs = Math.max(400, Math.round((graphemeCount(spokenText) / 13) * 1000));
+    await writeSilence(outFile, spokenMs, { signal, timeoutMs });
+    spokenMs = await durationMs(outFile, { signal });
+  }
+
+  // ไม่เก็บความเงียบลงแคช เพราะรอบหน้าจะได้ผลจากแคชโดยไม่มีธง unspoken ติดมา
+  // แล้วรายงานจะเงียบไปทั้งที่คำนั้นยังไม่ถูกอ่านอยู่ดี
+  if (cached && !unspoken) fs.copyFileSync(outFile, cached);
   return {
     file: outFile,
-    durationMs: await durationMs(outFile, { signal }),
+    durationMs: spokenMs,
     cached: false,
     provider,
     voice,
+    unspoken,
   };
 }
 

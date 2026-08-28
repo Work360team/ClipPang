@@ -683,6 +683,18 @@ export async function runPipeline(options = {}) {
           total,
         ),
       ));
+
+      // เครื่องยนต์เสียงไทยไม่ออกเสียงคำที่ไม่มีอักษรไทยเลย ระบบใส่ความเงียบแทนให้
+      // คลิปเดินต่อได้ แต่คนดูจะไม่ได้ยินคำนั้น ต้องบันทึกไว้ให้ผู้ใช้รู้ว่าคำไหน
+      const unspoken = takes
+        .map((take, index) => (take?.unspoken ? variant.chunks[index]?.text : null))
+        .filter(Boolean);
+      if (unspoken.length) {
+        warnings.push(
+          `เสียงพากย์อ่านคำเหล่านี้ไม่ออก จึงเว้นเป็นความเงียบไว้: ${unspoken.join(" · ")}`
+          + " — ลองเขียนเป็นคำอ่านไทยแทน",
+        );
+      }
     }
 
     let timeline;
