@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AccountCard } from "./AccountCard";
 import { AiProviderCard } from "./AiProviderCard";
+import { MobileAccessCard } from "./MobileAccessCard";
 import { QuotaCard } from "./QuotaCard";
 import { UsersCard } from "./UsersCard";
 import { TtsKeysCard } from "./TtsKeysCard";
@@ -162,6 +163,7 @@ export default function SettingsPage() {
             <ReadinessCard engineState={engineState} />
             <TtsKeysCard engineState={engineState} />
             <AiProviderCard engineState={engineState} />
+            <MobileAccessCard engineState={engineState} />
             <UsersCard engineState={engineState} />
 
             <section className="settings-card" aria-labelledby="folder-title">

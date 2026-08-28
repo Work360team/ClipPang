@@ -17,7 +17,7 @@ import {
   throttle, verifyPassword,
 } from "./auth.mjs";
 import { remoteHelpText as buildRemoteHelp } from "./remote-help.mjs";
-import { tunnelStatus } from "./tunnel.mjs";
+import { startTunnel, stopTunnel, tunnelInstalled, tunnelStatus } from "./tunnel.mjs";
 import { safeProjectPath } from "./security.mjs";
 import { keySourceFor } from "./user-keys.mjs";
 import { prepareSources } from "./sources.mjs";
@@ -666,9 +666,29 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   const launchUrl = setupReady ? url : `${url}/setup`;
   console.log(`\nClip360 Local พร้อมใช้งาน: ${url}`);
   console.log(`ข้อมูลทั้งหมดอยู่ที่: ${PATHS.projects}\n`);
+
+  /**
+   * เปิด URL สำหรับมือถือให้เองถ้าผู้ใช้เลือกไว้
+   *
+   * URL ของ quick tunnel สุ่มใหม่ทุกครั้งที่เปิดโปรแกรม ถ้าไม่พิมพ์ออกตรงนี้ ผู้ใช้ต้อง
+   * เปิดหน้าเว็บไปหาเองทุกรอบ ซึ่งขัดกับเหตุผลที่เปิดอัตโนมัติตั้งแต่แรก
+   *
+   * ล้มเหลวแล้วไม่ล้มทั้งเซิร์ฟเวอร์ เพราะเน็ตสะดุดไม่ควรแปลว่าใช้เครื่องตัวเองไม่ได้
+   */
+  if (runtime.store.getSettings?.().tunnelAutoStart === "1" && tunnelInstalled()) {
+    try {
+      const status = await startTunnel({ port, hasOwner: true });
+      console.log(`เข้าจากมือถือได้ที่: ${status.url}`);
+      console.log("(URL นี้เปลี่ยนใหม่ทุกครั้งที่เปิดโปรแกรม)\n");
+    } catch (error) {
+      console.warn(`[Clip360 Local] เปิด URL สำหรับมือถือไม่สำเร็จ: ${error.message}`);
+    }
+  }
+
   openBrowser(launchUrl);
 
   const close = async () => {
+    stopTunnel();
     await new Promise((resolve) => server.close(resolve));
     await runtime.close();
     await getWebWorker.close?.();

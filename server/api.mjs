@@ -478,6 +478,38 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       /* ---------- เข้าจากมือถือ ---------- */
 
+      // หน้าตั้งค่าก็ต้องเห็นสถานะนี้ ไม่ใช่ต้องกลับไปหน้าติดตั้งครั้งแรกทุกครั้งที่
+      // อยากรู้ว่า URL ตอนนี้คืออะไร — และ URL เปลี่ยนทุกครั้งที่เปิดโปรแกรม
+      if (method === "GET" && pathname === "/api/tunnel") {
+        return json({
+          ok: true,
+          tunnel: tunnelStatus(),
+          autoStart: readStoreSettings(store).tunnelAutoStart === "1",
+          account: { hasOwner: (store.listUsers?.() ?? []).length > 0 },
+        });
+      }
+
+      // เปิดเองทุกครั้งที่เริ่มโปรแกรม — เก็บเป็นค่าตั้งไว้ ไม่ใช่จำแค่รอบนี้
+      if (method === "POST" && pathname === "/api/tunnel/auto") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "ตั้งค่านี้ได้จากเครื่องที่รันระบบเท่านั้น");
+        const body = await readJson(request);
+        const enabled = body?.enabled === true;
+        const hasOwner = ownerAccountReady() || (store.listUsers?.() ?? []).length > 0;
+        if (enabled && !hasOwner) return apiError(400, "TUNNEL_NEEDS_PASSWORD", "ต้องตั้งชื่อผู้ใช้และรหัสผ่านก่อน");
+        store.setSetting?.("tunnelAutoStart", enabled ? "1" : "");
+        // เปิดสวิตช์แล้วควรได้ URL เลย ไม่ใช่ต้องรอปิดเปิดโปรแกรมก่อนถึงจะใช้ได้
+        if (enabled && !tunnelStatus().running) {
+          try {
+            const port = Number(new URL(request.url).port) || 4321;
+            await startTunnel({ port, hasOwner: true });
+          } catch (error) {
+            return json({ ok: true, autoStart: true, tunnel: tunnelStatus(), warning: error.message });
+          }
+        }
+        if (!enabled) stopTunnel();
+        return json({ ok: true, autoStart: enabled, tunnel: tunnelStatus() });
+      }
+
       // ตั้งบัญชีสำหรับล็อกอินจากเครื่องอื่น — ทำได้จากเครื่องที่รันระบบเท่านั้น
       // ไม่งั้นใครที่เข้ามาได้แล้วจะตั้งบัญชีใหม่ทับของเจ้าของได้
       if (method === "POST" && pathname === "/api/setup/account") {
