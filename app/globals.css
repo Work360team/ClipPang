@@ -5128,6 +5128,8 @@ img.mini-project-thumb::after { content: none; }
 }
 
 .render-progress-card {
+  /* แถบบนติดอยู่ตลอด ถ้าเลื่อนมาชิดขอบบนพอดีหัวการ์ดจะถูกบัง */
+  scroll-margin-top: 70px;
   min-height: 360px;
   display: grid;
   grid-template-columns: 125px minmax(0, 1fr);

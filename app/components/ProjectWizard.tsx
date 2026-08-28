@@ -396,6 +396,7 @@ export function ProjectWizard() {
   // AI เขียนสคริปต์ล้มแล้วระบบตกไปใช้เทมเพลตออฟไลน์ ซึ่งแค่หั่นช่อง "จุดขาย" มาเป็นท่อน ๆ
   // ถ้าไม่บอก ผู้ใช้จะนึกว่านั่นคือฝีมือ AI แล้วเอาไปเรนเดอร์ทั้งอย่างนั้น
   const [scriptFallbackFrom, setScriptFallbackFrom] = useState<string | null>(null);
+  const renderProgressRef = useRef<HTMLDivElement | null>(null);
   const [voiceCloneActive, setVoiceCloneActive] = useState(false);
   const [captionStyles, setCaptionStyles] = useState<WizardStyle[]>(fallbackCaptionStyles);
   const captionStylesRef = useRef(captionStyles);
@@ -608,6 +609,23 @@ export function ProjectWizard() {
   const hasChosenClip = orderedClipAssets.length > 0;
   // "เลือกแล้ว" = เคยเดินผ่านขั้นนั้นมาแล้ว ไม่ใช่แค่มีค่า default ค้างอยู่ใน state
   // ใช้ขั้นที่ไปไกลสุด ไม่ใช่ขั้นปัจจุบัน ไม่งั้นย้อนกลับมาขั้น 1 แล้วค่าที่เลือกไว้จะหายไป
+  /**
+   * พาสายตาไปที่ความคืบหน้าทันทีที่เริ่มเรนเดอร์
+   *
+   * บนมือถือปุ่มสร้างคลิปอยู่ท้ายหน้า พอกดแล้วการ์ดความคืบหน้าโผล่ขึ้นมาเหนือปุ่ม
+   * ผู้ใช้จึงค้างอยู่ที่เดิมโดยไม่เห็นว่ามีอะไรเกิดขึ้น ต้องเลื่อนขึ้นไปหาเอง
+   *
+   * ทำครั้งเดียวตอนเริ่ม ไม่ใช่ทุกครั้งที่เปอร์เซ็นต์ขยับ ไม่งั้นหน้าจะกระตุกตลอดเวลา
+   * ที่เรนเดอร์อยู่และผู้ใช้จะเลื่อนไปดูอย่างอื่นไม่ได้เลย
+   */
+  useEffect(() => {
+    if (!rendering) return;
+    const card = renderProgressRef.current;
+    if (!card) return;
+    const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    card.scrollIntoView({ behavior: motion?.matches ? "auto" : "smooth", block: "start" });
+  }, [rendering]);
+
   const voiceChosen = furthestStep > 3;
   /**
    * คำที่เครื่องยนต์ในเครื่องอ่านไม่ออก
@@ -2945,7 +2963,7 @@ export function ProjectWizard() {
                 )}
 
                 {rendering && (
-                  <div className="render-progress-card">
+                  <div className="render-progress-card" ref={renderProgressRef}>
                     <div className="render-orbit"><span>{renderProgress}%</span></div>
                     <div className="render-copy">
                       <span className="live-pill dark"><i /> กำลังสร้างคลิป</span>
