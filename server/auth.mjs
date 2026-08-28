@@ -11,6 +11,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * มีบัญชีเจ้าของให้ล็อกอินแล้วหรือยัง
+ *
+ * เก็บไว้ที่นี่เพราะทั้งตัวเซิร์ฟเวอร์และ API ต้องอ่าน และค่าต้องเปลี่ยนได้ทันทีที่ตั้ง
+ * รหัสผ่านจากหน้าตั้งค่า ไม่ใช่รอปิดเปิดโปรแกรมใหม่
+ */
+let ownerReady = false;
+export const markOwnerReady = () => { ownerReady = true; };
+export const ownerAccountReady = () => ownerReady;
+
 export const SESSION_COOKIE = "clip360_session";
 // ชื่อคุกกี้ก่อนเปลี่ยนแบรนด์ ยังอ่านอยู่เพื่อไม่ให้คนที่ล็อกอินค้างไว้หลุดตอนอัปเดต
 export const LEGACY_SESSION_COOKIE = "clippang_session";

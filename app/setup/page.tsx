@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Clapperboard,
+  Copy,
   Cpu,
   Download,
   ExternalLink,
@@ -19,7 +20,9 @@ import {
   Mic2,
   RefreshCw,
   ShieldCheck,
+  Smartphone,
   Sparkles,
+  Terminal,
   Type,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -31,7 +34,7 @@ import {
 } from "../lib/local-api";
 import styles from "./setup.module.css";
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 const VOICE_TEST_CAPTIONS = `data:text/vtt;charset=utf-8,${encodeURIComponent("WEBVTT\n\n00:00.000 --> 00:10.000\nสวัสดีค่ะ Clip360 พร้อมช่วยทำคลิปให้ปังขึ้น")}`;
 
 const steps = [
@@ -49,8 +52,8 @@ const steps = [
   },
   {
     id: 3 as Step,
-    title: "เชื่อมต่อ Gemini",
-    description: "สำหรับเสียงพากย์และสคริปต์",
+    title: "ผู้ช่วยเขียนสคริปต์",
+    description: "จำเป็น · เลือกทางไหนก็ได้",
     icon: KeyRound,
   },
   {
@@ -65,6 +68,12 @@ const steps = [
     description: "ไม่บังคับ · ข้ามได้",
     icon: Mic2,
   },
+  {
+    id: 6 as Step,
+    title: "ใช้จากมือถือ",
+    description: "ไม่บังคับ · เปิด URL ส่วนตัว",
+    icon: Smartphone,
+  },
 ];
 
 function progressMessage(progress: number) {
@@ -74,7 +83,32 @@ function progressMessage(progress: number) {
   return "กำลังตรวจสอบการรองรับซับภาษาไทย…";
 }
 
+type ScriptOption = {
+  id: string;
+  kind: string;
+  label: string;
+  note: string | null;
+  available: boolean;
+  version: string | null;
+  reason: string | null;
+  keyUrl: string | null;
+  installUrl: string | null;
+  command: string | null;
+};
+
+type TunnelStatus = {
+  supported: boolean;
+  installed: boolean;
+  running: boolean;
+  url: string;
+  host: string;
+  error: string;
+};
+
 type DetailedSetupStatus = Omit<SetupStatus, "node" | "ffmpeg"> & {
+  script?: { ready?: boolean; options?: ScriptOption[] };
+  account?: { hasOwner?: boolean };
+  tunnel?: TunnelStatus;
   node?: boolean | { ready?: boolean; version?: string; required?: string };
   kanit?: boolean | { ready?: boolean; directory?: string; files?: string[]; reason?: string };
   whisper?: {
@@ -157,6 +191,17 @@ export default function SetupPage() {
   const [jaittsProgress, setJaittsProgress] = useState(0);
   const [jaittsMessage, setJaittsMessage] = useState("");
   const [jaittsError, setJaittsError] = useState("");
+  const [scriptReady, setScriptReady] = useState(false);
+  const [scriptOptions, setScriptOptions] = useState<ScriptOption[]>([]);
+  const [hasOwner, setHasOwner] = useState(false);
+  const [accountUser, setAccountUser] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [tunnel, setTunnel] = useState<TunnelStatus | null>(null);
+  const [tunnelBusy, setTunnelBusy] = useState(false);
+  const [tunnelError, setTunnelError] = useState("");
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const applySetupStatus = useCallback((result: DetailedSetupStatus, chooseStep = false) => {
     const nodeReady = isReady(result.node);
@@ -192,10 +237,69 @@ export default function SetupPage() {
     setJaittsMessage(result.jaittsMessage ?? "");
     setJaittsError(result.jaittsError ?? "");
 
+    setScriptReady(Boolean(result.script?.ready));
+    setScriptOptions(result.script?.options ?? []);
+    setHasOwner(Boolean(result.account?.hasOwner));
+    setTunnel(result.tunnel ?? null);
+
     if (chooseStep) {
       setCurrentStep(!nextSystemReady ? 1 : !nextFfmpegReady ? 2 : 3);
     }
   }, []);
+
+  /**
+   * ตั้งบัญชีสำหรับเข้าจากมือถือ
+   *
+   * เดิมทำได้ทางเดียวคือรัน node scripts/set-password.mjs ในเทอร์มินัล ซึ่งคนที่ไม่ได้
+   * เขียนโปรแกรมไม่มีทางเดาได้ว่าต้องทำแบบนั้น
+   */
+  const saveAccount = async (event: FormEvent) => {
+    event.preventDefault();
+    setAccountError("");
+    setSavingAccount(true);
+    try {
+      const response = await fetch("/api/setup/account", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: accountUser.trim(), password: accountPassword }),
+      });
+      const data = await response.json();
+      if (!data?.ok) throw new Error(data?.error?.message ?? "ตั้งบัญชีไม่สำเร็จ");
+      setHasOwner(true);
+      setAccountPassword("");
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : "ตั้งบัญชีไม่สำเร็จ");
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const callTunnel = async (path: string) => {
+    setTunnelError("");
+    setTunnelBusy(true);
+    try {
+      const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const data = await response.json();
+      if (!data?.ok) throw new Error(data?.error?.message ?? "ทำรายการไม่สำเร็จ");
+      if (data.tunnel) setTunnel(data.tunnel);
+      else await runSystemCheck();
+    } catch (error) {
+      setTunnelError(error instanceof Error ? error.message : "ทำรายการไม่สำเร็จ");
+    } finally {
+      setTunnelBusy(false);
+    }
+  };
+
+  const copyTunnelUrl = async () => {
+    if (!tunnel?.url) return;
+    try {
+      await navigator.clipboard.writeText(tunnel.url);
+      setUrlCopied(true);
+      window.setTimeout(() => setUrlCopied(false), 2000);
+    } catch {
+      setTunnelError("คัดลอกไม่สำเร็จ กรุณาเลือกข้อความแล้วคัดลอกเอง");
+    }
+  };
 
   const runSystemCheck = useCallback(async (chooseStep = false) => {
     setChecking(true);
@@ -458,13 +562,18 @@ export default function SetupPage() {
   const completedSteps = new Set<Step>([
     ...(systemReady ? ([1] as Step[]) : []),
     ...(ffmpegReady ? ([2] as Step[]) : []),
-    ...(keyValid ? ([3] as Step[]) : []),
+    ...(scriptReady ? ([3] as Step[]) : []),
     ...(whisperReady ? ([4] as Step[]) : []),
     ...(jaittsReady ? ([5] as Step[]) : []),
+    ...(hasOwner ? ([6] as Step[]) : []),
   ]);
   // เครื่องที่รัน whisper.cpp ไม่ได้ ข้ามขั้นนั้นได้ จึงไม่นับเป็นเงื่อนไขของคำว่าพร้อม
   // ส่วนเสียงโคลนเป็นของเสริม ไม่ติดตั้งก็ใช้ Gemini พากย์ได้ตามปกติ
-  const requiredDone = systemReady && ffmpegReady && keyValid && (whisperReady || !whisperSupported);
+  // เขียนสคริปต์ต้องมีทางใดทางหนึ่งเสมอ ไม่งั้นกดสร้างสคริปต์แล้วเจอ error
+  // ส่วนเสียงพากย์ต้องมี Gemini key หรือ JaiTTS อย่างใดอย่างหนึ่ง เพราะ CLI คืนได้แค่ข้อความ
+  const voiceReady = keyValid || jaittsReady;
+  const requiredDone = systemReady && ffmpegReady && scriptReady && voiceReady
+    && (whisperReady || !whisperSupported);
 
   return (
     <div className={styles.page}>
@@ -775,11 +884,75 @@ export default function SetupPage() {
                     <KeyRound size={22} aria-hidden="true" />
                   </span>
                   <div>
-                    <span className={styles.stepKicker}>ขั้นที่ 3</span>
-                    <h2>เชื่อมต่อ Gemini API</h2>
-                    <p>ใช้สร้างเสียงพากย์ไทยและช่วยเขียนสคริปต์สินค้า</p>
+                    <span className={styles.stepKicker}>ขั้นที่ 3 · จำเป็น</span>
+                    <h2>ผู้ช่วยเขียนสคริปต์และเสียงพากย์</h2>
+                    <p>ต้องมีอย่างน้อยหนึ่งทาง ไม่งั้นกดสร้างสคริปต์แล้วจะขึ้นข้อผิดพลาด</p>
                   </div>
                 </div>
+
+                {/* ระบบเขียนสคริปต์ได้เจ็ดทาง แต่หน้านี้เคยดูแค่คีย์ Gemini คนที่ล็อกอิน
+                    เครื่องมือ CLI ไว้แล้วจึงโดนบังคับขอคีย์ทั้งที่ไม่ต้องใช้ ส่วนคนที่กดข้าม
+                    ก็ไปเจอข้อผิดพลาดตอนสร้างสคริปต์ — ยกมาไว้บนสุดให้เห็นก่อนเลย */}
+                <div className={styles.assistantBox} data-ready={scriptReady}>
+                  <div className={styles.assistantHead}>
+                    <span>{scriptReady ? <Check size={17} strokeWidth={3} /> : <CircleAlert size={17} />}</span>
+                    <div>
+                      <strong>{scriptReady ? "มีผู้ช่วยเขียนสคริปต์พร้อมใช้แล้ว" : "ยังไม่มีผู้ช่วยเขียนสคริปต์"}</strong>
+                      <p>
+                        {scriptReady
+                          ? "ผ่านขั้นนี้ได้เลย ไม่ต้องหาคีย์เพิ่มถ้าไม่อยากใช้"
+                          : "เลือกทางที่ง่ายที่สุดสำหรับคุณจากด้านล่าง ทำอย่างใดอย่างหนึ่งพอ"}
+                      </p>
+                    </div>
+                    <button type="button" className={styles.textButton} onClick={() => void runSystemCheck()} disabled={checking}>
+                      <RefreshCw size={14} className={checking ? styles.spin : undefined} aria-hidden="true" /> ตรวจใหม่
+                    </button>
+                  </div>
+
+                  {/* เรียงเครื่องมือที่ล็อกอินไว้แล้วขึ้นก่อน เพราะไม่ต้องทำอะไรเพิ่มเลย
+                      คนที่ไม่เคยสมัครอะไรมาก่อนจะได้เห็นทางที่ง่ายที่สุดเป็นอันแรก */}
+                  <ul className={styles.assistantList}>
+                    {scriptOptions
+                      .filter((option) => option.kind === "cli")
+                      .sort((a, b) => Number(b.available) - Number(a.available))
+                      .map((option) => (
+                        <li key={option.id} data-ready={option.available}>
+                          <Terminal size={15} aria-hidden="true" />
+                          <div>
+                            <strong>{option.label.replace(" (ใช้ subscription ที่ล็อกอินไว้)", "")}</strong>
+                            <small>
+                              {option.available
+                                ? `พบแล้ว ${option.version ?? ""} · ใช้ได้เลย ไม่ต้องใส่คีย์`
+                                : `ยังไม่พบคำสั่ง ${option.command ?? option.id} บนเครื่องนี้`}
+                            </small>
+                          </div>
+                          {option.available ? (
+                            <span className={styles.assistantTick}><Check size={14} strokeWidth={3} aria-hidden="true" /></span>
+                          ) : option.installUrl ? (
+                            <a href={option.installUrl} target="_blank" rel="noreferrer">วิธีติดตั้ง<ExternalLink size={12} aria-hidden="true" /></a>
+                          ) : null}
+                        </li>
+                      ))}
+                  </ul>
+
+                  {!scriptReady && (
+                    <p className={styles.assistantHint}>
+                      <strong>ยังไม่เคยสมัครอะไรเลย?</strong> ทางที่เร็วที่สุดคือขอ API key ของ Google
+                      ด้านล่างนี้ — ฟรี ใช้บัญชี Google ที่มีอยู่แล้ว ไม่ต้องผูกบัตร และคีย์เดียวนี้
+                      ใช้ได้ทั้งเขียนสคริปต์และพากย์เสียง
+                    </p>
+                  )}
+                </div>
+
+                <div className={styles.assistantDivider}>
+                  <span>ส่วนเสียงพากย์</span>
+                </div>
+
+                <p className={styles.assistantHint}>
+                  เครื่องมือ CLI ด้านบนคืนได้แค่ข้อความ การพากย์เสียงจึงต้องมี
+                  <strong> Gemini API key</strong> หรือติดตั้ง <strong>เสียงในเครื่อง</strong> ที่ขั้นที่ 5
+                  อย่างใดอย่างหนึ่ง
+                </p>
 
                 {!keyValid ? (
                   <>
@@ -917,6 +1090,14 @@ export default function SetupPage() {
                     >
                       ย้อนกลับ
                     </button>
+                    {/* มีผู้ช่วยเขียนสคริปต์ทางอื่นอยู่แล้วก็ไปต่อได้ ไม่ต้องกรอกคีย์
+                        แต่ยังต้องมีเสียงพากย์ ซึ่งไปติดตั้งในเครื่องที่ขั้นที่ 5 ได้ */}
+                    {scriptReady && (
+                      <button type="button" className={styles.primaryButton} onClick={() => setCurrentStep(4)} disabled={testingKey}>
+                        ใช้ผู้ช่วยที่มีอยู่แล้ว
+                        <ArrowRight size={18} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1166,11 +1347,140 @@ export default function SetupPage() {
                     </button>
                   )}
                   {jaittsReady && (
-                    <button type="button" className={styles.primaryButton} onClick={goHome}>
-                      เริ่มทำคลิป
+                    <button type="button" className={styles.primaryButton} onClick={() => setCurrentStep(6)}>
+                      ต่อไป: ใช้จากมือถือ
                       <ArrowRight size={18} aria-hidden="true" />
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 6 && (
+              <div className={styles.panelInner}>
+                <div className={styles.sectionHeading}>
+                  <span className={styles.sectionIcon}>
+                    <Smartphone size={22} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <span className={styles.stepKicker}>ขั้นที่ 6 · ไม่บังคับ</span>
+                    <h2>ใช้จากมือถือ</h2>
+                    <p>เปิด URL ส่วนตัวให้เข้าจากที่ไหนก็ได้ ไม่ต้องสมัครบริการอะไรเพิ่ม</p>
+                  </div>
+                </div>
+
+                {/* ทางที่ปลอดภัยที่สุดคือ Wi-Fi เดียวกัน ต้องบอกก่อนเสมอ ไม่ใช่เชียร์ให้เปิด
+                    ออกอินเทอร์เน็ตทั้งที่หลายคนไม่ได้ต้องการขนาดนั้น */}
+                <div className={styles.assistantHint}>
+                  <strong>ถ้ามือถืออยู่ Wi-Fi เดียวกับคอมเครื่องนี้</strong> ไม่ต้องเปิดอะไรเลย
+                  พิมพ์ที่อยู่ของเครื่องนี้ในเบราว์เซอร์มือถือได้ทันที ส่วนด้านล่างมีไว้สำหรับตอนอยู่
+                  นอกบ้านหรืออยู่คนละเครือข่าย
+                </div>
+
+                {/* บัญชีต้องมาก่อนเสมอ — เปิด URL สาธารณะโดยไม่มีรหัสผ่านไม่ได้เด็ดขาด */}
+                <div className={styles.assistantBox} data-ready={hasOwner}>
+                  <div className={styles.assistantHead}>
+                    <span>{hasOwner ? <Check size={17} strokeWidth={3} /> : <CircleAlert size={17} />}</span>
+                    <div>
+                      <strong>{hasOwner ? "ตั้งรหัสผ่านไว้แล้ว" : "ตั้งชื่อผู้ใช้และรหัสผ่านก่อน"}</strong>
+                      <p>ใครเปิด URL นี้ก็ต้องใส่รหัสก่อนถึงจะเข้าได้ ไม่มีทางเปิดแบบไม่ตั้งรหัส</p>
+                    </div>
+                  </div>
+                  <form className={styles.accountForm} onSubmit={saveAccount}>
+                    <input
+                      type="text"
+                      autoComplete="username"
+                      placeholder="ชื่อผู้ใช้"
+                      value={accountUser}
+                      onChange={(event) => setAccountUser(event.target.value)}
+                    />
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="รหัสผ่าน อย่างน้อย 8 ตัว"
+                      value={accountPassword}
+                      onChange={(event) => setAccountPassword(event.target.value)}
+                    />
+                    <button type="submit" className={styles.secondaryButton} disabled={savingAccount || accountUser.trim().length < 3 || accountPassword.length < 8}>
+                      {savingAccount ? "กำลังบันทึก…" : hasOwner ? "เปลี่ยนรหัสผ่าน" : "ตั้งรหัสผ่าน"}
+                    </button>
+                  </form>
+                  {accountError && (
+                    <div className={styles.errorMessage} role="alert">
+                      <CircleAlert size={18} aria-hidden="true" />
+                      <span>{accountError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {tunnel?.supported === false ? (
+                  <div className={styles.assistantHint}>เครื่องนี้ยังไม่รองรับการเปิด URL อัตโนมัติ</div>
+                ) : (
+                  <div className={styles.assistantBox} data-ready={Boolean(tunnel?.running)}>
+                    <div className={styles.assistantHead}>
+                      <span>{tunnel?.running ? <Check size={17} strokeWidth={3} /> : <Smartphone size={17} />}</span>
+                      <div>
+                        <strong>{tunnel?.running ? "URL พร้อมใช้แล้ว" : "เปิด URL สำหรับมือถือ"}</strong>
+                        <p>ใช้ตัวเชื่อมต่อของ Cloudflare ไม่ต้องสมัครบัญชี ไม่ต้องตั้งค่าเราเตอร์</p>
+                      </div>
+                    </div>
+
+                    {tunnel?.running && tunnel.url && (
+                      <div className={styles.tunnelUrl}>
+                        <code>{tunnel.url}</code>
+                        <button type="button" className={styles.secondaryButton} onClick={() => void copyTunnelUrl()}>
+                          <Copy size={15} aria-hidden="true" />
+                          {urlCopied ? "คัดลอกแล้ว" : "คัดลอก"}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* URL สุ่มใหม่ทุกครั้งที่เปิด ต้องบอกไว้ ไม่งั้นผู้ใช้บุ๊กมาร์กไว้แล้วงงว่าเข้าไม่ได้ */}
+                    {tunnel?.running && (
+                      <p className={styles.assistantHint}>
+                        URL นี้ใช้ได้จนกว่าจะปิดโปรแกรม และจะ<strong>เปลี่ยนใหม่ทุกครั้งที่เปิด</strong>
+                        {' '}อย่าบุ๊กมาร์กไว้ ให้กลับมาดูที่หน้านี้
+                      </p>
+                    )}
+
+                    {tunnelError && (
+                      <div className={styles.errorMessage} role="alert">
+                        <CircleAlert size={18} aria-hidden="true" />
+                        <span>{tunnelError}</span>
+                      </div>
+                    )}
+
+                    <div className={styles.actions}>
+                      {!tunnel?.installed && (
+                        <button type="button" className={styles.secondaryButton} onClick={() => void callTunnel("/api/setup/tunnel")} disabled={tunnelBusy}>
+                          <Download size={17} aria-hidden="true" />
+                          {tunnelBusy ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดตัวเชื่อมต่อ"}
+                        </button>
+                      )}
+                      {tunnel?.installed && !tunnel.running && (
+                        <button type="button" className={styles.primaryButton} onClick={() => void callTunnel("/api/setup/tunnel/start")} disabled={tunnelBusy || !hasOwner}>
+                          {tunnelBusy ? "กำลังเปิด…" : "เปิด URL"}
+                        </button>
+                      )}
+                      {tunnel?.running && (
+                        <button type="button" className={styles.textButton} onClick={() => void callTunnel("/api/setup/tunnel/stop")} disabled={tunnelBusy}>
+                          ปิด URL
+                        </button>
+                      )}
+                    </div>
+
+                    {!hasOwner && tunnel?.installed && (
+                      <p className={styles.assistantHint}>ตั้งรหัสผ่านด้านบนก่อน ปุ่มเปิด URL ถึงจะกดได้</p>
+                    )}
+                  </div>
+                )}
+
+                <div className={styles.actions}>
+                  <button type="button" className={styles.textButton} onClick={() => setCurrentStep(5)}>ย้อนกลับ</button>
+                  <button type="button" className={styles.primaryButton} onClick={goHome}>
+                    เริ่มทำคลิป
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             )}

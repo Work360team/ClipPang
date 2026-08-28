@@ -13,9 +13,11 @@ import {
 } from "./config.mjs";
 import {
   clearLegacySessionCookie, createSession, loginPage, noteFailure, noteSuccess,
-  readSession, readSessionCookie, sessionCookie, sessionSecret, throttle, verifyPassword,
+  markOwnerReady, ownerAccountReady, readSession, readSessionCookie, sessionCookie, sessionSecret,
+  throttle, verifyPassword,
 } from "./auth.mjs";
 import { remoteHelpText as buildRemoteHelp } from "./remote-help.mjs";
+import { tunnelStatus } from "./tunnel.mjs";
 import { safeProjectPath } from "./security.mjs";
 import { keySourceFor } from "./user-keys.mjs";
 import { prepareSources } from "./sources.mjs";
@@ -73,7 +75,33 @@ const REMOTE_HOSTS = new Set(
 );
 const AUTH_USER = String(process.env.CLIP360_USER || "").trim();
 const AUTH_HASH = String(process.env.CLIP360_PASSWORD_HASH || "").trim();
-const REMOTE_READY = REMOTE_HOSTS.size > 0 && Boolean(AUTH_USER) && AUTH_HASH.startsWith("scrypt$");
+
+/**
+ * มีบัญชีเจ้าของให้ล็อกอินหรือยัง
+ *
+ * เดิมดูจาก .env อย่างเดียว ซึ่งอ่านตอนโหลดโมดูลครั้งเดียว แปลว่าตั้งรหัสผ่านจากหน้า
+ * ตั้งค่าแล้วต้องปิดเปิดโปรแกรมใหม่ถึงจะใช้ได้ ตัวจริงที่ล็อกอินเทียบด้วยคือแถวในตาราง
+ * users อยู่แล้ว จึงถามจากตารางตรง ๆ ได้เลย
+ */
+if (AUTH_USER && AUTH_HASH.startsWith("scrypt$")) markOwnerReady();
+const authReady = ownerAccountReady;
+
+/**
+ * โฮสต์นี้ได้รับอนุญาตให้เข้าจากข้างนอกไหม
+ *
+ * นอกจากรายชื่อใน .env แล้ว ยังรับโฮสต์ของอุโมงค์ที่กำลังเปิดอยู่ด้วย เพราะ URL ของ
+ * quick tunnel สุ่มใหม่ทุกครั้งที่เปิด จะให้ผู้ใช้ไปแก้ .env แล้วรีสตาร์ททุกรอบไม่ได้
+ * ตัวอุโมงค์เองเปิดไม่ได้ถ้ายังไม่มีรหัสผ่าน เกตนี้จึงไม่ได้หลวมลง
+ */
+function knownRemoteHost(hostname) {
+  if (REMOTE_HOSTS.has(hostname)) return true;
+  const active = tunnelStatus();
+  return Boolean(active.running && active.host && active.host.toLowerCase() === hostname);
+}
+
+// ผูกกับ .env เท่านั้น เพราะเป็นการตัดสินใจตอนเปิดพอร์ต ซึ่งทำได้ครั้งเดียวตอนบูต
+// อุโมงค์ไม่ต้องพึ่งค่านี้ เพราะมันต่อกลับเข้ามาที่ 127.0.0.1 เองอยู่แล้ว
+const BIND_PUBLIC = REMOTE_HOSTS.size > 0 && Boolean(AUTH_USER) && AUTH_HASH.startsWith("scrypt$");
 const SECRET = sessionSecret(PATHS.data);
 
 const STATIC_MIME = new Map([
@@ -112,7 +140,7 @@ async function handleLogin(request, ip, store) {
 
   const user = store.getUserByUsername?.(username) ?? null;
   const ok = Boolean(user) && !user.disabled && verifyPassword(password, user.passwordHash);
-  if (!REMOTE_READY || !ok) {
+  if (!authReady() || !ok) {
     noteFailure(ip);
     // ไม่บอกว่าผิดที่ชื่อหรือรหัส เพื่อไม่ให้ไล่เดาชื่อผู้ใช้ได้
     return new Response(loginPage({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", nextPath }), {
@@ -142,6 +170,8 @@ function ensureBootstrapUser(store) {
     owner = store.createUser({ username: AUTH_USER, passwordHash: AUTH_HASH, role: "owner" });
   }
   if (owner) {
+    // มีบัญชีจริงในตารางแล้ว = ล็อกอินได้ ไม่ต้องรอ .env
+    markOwnerReady();
     const claimed = store.claimOrphanProjects?.(owner.id) ?? 0;
     if (claimed) process.stdout.write(`ยกโปรเจกต์เดิม ${claimed} รายการให้ ${owner.username}
 `);
@@ -152,11 +182,11 @@ function ensureBootstrapUser(store) {
 function remoteHelpText(request) {
   let host = "";
   try { host = new URL(request.url).hostname; } catch { host = ""; }
-  return buildRemoteHelp({ host, allowedHosts: REMOTE_HOSTS, hasUser: Boolean(AUTH_USER), hasHash: AUTH_HASH.startsWith("scrypt$") });
+  return buildRemoteHelp({ host, allowedHosts: REMOTE_HOSTS, hasUser: authReady(), hasHash: authReady() });
 }
 
 function hostAllowed(hostname) {
-  return LOCAL_HOSTS.has(hostname) || (REMOTE_READY && REMOTE_HOSTS.has(hostname.toLowerCase()));
+  return LOCAL_HOSTS.has(hostname) || (authReady() && knownRemoteHost(hostname.toLowerCase()));
 }
 
 function localRequestAllowed(request) {
@@ -495,17 +525,24 @@ function streamToNode(body, destination) {
   return streamPipeline(Readable.fromWeb(body), destination);
 }
 
-function canListen(port) {
+/**
+ * พอร์ตนี้จองได้ไหม
+ *
+ * ต้องลองที่อยู่เดียวกับที่จะเปิดจริง ของเดิมลองที่ 127.0.0.1 เสมอ แต่ตอนเปิดโหมด
+ * เข้าจากเครื่องอื่นจะไปเปิดที่ 0.0.0.0 — บน Windows การจอง 127.0.0.1 สำเร็จได้ทั้งที่
+ * มีอีก process ถือ 0.0.0.0 อยู่ ผลคือตรวจว่าว่างแล้วไปตายตอนเปิดจริงด้วย EADDRINUSE
+ */
+function canListen(port, host) {
   return new Promise((resolve) => {
     const probe = net.createServer();
     probe.unref();
     probe.once("error", () => resolve(false));
-    probe.listen({ host: HOST, port }, () => probe.close(() => resolve(true)));
+    probe.listen({ host, port }, () => probe.close(() => resolve(true)));
   });
 }
 
-async function availablePort(start = DEFAULT_PORT) {
-  for (let port = start; port < start + 40; port += 1) if (await canListen(port)) return port;
+async function availablePort(start = DEFAULT_PORT, host = HOST) {
+  for (let port = start; port < start + 40; port += 1) if (await canListen(port, host)) return port;
   throw new Error(`ไม่พบพอร์ตว่างตั้งแต่ ${start} ถึง ${start + 39}`);
 }
 
@@ -520,7 +557,8 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   const [runtime, getWebWorker] = await Promise.all([createLocalRuntime(), createWebWorkerLoader()]);
   // ต้องมีเจ้าของอย่างน้อยหนึ่งคนก่อนรับคำขอ ไม่งั้นงานเก่าจะไม่มีใครเห็น
   const bootstrapOwner = ensureBootstrapUser(runtime.store);
-  const port = requestedPort ?? await availablePort(DEFAULT_PORT);
+  const bindHost = BIND_PUBLIC ? "0.0.0.0" : HOST;
+  const port = requestedPort ?? await availablePort(DEFAULT_PORT, bindHost);
   const server = http.createServer({ requestTimeout: 0, headersTimeout: 30_000 }, async (req, res) => {
     try {
       const request = toWebRequest(req, port, connectionAbortSignal(req, res));
@@ -559,7 +597,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
       const staleSession = Boolean(session) && !viewer;
       if (!publicAsset && (staleSession || !localRequestAllowed(request))) {
         // โฮสต์ที่อนุญาตไว้แล้วแต่ยังไม่ล็อกอิน → ให้หน้าล็อกอิน ไม่ใช่กำแพงเปล่า
-        if (REMOTE_READY && REMOTE_HOSTS.has(requestUrl.hostname.toLowerCase())) {
+        if (authReady() && knownRemoteHost(requestUrl.hostname.toLowerCase())) {
           if (requestUrl.pathname.startsWith("/api/")) {
             return sendWebResponse(res, new Response(JSON.stringify({ ok: false, error: { code: "AUTH_REQUIRED", message: "ต้องเข้าสู่ระบบก่อน" } }), {
               status: 401, headers: { "content-type": "application/json; charset=utf-8" },
@@ -616,7 +654,7 @@ export async function startLocalServer({ port: requestedPort } = {}) {
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     // ผูกกับ 127.0.0.1 เสมอ ยกเว้นเปิดโหมดระยะไกลไว้ครบทั้งโฮสต์และรหัสผ่าน
-    server.listen(port, REMOTE_READY ? "0.0.0.0" : HOST, resolve);
+    server.listen(port, bindHost, resolve);
   });
   const url = `http://${HOST}:${port}`;
   let setupReady = false;

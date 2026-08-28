@@ -26,10 +26,11 @@ import {
 } from "./setup.mjs";
 import { installWhisper } from "./whisper-setup.mjs";
 import { getJaittsStatus, installJaitts } from "./jaitts-setup.mjs";
+import { installTunnel, startTunnel, stopTunnel, tunnelStatus } from "./tunnel.mjs";
 import { generateCaptions } from "../pipeline/caption.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
-import { hashPassword, verifyPassword } from "./auth.mjs";
+import { hashPassword, markOwnerReady, ownerAccountReady, verifyPassword } from "./auth.mjs";
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import { timingForPace, VOICE_GENDERS, VOICE_TONES } from "../pipeline/core.mjs";
 import { deleteClone, listClones, listSpeakers, readClone, updateCloneGender } from "../pipeline/voice-clones.mjs";
@@ -74,6 +75,32 @@ function json(data, init = {}) {
 
 function apiError(status, code, message, details) {
   return json({ ok: false, error: { code, message, ...(details ? { details } : {}) } }, { status });
+}
+
+/**
+ * มีทางเขียนสคริปต์ที่ใช้ได้จริงแล้วหรือยัง
+ *
+ * หน้าตั้งค่าเดิมดูแค่คีย์ Gemini ทั้งที่ระบบรับได้เจ็ดทาง คนที่ล็อกอิน CLI ไว้แล้ว
+ * จึงโดนบังคับขอคีย์ทั้งที่ไม่ต้องใช้ ส่วนคนที่กดข้ามก็ไปเจอ error ตอนสร้างสคริปต์
+ */
+async function scriptReadiness() {
+  const providers = await detectScriptProviders({});
+  const usable = providers.filter((item) => item.available);
+  return {
+    ready: usable.length > 0,
+    options: providers.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      label: item.label,
+      note: item.note ?? null,
+      available: item.available,
+      version: item.version ?? null,
+      reason: item.reason ?? null,
+      keyUrl: item.keyUrl ?? null,
+      installUrl: item.installUrl ?? null,
+      command: item.command ?? null,
+    })),
+  };
 }
 
 async function readJson(request, { optional = false } = {}) {
@@ -363,6 +390,7 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
   let ffmpegInstall = null;
   let whisperInstall = null;
   let jaittsInstall = null;
+  let tunnelInstall = null;
   const generateScriptsImpl = services.generateScripts ?? generateScripts;
   const generateCaptionsImpl = services.generateCaptions ?? generateCaptions;
   const regenerateChunkImpl = services.regenerateChunk ?? regenerateChunk;
@@ -437,8 +465,73 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           jaittsProgress: jaittsInstall?.progress ?? null,
           jaittsMessage: jaittsInstall?.message ?? null,
           jaittsError: jaittsInstall?.error ?? null,
+          // ผู้ช่วยเขียนสคริปต์ — หน้าตั้งค่าต้องรู้ว่ามีทางไหนใช้ได้บ้าง ไม่ใช่ดูแค่คีย์ Gemini
+          script: await scriptReadiness(),
+          // เข้าจากมือถือ
+          account: { hasOwner: (store.listUsers?.() ?? []).length > 0 },
+          tunnel: tunnelStatus(),
           paths: { input: PATHS.input, projects: PATHS.projects },
         });
+      }
+
+      /* ---------- ผู้ช่วยเขียนสคริปต์ ---------- */
+
+      /* ---------- เข้าจากมือถือ ---------- */
+
+      // ตั้งบัญชีสำหรับล็อกอินจากเครื่องอื่น — ทำได้จากเครื่องที่รันระบบเท่านั้น
+      // ไม่งั้นใครที่เข้ามาได้แล้วจะตั้งบัญชีใหม่ทับของเจ้าของได้
+      if (method === "POST" && pathname === "/api/setup/account") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "ตั้งบัญชีได้จากเครื่องที่รันระบบเท่านั้น");
+        const body = await readJson(request);
+        const username = String(body?.username ?? "").trim();
+        const password = String(body?.password ?? "");
+        if (username.length < 3) return apiError(400, "BAD_USERNAME", "ชื่อผู้ใช้ต้องยาวอย่างน้อย 3 ตัวอักษร");
+        if (password.length < 8) return apiError(400, "BAD_PASSWORD", "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+        const passwordHash = hashPassword(password);
+        const existing = store.getUserByUsername?.(username) ?? null;
+        const owner = (store.listUsers?.() ?? [])[0] ?? null;
+        if (existing) store.updateUser?.(existing.id, { passwordHash, disabled: 0 });
+        else if (owner) store.updateUser?.(owner.id, { username, passwordHash, disabled: 0 });
+        else store.createUser({ username, passwordHash, role: "owner" });
+        markOwnerReady();
+        return json({ ok: true, account: { hasOwner: true, username } });
+      }
+
+      // โหลดตัวเชื่อมต่อของ Cloudflare มาเก็บไว้ในเครื่อง
+      if (method === "POST" && pathname === "/api/setup/tunnel") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "ติดตั้งโปรแกรมได้จากเครื่องที่รันระบบเท่านั้น");
+        if (tunnelInstall?.running) return json({ ok: true, status: "installing", progress: tunnelInstall.progress }, { status: 202 });
+        tunnelInstall = { running: true, progress: 0, message: "กำลังเตรียมดาวน์โหลด" };
+        installTunnel({
+          onProgress(event) {
+            tunnelInstall = { ...tunnelInstall, ...event, running: true, progress: Number(event?.progress ?? tunnelInstall.progress) };
+          },
+        }).then(() => {
+          tunnelInstall = { running: false, progress: 100, message: "พร้อมเปิด URL สำหรับมือถือแล้ว" };
+        }).catch((error) => {
+          tunnelInstall = { running: false, progress: 0, error: error.message, message: "โหลดตัวเชื่อมต่อไม่สำเร็จ" };
+        });
+        return json({ ok: true, status: "installing", progress: 0 }, { status: 202 });
+      }
+
+      // เปิดและปิดอุโมงค์ — เปิดไม่ได้ถ้ายังไม่มีบัญชี เพราะ URL นี้เป็นที่อยู่สาธารณะจริง
+      if (method === "POST" && pathname === "/api/setup/tunnel/start") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "เปิด URL ได้จากเครื่องที่รันระบบเท่านั้น");
+        const hasOwner = ownerAccountReady() || (store.listUsers?.() ?? []).length > 0;
+        if (!hasOwner) return apiError(400, "TUNNEL_NEEDS_PASSWORD", "ต้องตั้งชื่อผู้ใช้และรหัสผ่านก่อน จึงจะเปิด URL สาธารณะได้");
+        const port = Number(new URL(request.url).port) || 4321;
+        try {
+          const status = await startTunnel({ port, hasOwner: true });
+          return json({ ok: true, tunnel: status });
+        } catch (error) {
+          return apiError(error.status ?? 500, error.code ?? "TUNNEL_FAILED", error.message);
+        }
+      }
+
+      if (method === "POST" && pathname === "/api/setup/tunnel/stop") {
+        if (!isLocal) return apiError(403, "LOCAL_ONLY", "ปิด URL ได้จากเครื่องที่รันระบบเท่านั้น");
+        stopTunnel();
+        return json({ ok: true, tunnel: tunnelStatus() });
       }
 
       if (method === "POST" && pathname === "/api/setup/ffmpeg") {

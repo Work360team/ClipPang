@@ -1229,3 +1229,199 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ============================================================
+   ผู้ช่วยเขียนสคริปต์ และการเข้าใช้จากมือถือ
+
+   กล่องสรุปที่บอกได้ในบรรทัดเดียวว่า "ผ่านแล้ว" หรือ "ยังขาดอะไร" เพราะสองขั้นนี้
+   มีทางเลือกหลายทาง ถ้าเรียงเป็นรายการเฉย ๆ ผู้ใช้จะไม่รู้ว่าต้องทำอะไรบ้างถึงจะพอ
+   ============================================================ */
+
+.assistantBox {
+  margin-top: 20px;
+  padding: 17px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 13px;
+  background: var(--panel-2);
+}
+
+.assistantBox[data-ready="true"] {
+  border-color: rgba(98, 217, 163, 0.4);
+  background: rgba(98, 217, 163, 0.05);
+}
+
+.assistantHead {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 11px;
+}
+
+.assistantHead > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 210, 63, 0.12);
+  color: var(--yellow);
+}
+
+.assistantBox[data-ready="true"] .assistantHead > span:first-child {
+  background: rgba(98, 217, 163, 0.14);
+  color: var(--green);
+}
+
+.assistantHead strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.assistantHead p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.assistantList {
+  display: grid;
+  gap: 7px;
+  margin: 15px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assistantList li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted-2);
+}
+
+.assistantList li[data-ready="true"] {
+  border-color: rgba(98, 217, 163, 0.32);
+  color: #cfd8d4;
+}
+
+.assistantList strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #e6ecef;
+}
+
+.assistantList li[data-ready="false"] strong { color: var(--muted); }
+
+.assistantList small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.assistantList a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--yellow);
+  font-size: 11.5px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.assistantTick {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(98, 217, 163, 0.15);
+  color: var(--green);
+}
+
+.assistantHint {
+  margin: 15px 0 0;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.028);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.assistantHint strong { color: #e6ecef; font-weight: 600; }
+
+.assistantDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 26px 0 0;
+  color: var(--muted-2);
+  font-size: 11.5px;
+}
+
+.assistantDivider::before,
+.assistantDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+.accountForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 9px;
+  margin-top: 15px;
+}
+
+.accountForm input {
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--panel);
+  color: #e6ecef;
+  font-size: 13.5px;
+}
+
+.accountForm input:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 1px;
+}
+
+/* URL ของอุโมงค์ยาวและสุ่มมา ต้องเลือกคัดลอกได้ง่ายและตัดบรรทัดได้ ไม่ใช่ล้นกล่อง */
+.tunnelUrl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+  padding: 13px 15px;
+  border: 1px solid rgba(98, 217, 163, 0.32);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.tunnelUrl code {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--green);
+  font-family: ui-monospace, monospace;
+  font-size: 13.5px;
+  user-select: all;
+}
+
+@media (max-width: 640px) {
+  .accountForm { grid-template-columns: 1fr; }
+  .assistantHead { grid-template-columns: 26px minmax(0, 1fr); }
+  .assistantHead > button { grid-column: 2; justify-self: start; }
+}
