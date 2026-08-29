@@ -1412,7 +1412,7 @@ export function ProjectWizard() {
     clipAssets, timelineClips, projectId, engineState,
     selectedScript, scriptTexts, scriptVariants, scriptVoiceSignature,
     selectedVoice, speed, tone, pace, voiceEngine, cloneVoice,
-    selectedStyle, captionPosition, captionColor,
+    selectedStyle, captionPosition, captionColor, bgm, bgmGainDb,
   ]);
 
   const saveProject = async (message = "บันทึกโปรเจกต์และ Timeline แล้ว") => {
@@ -2295,6 +2295,8 @@ export function ProjectWizard() {
             styleId: selectedStyle,
             position,
             captionColor,
+            bgmName: bgm?.name ?? null,
+            bgmGainDb,
           },
         });
       if (editRevisionRef.current !== renderEditRevision) {
