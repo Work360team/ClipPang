@@ -291,7 +291,7 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       captionColor: config.captionColor ?? null,
       // เพลงประกอบเก็บอยู่ในโฟลเดอร์ของโปรเจกต์ pipeline รับเป็นพาธแบบ relative
       bgm: config.bgmName ? path.join("bgm", config.bgmName) : null,
-      bgmGainDb: Number(config.bgmGainDb ?? -18),
+      bgmGainDb: Number(config.bgmGainDb ?? -14),
       kind: render.kind,
       ...(prepared.selectedTotalMs != null ? {
         targetSec: prepared.selectedTotalMs / 1000,

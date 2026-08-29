@@ -420,7 +420,7 @@ export function ProjectWizard() {
   const [pace, setPace] = useState<string>(DEFAULT_PACE);
   // เพลงประกอบ — ผู้ใช้อัปโหลดเอง เก็บไว้ในโฟลเดอร์ของโปรเจกต์
   const [bgm, setBgm] = useState<LocalBgm | null>(null);
-  const [bgmGainDb, setBgmGainDb] = useState(-18);
+  const [bgmGainDb, setBgmGainDb] = useState(-14);
   const [bgmBusy, setBgmBusy] = useState(false);
   const [bgmError, setBgmError] = useState("");
   const bgmInputRef = useRef<HTMLInputElement | null>(null);
@@ -2841,7 +2841,7 @@ export function ProjectWizard() {
                           className="range"
                           type="range"
                           min="-30"
-                          max="-6"
+                          max="0"
                           step="1"
                           value={bgmGainDb}
                           onChange={(event) => setBgmGainDb(Number(event.target.value))}

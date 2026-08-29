@@ -80,7 +80,7 @@ export async function burnAndMux(
   outFile,
   {
     bgm = null,
-    bgmGainDb = -18,
+    bgmGainDb = -14,
     overlay = null,
     fontsDir = path.join(ROOT, "fonts"),
     signal,
@@ -120,10 +120,13 @@ export async function burnAndMux(
     const idx = next;
     next += 1;
     args.push("-stream_loop", "-1", "-i", bgm);
+    // normalize=0 สำคัญ ถ้าปล่อยค่าเริ่มต้น amix จะหารระดับเสียงทุกทางเข้าด้วยจำนวนทาง
+    // ทั้งเสียงพากย์และเพลงจะเบาลง 6 dB และค่าที่ผู้ใช้เลือกจะไม่ตรงกับที่ได้ยิน
+    // ยอดคลื่นที่เกินให้ alimiter คุมท้ายสายแทน
     filters.push(
       `[${idx}:a]volume=${bgmGainDb}dB,aformat=sample_rates=24000:channel_layouts=mono[bg]`,
-      "[bg][1:a]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=400[duck]",
-      "[duck][1:a]amix=inputs=2:duration=first:dropout_transition=0,alimiter=limit=0.95[a]",
+      "[bg][1:a]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[duck]",
+      "[duck][1:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95[a]",
     );
   }
 

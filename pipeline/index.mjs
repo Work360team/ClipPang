@@ -865,7 +865,7 @@ export async function runPipeline(options = {}) {
     await timeStage("package", async () => {
       await burnAndMux(timeline, runDir, "final.mp4", {
         bgm: options.bgm ? path.resolve(projectDir, options.bgm) : null,
-        bgmGainDb: Number(options.bgmGainDb ?? -18),
+        bgmGainDb: Number(options.bgmGainDb ?? -14),
         overlay: overlayFile,
         fontsDir: FONTS_DIR,
         signal,
