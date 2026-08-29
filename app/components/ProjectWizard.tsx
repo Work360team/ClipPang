@@ -334,6 +334,16 @@ const productBriefFromApi = (value: Record<string, unknown>, fallback: ProductBr
   };
 };
 
+/** แตก features ให้เป็นรายการเดียวกันไม่ว่าจะพิมพ์คั่นบรรทัดหรือคั่นจุลภาค */
+const featureList = (value: string): string[] =>
+  value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+
+/** เทียบ brief แบบมองข้ามรูปแบบการพิมพ์ ค่าที่วนผ่าน API จะกลับมาเป็น "a, b" เสมอ
+ *  ถ้าเทียบสตริงตรง ๆ คนที่พิมพ์จุดขายคั่นบรรทัดจะโดนเตือนว่าถูกแก้จากอีกแท็บทุกครั้ง */
+const sameProductBrief = (a: ProductBrief, b: ProductBrief) =>
+  (["name", "category", "audience", "tone", "cta"] as const).every((key) => a[key].trim() === b[key].trim())
+  && featureList(a.features).join("\u0000") === featureList(b.features).join("\u0000");
+
 const projectRevision = (project: { updatedAt?: unknown; updated_at?: unknown }) => {
   const value = Number(project.updatedAt ?? project.updated_at);
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -2233,7 +2243,7 @@ export function ProjectWizard() {
       ? productBriefFromApi(authoritativeBrief, brief)
       : null;
     const briefChangedWhileGenerating = authoritativeFormBrief !== null
-      && JSON.stringify(authoritativeFormBrief) !== JSON.stringify(brief);
+      && !sameProductBrief(authoritativeFormBrief, brief);
     // scripts, brief และ signature ถูก API บันทึกแล้ว ข้าม effect รอบที่ setters ด้านล่างสร้างขึ้น
     // จึงไม่มีหน้าต่าง 450ms ให้ snapshot นี้ย้อนกลับไปทับ brief ที่อีกแท็บเพิ่งแก้ภายหลัง
     skipNextProjectAutosaveRef.current = true;
