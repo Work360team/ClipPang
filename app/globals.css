@@ -6781,3 +6781,59 @@ a.notification-link:hover { background: #fafbf8; }
     top: calc(var(--app-safe-t) + 12px);
   }
 }
+
+/* ---------- เพลงประกอบ (ขั้นที่ 3) ---------- */
+.bgm-block {
+  margin-top: 14px;
+  padding: 15px 16px 16px;
+  border: 1px solid #e2e4dd;
+  border-radius: 13px;
+  background: #fafbf8;
+}
+
+.bgm-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bgm-head b { display: block; font-size: 14px; font-weight: 620; }
+.bgm-head small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-faint); max-width: 46ch; }
+.bgm-head .button { flex: 0 0 auto; }
+
+.bgm-file {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.bgm-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(255, 210, 63, 0.22);
+  color: var(--yellow-dark);
+}
+
+.bgm-name { min-width: 0; }
+.bgm-name b { display: block; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bgm-name small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-faint); }
+.bgm-file audio { height: 32px; max-width: 220px; }
+
+.bgm-empty { margin: 10px 0 0; font-size: 12px; color: var(--ink-faint); }
+
+@media (max-width: 720px) {
+  .bgm-head { flex-direction: column; }
+  .bgm-head .button { width: 100%; }
+  .bgm-file { grid-template-columns: 30px minmax(0, 1fr) auto; }
+  .bgm-file audio { grid-column: 1 / -1; max-width: none; width: 100%; }
+}

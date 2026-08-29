@@ -17,6 +17,8 @@ import {
   saveGeminiApiKey,
   safeFilename,
   safeProjectPath,
+  MAX_AUDIO_BYTES,
+  validateUploadedAudio,
   validateUploadedFile,
 } from "./security.mjs";
 import {
@@ -28,6 +30,7 @@ import { installWhisper } from "./whisper-setup.mjs";
 import { getJaittsStatus, installJaitts } from "./jaitts-setup.mjs";
 import { installTunnel, startTunnel, stopTunnel, tunnelStatus } from "./tunnel.mjs";
 import { generateCaptions } from "../pipeline/caption.mjs";
+import { durationMs as audioDurationMs } from "../pipeline/lib.mjs";
 import { buildNotifications, countUnread } from "./notifications.mjs";
 import { keySourceFor, quotaGate, userKeyEnvironment } from "./user-keys.mjs";
 import { hashPassword, markOwnerReady, ownerAccountReady, verifyPassword } from "./auth.mjs";
@@ -277,17 +280,20 @@ function readStoreSettings(store) {
  */
 const PER_USER_SETTINGS = new Set(["pinnedProjects", "notificationsSeenAt"]);
 
-async function streamUpload(request, destination) {
-  if (!request.body) throw Object.assign(new Error("ไม่พบข้อมูลไฟล์วิดีโอ"), { status: 400, code: "EMPTY_UPLOAD" });
+async function streamUpload(request, destination, { maxBytes = MAX_VIDEO_BYTES, label = "วิดีโอ" } = {}) {
+  if (!request.body) throw Object.assign(new Error(`ไม่พบข้อมูลไฟล์${label}`), { status: 400, code: "EMPTY_UPLOAD" });
+  const limitMb = Math.round(maxBytes / 1024 / 1024);
+  const tooLarge = () => Object.assign(
+    new Error(`ไฟล์ใหญ่เกิน ${limitMb} MB`),
+    { status: 413, code: "FILE_TOO_LARGE" },
+  );
   const declared = Number(request.headers.get("content-length") || 0);
-  if (declared > MAX_VIDEO_BYTES) {
-    throw Object.assign(new Error("ไฟล์ใหญ่เกิน 500 MB กรุณาบีบอัดหรือตัดคลิปก่อน"), { status: 413, code: "FILE_TOO_LARGE" });
-  }
+  if (declared > maxBytes) throw tooLarge();
   let size = 0;
   const limiter = new Transform({
     transform(chunk, _encoding, callback) {
       size += chunk.length;
-      if (size > MAX_VIDEO_BYTES) callback(Object.assign(new Error("ไฟล์ใหญ่เกิน 500 MB"), { status: 413, code: "FILE_TOO_LARGE" }));
+      if (size > maxBytes) callback(tooLarge());
       else callback(null, chunk);
     },
   });
@@ -1105,6 +1111,66 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
           cancel() { stopped = true; clearInterval(heartbeat); unsubscribe(); },
         });
         return new Response(body, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" } });
+      }
+
+      // ---- เพลงประกอบของโปรเจกต์ ----
+      // เก็บไว้ในโฟลเดอร์ของโปรเจกต์เอง ไม่ปนกับคลิปใน input/ เพราะเป็นของเฉพาะงานนั้น
+      // และถูกลบไปพร้อมโปรเจกต์เมื่อผู้ใช้ลบทิ้ง
+      const bgmMatch = /^\/api\/projects\/([^/]+)\/bgm$/.exec(pathname);
+      if (bgmMatch && method === "POST") {
+        const project = store.getProject(bgmMatch[1]);
+        if (!project) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
+        // ชื่อไฟล์บนดิสก์เราตั้งเองอยู่แล้ว ชื่อเดิมเก็บไว้โชว์เฉย ๆ จึงไม่ต้องผ่าน
+        // safeFilename ซึ่งตัดอักษรไทยทิ้งจนเหลือแต่นามสกุล
+        const rawName = String(url.searchParams.get("name") || "bgm.mp3").replace(/\s+/g, " ").trim().slice(0, 120);
+        const original = rawName || "bgm.mp3";
+        const ext = path.extname(safeFilename(original)).toLowerCase() || ".mp3";
+        const bgmDir = safeProjectPath(project.id, "bgm");
+        await fsp.mkdir(bgmDir, { recursive: true });
+        const filename = safeFilename(`bgm-${Date.now().toString(36)}${ext}`);
+        const destination = resolveUnderRoot(bgmDir, filename);
+        const temporary = resolveUnderRoot(bgmDir, `.${filename}.${randomUUID()}.upload`);
+        try {
+          const size = await streamUpload(request, temporary, { maxBytes: MAX_AUDIO_BYTES, label: "เพลง" });
+          await validateUploadedAudio(temporary);
+          let audioMs = null;
+          try {
+            audioMs = await audioDurationMs(temporary, { signal: request.signal, timeoutMs: 20_000 });
+          } catch { /* อ่านความยาวไม่ได้ก็ยังใช้เพลงได้ แค่ไม่รู้ว่ายาวเท่าไหร่ */ }
+          await fsp.rename(temporary, destination);
+          // เหลือเพลงได้ไฟล์เดียวต่อโปรเจกต์ อัปโหลดใหม่ = แทนที่ของเดิม
+          for (const entry of await fsp.readdir(bgmDir)) {
+            if (entry !== filename && !entry.startsWith(".")) {
+              await fsp.rm(path.join(bgmDir, entry), { force: true });
+            }
+          }
+          return json({
+            ok: true,
+            bgm: {
+              name: filename,
+              originalName: original,
+              size,
+              durationMs: audioMs,
+              url: `/api/projects/${encodeURIComponent(project.id)}/bgm/${encodeURIComponent(filename)}`,
+            },
+          }, { status: 201 });
+        } finally {
+          await fsp.rm(temporary, { force: true }).catch(() => {});
+        }
+      }
+      if (bgmMatch && method === "DELETE") {
+        const project = store.getProject(bgmMatch[1]);
+        if (!project) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
+        await fsp.rm(safeProjectPath(project.id, "bgm"), { recursive: true, force: true });
+        return json({ ok: true, removed: true });
+      }
+
+      const bgmFileMatch = /^\/api\/projects\/([^/]+)\/bgm\/([^/]+)$/.exec(pathname);
+      if (bgmFileMatch && method === "GET") {
+        const project = store.getProject(bgmFileMatch[1]);
+        if (!project) return apiError(404, "PROJECT_NOT_FOUND", "ไม่พบโปรเจกต์นี้");
+        const file = resolveUnderRoot(safeProjectPath(project.id, "bgm"), safeFilename(bgmFileMatch[2]));
+        return fileResponse(file, request);
       }
 
       const fileMatch = /^\/api\/projects\/([^/]+)\/files\/([^/]+)$/.exec(pathname);

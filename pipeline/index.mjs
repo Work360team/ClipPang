@@ -950,6 +950,7 @@ export async function runPipeline(options = {}) {
         reused: Boolean(reuse),
         sourceRenderId: reuse?.renderId || null,
       },
+      bgm: options.bgm ? { file: options.bgm, gainDb: Number(options.bgmGainDb ?? -18) } : null,
       durationMs: timeline.durationMs,
       // สถิติความเร็วพูดของงานนี้ ใช้ประเมินความยาวสคริปต์ครั้งต่อไปให้แม่นขึ้น
       // เสียงที่ถูกเร่งให้ลงไทม์ไลน์แล้วสั้นกว่าจังหวะพูดจริง เอาไปวัดอัตราจะได้ค่าที่

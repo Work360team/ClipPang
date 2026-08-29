@@ -508,3 +508,65 @@ export function saveGeminiApiKey(apiKey, options = {}) {
 }
 
 export const writeGeminiApiKey = saveGeminiApiKey;
+
+/* ---------- เพลงประกอบ (BGM) ---------- */
+
+export const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
+
+/**
+ * ตรวจจากเนื้อไฟล์ว่าเป็นเสียงจริงไหม ไม่ดูนามสกุล
+ * เพลงประกอบไม่ต้องใหญ่เท่าวิดีโอ เพดาน 30 MB พอสำหรับ MP3 คุณภาพดีความยาวหลายนาที
+ */
+export function detectAudioMagic(header) {
+  const buffer = Buffer.isBuffer(header) ? header : Buffer.from(header ?? []);
+  if (buffer.length < 12) return null;
+  const ascii = (start, end) => buffer.subarray(start, end).toString("latin1");
+
+  if (ascii(0, 3) === "ID3") return { kind: "audio", format: "mp3" };
+  // MPEG frame sync — MP3 ที่ไม่มีแท็ก ID3 นำหน้า
+  if (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) return { kind: "audio", format: "mp3" };
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE") return { kind: "audio", format: "wav" };
+  if (ascii(0, 4) === "OggS") return { kind: "audio", format: "ogg" };
+  if (ascii(0, 4) === "fLaC") return { kind: "audio", format: "flac" };
+  if (ascii(4, 8) === "ftyp") {
+    const brand = ascii(8, 12);
+    if (/^(M4A|M4B|mp42|isom|dash)/.test(brand)) return { kind: "audio", format: "m4a" };
+  }
+  return null;
+}
+
+export function assertAudioUpload({ header, size, maxBytes = MAX_AUDIO_BYTES } = {}) {
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new SecurityError("ไม่ทราบขนาดไฟล์เพลง", { code: "INVALID_FILE_SIZE" });
+  }
+  if (size > maxBytes) {
+    throw new SecurityError("ไฟล์เพลงต้องมีขนาดไม่เกิน 30 MB", { code: "FILE_TOO_LARGE", statusCode: 413 });
+  }
+  if (size === 0) throw new SecurityError("ไฟล์เพลงว่างเปล่า", { code: "EMPTY_FILE" });
+
+  const detected = detectAudioMagic(header);
+  if (!detected) {
+    throw new SecurityError("ไฟล์นี้ไม่ใช่ไฟล์เสียงที่รองรับ — ใช้ MP3, M4A, WAV, OGG หรือ FLAC", {
+      code: "UNSUPPORTED_AUDIO",
+      statusCode: 415,
+    });
+  }
+  return { ok: true, size, ...detected };
+}
+
+/** ตรวจไฟล์เสียงที่อัปโหลดมาแล้วบนดิสก์ */
+export async function validateUploadedAudio(filePath, { maxBytes = MAX_AUDIO_BYTES } = {}) {
+  if (typeof filePath !== "string" || filePath.includes("\0")) {
+    throw new SecurityError("พาธไฟล์เพลงไม่ถูกต้อง", { code: "INVALID_PATH" });
+  }
+  const handle = await fs.promises.open(filePath, "r");
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new SecurityError("รายการที่อัปโหลดไม่ใช่ไฟล์", { code: "NOT_A_FILE" });
+    const header = Buffer.alloc(Math.min(64, Math.max(0, stat.size)));
+    if (header.length > 0) await handle.read(header, 0, header.length, 0);
+    return { ...assertAudioUpload({ header, size: stat.size, maxBytes }), filename: path.basename(filePath) };
+  } finally {
+    await handle.close();
+  }
+}

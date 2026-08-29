@@ -21,6 +21,7 @@ import {
   Mic2,
   PackageCheck,
   Pause,
+  Music2,
   Play,
   Plus,
   RotateCcw,
@@ -63,6 +64,7 @@ import {
   watchRender,
   type LocalEngineState,
   type LocalAsset,
+  type LocalBgm,
   type LocalColorSet,
   type LocalOutput,
   type LocalProject,
@@ -416,6 +418,12 @@ export function ProjectWizard() {
   const [speed, setSpeed] = useState(1);
   const [tone, setTone] = useState("เป็นกันเอง");
   const [pace, setPace] = useState<string>(DEFAULT_PACE);
+  // เพลงประกอบ — ผู้ใช้อัปโหลดเอง เก็บไว้ในโฟลเดอร์ของโปรเจกต์
+  const [bgm, setBgm] = useState<LocalBgm | null>(null);
+  const [bgmGainDb, setBgmGainDb] = useState(-18);
+  const [bgmBusy, setBgmBusy] = useState(false);
+  const [bgmError, setBgmError] = useState("");
+  const bgmInputRef = useRef<HTMLInputElement | null>(null);
   const [scriptVariants, setScriptVariants] = useState<LocalScript[]>(initialScripts);
   const [selectedScript, setSelectedScript] = useState("");
   const [scriptTexts, setScriptTexts] = useState<Record<string, string[]>>({});
@@ -1028,6 +1036,16 @@ export function ProjectWizard() {
       // เก็บแค่ id ไว้ก่อน รายละเอียดของเสียงมาจาก VoiceCloneStudio ตอนโหลดรายการ
       if (typeof config.voiceId === "string") setCloneVoice({ id: config.voiceId } as LocalVoiceClone);
     } else if (typeof config.voiceId === "string") setSelectedVoice(config.voiceId);
+    if (typeof config.bgmName === "string" && config.bgmName) {
+      setBgm({
+        name: config.bgmName,
+        originalName: String(config.bgmOriginalName || config.bgmName),
+        size: 0,
+        durationMs: null,
+        url: `/api/projects/${encodeURIComponent(project.id)}/bgm/${encodeURIComponent(config.bgmName)}`,
+      });
+    } else setBgm(null);
+    if (typeof config.bgmGainDb === "number") setBgmGainDb(config.bgmGainDb);
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
@@ -1308,6 +1326,7 @@ export function ProjectWizard() {
         provider: voiceEngine === "jaitts" ? "jaitts" : (selectedVoiceData.provider || "gemini"),
         speed, tone, pace, scriptId: selectedScript, scriptVoiceSignature,
         styleId: selectedStyle, position: captionPosition, captionColor,
+        bgmName: bgm?.name ?? null, bgmOriginalName: bgm?.originalName ?? null, bgmGainDb,
       },
       ...extra,
     };
@@ -2739,6 +2758,101 @@ export function ProjectWizard() {
                     </div>
                     <div className="control-note">{activePace.note}</div>
                   </div>
+                </div>
+
+                {/* เพลงประกอบ — ตัวเรนเดอร์รองรับการมิกซ์อยู่แล้ว (ลดเสียงเพลงลงอัตโนมัติ
+                    ตอนมีคนพูด) ที่ขาดคือทางให้ผู้ใช้ใส่ไฟล์ของตัวเอง */}
+                <div className="bgm-block">
+                  <div className="bgm-head">
+                    <div>
+                      <b>เพลงประกอบ</b>
+                      <small>ไม่ใส่ก็ได้ · ระบบจะหรี่เพลงลงเองตอนมีเสียงพูด แล้วดังขึ้นตอนเงียบ</small>
+                    </div>
+                    <input
+                      ref={bgmInputRef}
+                      type="file"
+                      accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/flac,.mp3,.m4a,.wav,.ogg,.flac"
+                      hidden
+                      onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (!file) return;
+                        setBgmError("");
+                        setBgmBusy(true);
+                        try {
+                          const id = projectId ?? await ensureProject();
+                          const result = await localApi.uploadBgm(id, file);
+                          setBgm(result.bgm);
+                        } catch (error) {
+                          setBgmError(error instanceof Error ? error.message : "อัปโหลดเพลงไม่สำเร็จ");
+                        } finally {
+                          setBgmBusy(false);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="button button-outline button-small"
+                      disabled={bgmBusy || scriptBusy}
+                      onClick={() => bgmInputRef.current?.click()}
+                    >
+                      <UploadCloud size={15} /> {bgmBusy ? "กำลังอัปโหลด…" : bgm ? "เปลี่ยนเพลง" : "อัปโหลดเพลง"}
+                    </button>
+                  </div>
+
+                  {bgm ? (
+                    <>
+                      <div className="bgm-file">
+                        <span className="bgm-icon" aria-hidden="true"><Music2 size={16} /></span>
+                        <div className="bgm-name">
+                          <b>{bgm.originalName}</b>
+                          <small>{bgm.durationMs ? `${Math.round(bgm.durationMs / 1000)} วินาที · ` : ""}เพลงสั้นกว่าคลิปจะวนให้เอง</small>
+                        </div>
+                        <audio src={bgm.url} controls preload="none">
+                          {/* เพลงล้วน ไม่มีคำพูด จึงไม่มีคำบรรยายให้ใส่ */}
+                          <track kind="captions" />
+                        </audio>
+                        <button
+                          type="button"
+                          className="key-remove"
+                          aria-label="เอาเพลงออก"
+                          disabled={bgmBusy}
+                          onClick={async () => {
+                            setBgmBusy(true);
+                            setBgmError("");
+                            try {
+                              if (projectId) await localApi.removeBgm(projectId);
+                              setBgm(null);
+                            } catch (error) {
+                              setBgmError(error instanceof Error ? error.message : "เอาเพลงออกไม่สำเร็จ");
+                            } finally {
+                              setBgmBusy(false);
+                            }
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                      <div className="control-block">
+                        <div className="control-label"><span>ความดังเพลง</span><b>{bgmGainDb} dB</b></div>
+                        <input
+                          className="range"
+                          type="range"
+                          min="-30"
+                          max="-6"
+                          step="1"
+                          value={bgmGainDb}
+                          onChange={(event) => setBgmGainDb(Number(event.target.value))}
+                          aria-label="ความดังเพลงประกอบ"
+                        />
+                        <div className="range-labels"><span>คลอเบา ๆ</span><span>กำลังดี</span><span>เด่นชัด</span></div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="bgm-empty">รองรับ MP3, M4A, WAV, OGG, FLAC · ไม่เกิน 30 MB · ใช้เพลงที่คุณมีสิทธิ์เผยแพร่เท่านั้น</p>
+                  )}
+
+                  {bgmError && <p className="key-hint idea-error" role="alert">{bgmError}</p>}
                 </div>
                 {scriptBusy && (
                   <div className="analysis-box script-generation-status" role="status" aria-live="polite">

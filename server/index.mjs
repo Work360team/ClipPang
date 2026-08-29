@@ -289,6 +289,9 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       styleId: config.styleId ?? render.styleId ?? render.style_id ?? "pop-yellow",
       position: config.position ?? config.captionPosition ?? "bottom",
       captionColor: config.captionColor ?? null,
+      // เพลงประกอบเก็บอยู่ในโฟลเดอร์ของโปรเจกต์ pipeline รับเป็นพาธแบบ relative
+      bgm: config.bgmName ? path.join("bgm", config.bgmName) : null,
+      bgmGainDb: Number(config.bgmGainDb ?? -18),
       kind: render.kind,
       ...(prepared.selectedTotalMs != null ? {
         targetSec: prepared.selectedTotalMs / 1000,

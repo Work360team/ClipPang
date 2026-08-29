@@ -6,7 +6,9 @@ import test from "node:test";
 
 import { HOST, applyLegacyEnvAliases, createPaths, migrateLegacyDatabase } from "../server/config.mjs";
 import {
+  MAX_AUDIO_BYTES,
   MAX_VIDEO_BYTES,
+  assertAudioUpload,
   assertVideoUpload,
   getGeminiKeyStatus,
   resolveUnderRoot,
@@ -186,4 +188,26 @@ test("session cookies issued under the old brand name are still accepted", () =>
     "ถ้ามีทั้งคู่ต้องใช้ของใหม่",
   );
   assert.equal(readSessionCookie(""), "");
+});
+
+test("เพลงประกอบรับเฉพาะไฟล์เสียงจริง ตรวจจากเนื้อไฟล์ไม่ใช่นามสกุล", () => {
+  const audio = (bytes) => Buffer.concat([Buffer.from(bytes), Buffer.alloc(64)]);
+  const ok = (header, label) => assert.equal(assertAudioUpload({ header, size: header.length }).kind, "audio", label);
+
+  ok(audio("ID3"), "mp3 ที่มีแท็ก ID3");
+  ok(audio([0xff, 0xfb]), "mp3 ที่ไม่มีแท็ก");
+  ok(Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVE"), Buffer.alloc(64)]), "wav");
+  ok(Buffer.concat([Buffer.alloc(4), Buffer.from("ftypM4A "), Buffer.alloc(64)]), "m4a");
+  ok(audio("OggS"), "ogg");
+
+  // ไฟล์วิดีโอกับไฟล์ข้อความต้องไม่ผ่าน ไม่งั้นผู้ใช้จะอัปอะไรก็ได้เข้ามาในโฟลเดอร์โปรเจกต์
+  const video = Buffer.concat([Buffer.alloc(4), Buffer.from("ftypqt  "), Buffer.alloc(64)]);
+  assert.throws(() => assertAudioUpload({ header: video, size: video.length }), /ไม่ใช่ไฟล์เสียง/);
+  const text = Buffer.from("นี่คือข้อความ ไม่ใช่เพลงแน่นอน");
+  assert.throws(() => assertAudioUpload({ header: text, size: text.length }), /ไม่ใช่ไฟล์เสียง/);
+
+  // เพดานของเพลงต้องเล็กกว่าวิดีโอ ไม่มีเหตุผลให้เพลงประกอบใหญ่ถึง 500 MB
+  assert.ok(MAX_AUDIO_BYTES < MAX_VIDEO_BYTES);
+  const big = audio("ID3");
+  assert.throws(() => assertAudioUpload({ header: big, size: MAX_AUDIO_BYTES + 1 }), /ไม่เกิน 30 MB/);
 });

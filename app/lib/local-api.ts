@@ -189,6 +189,13 @@ export const localApi = {
     apiFetch<{ ok: true; user?: LocalUser; moved?: number; to?: string }>(`/api/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteUser: (id: string) =>
     apiFetch<{ ok: true; removed: string; orphanedProjects: number }>(`/api/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  uploadBgm: (projectId: string, file: File) =>
+    apiFetch<{ ok: true; bgm: LocalBgm }>(
+      `/api/projects/${encodeURIComponent(projectId)}/bgm?name=${encodeURIComponent(file.name)}`,
+      { method: "POST", body: file, headers: { "content-type": file.type || "application/octet-stream" } },
+    ),
+  removeBgm: (projectId: string) =>
+    apiFetch<{ ok: true; removed: boolean }>(`/api/projects/${encodeURIComponent(projectId)}/bgm`, { method: "DELETE" }),
   quota: () => apiFetch<LocalQuota>("/api/tts/quota"),
   account: () => apiFetch<LocalAccount>("/api/account"),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -264,6 +271,13 @@ export interface VoiceCloneLibrary {
 
 export interface LocalVoice { id: string; name?: string; label?: string; gender?: string; tone?: string; provider?: string; color?: string; initials?: string; msPerGrapheme?: number }
 export interface LocalCaptionStyle { id: string; name: string; note?: string; speed?: string; premium?: boolean }
+export interface LocalBgm {
+  name: string;
+  originalName: string;
+  size: number;
+  durationMs: number | null;
+  url: string;
+}
 export interface LocalColorSet { id: string; name: string; primary: string; secondary: string; hint?: string }
 export interface LocalUser {
   id: string;
