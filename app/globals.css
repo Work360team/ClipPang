@@ -4368,7 +4368,7 @@ img.mini-project-thumb::after { content: none; }
 .clone-take {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   border: 1px solid var(--line);
@@ -4440,9 +4440,9 @@ img.mini-project-thumb::after { content: none; }
 .clone-remove {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-right: 6px;
+  width: 40px;
+  height: 40px;
+  margin-right: 4px;
   border: 0;
   border-radius: 9px;
   background: none;
@@ -4471,6 +4471,178 @@ img.mini-project-thumb::after { content: none; }
   /* สองปุ่มเรียงกันบนจอแคบทำให้ข้อความอธิบายเหลือคำเดียวต่อบรรทัด */
   .engine-switch { grid-template-columns: 1fr; }
 }
+
+/* ---------- เสียงที่อัดเอง: ปุ่มฟัง แถบเวลา และลิงก์ไปหน้าเฉพาะ ---------- */
+
+/* หัวรายการบอกจำนวนไว้ด้วย คนที่อัดหลายโทนจะได้รู้ว่ามีอยู่กี่ตัวโดยไม่ต้องนับ */
+.clone-library-head h4 em {
+  margin-left: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f0f1ec;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* ฟังก่อนเลือกได้ — ขนาด 40px ขึ้นไปเพื่อให้กดโดนบนมือถือ */
+.clone-play {
+  align-self: center;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  margin-left: 8px;
+  border: 1px solid #dcdfd7;
+  border-radius: 11px;
+  background: #f6f7f3;
+  color: #4a524a;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+
+.clone-play:hover { border-color: var(--yellow-dark); background: #fff6dc; color: #6b5200; }
+.clone-take.active .clone-play { border-color: var(--yellow-dark); background: var(--yellow); color: #4d3f0d; }
+
+.clone-tone i {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f2ed;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.clone-take-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ป้ายบอกว่าเสียงไหนกำลังถูกใช้ ของเดิมมีแค่ขอบสีจาง ๆ ซึ่งบนมือถือแทบไม่เห็น */
+.clone-chosen {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: #4d3f0d;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* แถบเวลาอัด บอกว่าพอหรือยังโดยไม่ต้องอ่านตัวเลข ขีดคือจุดที่ครบขั้นต่ำ */
+.clone-meter {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eae3;
+}
+
+.clone-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #d8b23a;
+  transition: width .3s linear;
+}
+
+.clone-meter span.ready { background: var(--green); }
+
+.clone-meter em {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(24, 27, 24, 0.28);
+}
+
+/* ทางออกไปหน้าจัดการเสียง ไม่ต้องทำงานจัดการทั้งหมดกลางวิซาร์ด */
+.clone-manage-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.clone-manage-link span { flex: 1; }
+.clone-manage-link:hover { border-color: var(--yellow-dark); background: #fffaea; color: #6b5200; }
+
+/* สวิตช์เครื่องยนต์เสียง — ไอคอนนำ ข้อความรอง และติ๊กถูกตอนเลือก
+   ของเดิมสองกล่องต่างกันแค่สีพื้นอ่อน ๆ ซึ่งบนมือถือกลางแดดแทบแยกไม่ออก */
+.engine-switch button {
+  flex-direction: row;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+}
+
+.engine-mark {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #f0f1ec;
+  color: var(--ink-soft);
+}
+
+.engine-switch button.active .engine-mark { background: var(--yellow); color: #4d3f0d; }
+.engine-copy { min-width: 0; display: grid; gap: 2px; }
+.engine-check { flex: none; color: var(--yellow-dark); }
+
+@media (max-width: 720px) {
+  .clone-play { width: 44px; height: 44px; }
+  .clone-remove { width: 44px; height: 44px; }
+  /* คอลัมน์ตัวเลขกินความกว้างไป 37px จากจอ 375px ซึ่งเป็นสัดส่วนที่เสียเปล่ามาก
+     ย้ายเลขไปเป็นชิปหน้าหัวข้อแทน ช่องประโยคที่ต้องอ่านออกเสียงจะได้เต็มความกว้าง */
+  .clone-recorder { padding: 13px; counter-reset: clone-step; }
+  .clone-step { grid-template-columns: minmax(0, 1fr); gap: 9px; }
+  .clone-step-no { display: none; }
+  .clone-step > div > b {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .clone-step > div > b::before {
+    counter-increment: clone-step;
+    content: counter(clone-step);
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #f0f1ec;
+    color: var(--ink-soft);
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+  .clone-script { padding: 10px; }
+  .clone-manage-link { min-height: 50px; }
+  /* ปุ่มอัดเป็นงานหลักของฟอร์ม บนมือถือจึงกินเต็มความกว้าง */
+  .clone-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+  .clone-record-button { justify-content: center; width: 100%; min-height: 48px; }
+  .clone-actions small { text-align: center; }
+  /* ชิปเพศกับโทนต้องกดง่าย ของเดิมสูงเท่าตัวอักษรจนพลาดบ่อย */
+  .clone-step .tone-options button { min-height: 40px; }
+  .clone-gender-fix { align-items: stretch; flex-direction: column; }
+  .clone-gender-fix > div button { flex: 1; min-height: 38px; }
+}
+
 
 .voice-controls {
   display: grid;

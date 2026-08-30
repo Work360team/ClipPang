@@ -18,6 +18,7 @@ import {
   Gauge,
   GripVertical,
   LoaderCircle,
+  Mic,
   Mic2,
   PackageCheck,
   Pause,
@@ -2682,7 +2683,9 @@ export function ProjectWizard() {
                     disabled={scriptBusy || voiceCloneActive}
                     onClick={() => setVoiceEngine("gemini")}
                   >
-                    <b>เสียง AI สำเร็จรูป</b><small>Gemini · เลือกได้ {voiceLibrary.length} เสียง</small>
+                    <span className="engine-mark"><Sparkles size={15} /></span>
+                    <span className="engine-copy"><b>เสียง AI สำเร็จรูป</b><small>เลือกได้ {voiceLibrary.length} เสียง · ใช้โควตา</small></span>
+                    {voiceEngine === "gemini" && <Check size={16} strokeWidth={3} className="engine-check" />}
                   </button>
                   <button
                     type="button"
@@ -2691,12 +2694,15 @@ export function ProjectWizard() {
                     disabled={scriptBusy || voiceCloneActive}
                     onClick={() => setVoiceEngine("jaitts")}
                   >
-                    <b>เสียงของฉัน</b><small>โคลนจากเสียงที่อัดเอง · ไม่ใช้โควตา</small>
+                    <span className="engine-mark"><Mic size={15} /></span>
+                    <span className="engine-copy"><b>เสียงของฉัน</b><small>อัดเสียงตัวเอง · ไม่ใช้โควตา</small></span>
+                    {voiceEngine === "jaitts" && <Check size={16} strokeWidth={3} className="engine-check" />}
                   </button>
                 </div>
 
                 {voiceEngine === "jaitts" ? (
                   <VoiceCloneStudio
+                    variant="wizard"
                     selectedId={cloneVoice?.id ?? null}
                     onSelect={setCloneVoice}
                     locked={scriptBusy}

@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Film,
   LayoutDashboard,
+  Mic,
   Menu,
   MoreVertical,
   Pin,
@@ -31,13 +32,19 @@ const navItems = [
   { href: "/projects", label: "โปรเจกต์", icon: Film },
   { href: "/p/new", label: "สร้างคลิป", icon: Sparkles },
   { href: "/styles", label: "สไตล์ซับ", icon: Captions },
+  { href: "/voices", label: "เสียงของฉัน", icon: Mic },
   { href: "/settings", label: "ตั้งค่า", icon: Settings },
 ];
+
+/** แถบล่างบนมือถือรับได้ห้าช่องก่อนที่ป้ายจะเริ่มตัดคำ เสียงของฉันจึงอยู่ในเมนูเต็ม
+ *  ซึ่งเปิดจากปุ่มขีดสามขีด และมีลิงก์ตรงจากขั้นเลือกเสียงอยู่แล้ว */
+const mobileNavItems = navItems.filter((item) => item.href !== "/voices");
 
 const pageTitles: Record<string, string> = {
   "/": "ภาพรวม",
   "/projects": "โปรเจกต์ของฉัน",
   "/styles": "คลังสไตล์ซับ",
+  "/voices": "เสียงของฉัน",
   "/settings": "ตั้งค่า",
 };
 
@@ -405,7 +412,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="mobile-nav" aria-label="เมนูมือถือ">
-        {navItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const Icon = item.icon;
           const active =
             item.href === "/"

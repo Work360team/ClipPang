@@ -911,6 +911,12 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
 
       const clonePrefix = "/api/voice-clones/";
       const voiceCloneMatch = pathname.startsWith(clonePrefix) ? pathname.slice(clonePrefix.length) : null;
+      // ฟังเสียงต้นแบบที่อัดไว้ ไม่มีทางรู้เลยว่าไฟล์ไหนคือเสียงไหนถ้าเปิดฟังไม่ได้
+      if (voiceCloneMatch && voiceCloneMatch.endsWith("/sample") && method === "GET") {
+        const clone = readClone(decodeURIComponent(voiceCloneMatch.slice(0, -"/sample".length)));
+        if (!clone) return apiError(404, "VOICE_CLONE_NOT_FOUND", "ไม่พบเสียงต้นแบบนี้");
+        return fileResponse(clone.wav, request);
+      }
       if (voiceCloneMatch && !voiceCloneMatch.includes("/") && method === "PATCH") {
         const body = await readJson(request);
         if (!VOICE_GENDERS.includes(String(body.gender ?? "").trim())) {

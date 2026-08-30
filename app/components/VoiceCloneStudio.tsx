@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Loader2, Mic, Square, Trash2, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, Loader2, Mic, Pause, Play, Plus, Square, Trash2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { localApi, type LocalVoiceClone, type VoiceCloneLibrary, type VoiceGender } from "../lib/local-api";
+import { localApi, voiceCloneSampleUrl, type LocalVoiceClone, type VoiceCloneLibrary, type VoiceGender } from "../lib/local-api";
+import { HardLink as Link } from "./HardLink";
 import { toneSample, VOICE_GENDERS } from "../../pipeline/core.mjs";
 
 /** ต่ำกว่านี้โมเดลจับโทนเสียงไม่ทัน ตรงกับ MIN_REF_MS/MAX_REF_MS ฝั่งเซิร์ฟเวอร์ */
@@ -20,11 +21,14 @@ export function VoiceCloneStudio({
   onSelect,
   locked = false,
   onActivityChange,
+  variant = "page",
 }: {
   selectedId: string | null;
   onSelect: (clone: LocalVoiceClone | null) => void;
   locked?: boolean;
   onActivityChange?: (active: boolean) => void;
+  /** ในวิซาร์ดตัดส่วนจัดการออกให้เหลือแค่เลือกใช้ ส่วนหน้าเฉพาะแสดงครบ */
+  variant?: "wizard" | "page";
 }) {
   const [library, setLibrary] = useState<VoiceCloneLibrary | null>(null);
   const [speaker, setSpeaker] = useState("");
@@ -41,7 +45,9 @@ export function VoiceCloneStudio({
   const [seconds, setSeconds] = useState(0);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [playing, setPlaying] = useState<string | null>(null);
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -112,6 +118,24 @@ export function VoiceCloneStudio({
       }
     };
   }, []);
+
+  // เสียงตัวอย่างต้องหยุดเมื่อออกจากหน้า ไม่งั้นเสียงเล่นค้างทับขั้นตอนถัดไป
+  useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
+
+  const togglePlay = (clone: LocalVoiceClone) => {
+    audioRef.current?.pause();
+    if (playing === clone.id) {
+      audioRef.current = null;
+      setPlaying(null);
+      return;
+    }
+    const audio = new Audio(voiceCloneSampleUrl(clone.id));
+    audio.onended = () => setPlaying(null);
+    audio.onerror = () => { setPlaying(null); setError("เปิดไฟล์เสียงต้นแบบไม่ได้"); };
+    audioRef.current = audio;
+    setPlaying(clone.id);
+    void audio.play().catch(() => { setPlaying(null); setError("เล่นเสียงไม่ได้ ลองอีกครั้ง"); });
+  };
 
   const stopTracks = () => {
     recorderRef.current?.stream.getTracks().forEach((track) => track.stop());
@@ -257,19 +281,20 @@ export function VoiceCloneStudio({
   const hasVoices = library.speakers.length > 0;
   const showRecorder = adding || !hasVoices;
 
+
   return (
-    <div className="clone-studio">
+    <div className={`clone-studio clone-studio-${variant}`}>
       {hasVoices && (
         <div className="clone-library">
           <div className="clone-library-head">
-            <h4>เสียงที่อัดไว้แล้ว</h4>
+            <h4>เสียงที่อัดไว้แล้ว <em>{library.clones.length}</em></h4>
             <button
               type="button"
               className="button button-quiet"
               disabled={locked || Boolean(busy) || recording}
               onClick={() => setAdding((current) => !current)}
             >
-              {adding ? "ปิดการอัด" : "+ อัดเสียงใหม่"}
+              {adding ? <><X size={15} /> ปิดการอัด</> : <><Plus size={15} /> อัดเสียงใหม่</>}
             </button>
           </div>
           {library.speakers.map((person) => (
@@ -278,17 +303,38 @@ export function VoiceCloneStudio({
               <div className="clone-takes">
                 {person.tones.map((clone) => (
                   <div className={`clone-take${selectedId === clone.id ? " active" : ""}`} key={clone.id}>
+                    {/* ต้องฟังได้ก่อนเลือก ชื่อโทนอย่างเดียวบอกไม่ได้ว่าเสียงที่อัดไว้เป็นยังไง */}
+                    <button
+                      type="button"
+                      className="clone-play"
+                      aria-label={playing === clone.id ? "หยุดฟัง" : "ฟังเสียงที่อัดไว้"}
+                      onClick={() => togglePlay(clone)}
+                    >
+                      {playing === clone.id ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                    </button>
                     <button type="button" className="clone-pick" disabled={locked || Boolean(busy)} onClick={() => onSelect(clone)}>
                       <span className="clone-tone">
-                        {selectedId === clone.id && <Check size={13} strokeWidth={3} />}
                         {clone.tone}
                         <em className={clone.gender ? "" : "missing"}>{clone.gender ?? "ยังไม่ระบุเพศ"}</em>
+                        {clone.durationMs ? <i>{(clone.durationMs / 1000).toFixed(1)} วิ</i> : null}
                       </span>
-                      <small>{clone.durationMs ? `${(clone.durationMs / 1000).toFixed(1)} วิ · ` : ""}{clone.text}</small>
+                      <small>{clone.text}</small>
                     </button>
+                    <span className="clone-take-actions">
+                      {selectedId === clone.id && <span className="clone-chosen"><Check size={13} strokeWidth={3} /> ใช้อยู่</span>}
+                      <button
+                        type="button"
+                        className="clone-remove"
+                        aria-label={"ลบเสียง " + clone.label}
+                        disabled={locked || Boolean(busy)}
+                        onClick={() => void remove(clone)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </span>
                     {!clone.gender && (
                       <div className="clone-gender-fix">
-                        <small>เสียงนี้อัดไว้ก่อนมีตัวเลือกเพศ กรุณาระบุก่อนนำไปสร้างสคริปต์</small>
+                        <small>เสียงนี้อัดไว้ก่อนมีตัวเลือกเพศ ระบุก่อนนำไปสร้างสคริปต์</small>
                         <div>
                           {(VOICE_GENDERS as VoiceGender[]).map((item) => (
                             <button
@@ -303,21 +349,19 @@ export function VoiceCloneStudio({
                         </div>
                       </div>
                     )}
-                    <button
-                      type="button"
-                      className="clone-remove"
-                      aria-label={`ลบเสียง ${clone.label}`}
-                      disabled={locked || Boolean(busy)}
-                      onClick={() => void remove(clone)}
-                    >
-                      <Trash2 size={15} />
-                    </button>
                   </div>
                 ))}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* กลางวิซาร์ดไม่ควรยัดงานจัดการเสียงทั้งชุดไว้ ลิงก์ไปหน้าเฉพาะแทน */}
+      {variant === "wizard" && hasVoices && !showRecorder && (
+        <Link href="/voices" className="clone-manage-link">
+          <Mic size={15} /> <span>จัดการเสียงของฉันทั้งหมด</span> <ChevronRight size={15} />
+        </Link>
       )}
 
       {showRecorder && (
@@ -356,7 +400,7 @@ export function VoiceCloneStudio({
                         disabled={recording || locked || Boolean(busy)}
                         onClick={() => { setGender(item); setScriptEdited(false); }}
                       >
-                        {item}
+                        {gender === item && <Check size={13} strokeWidth={3} />}{item}
                       </button>
                     ))}
                   </div>
@@ -379,7 +423,7 @@ export function VoiceCloneStudio({
                     disabled={recording || locked || Boolean(busy)}
                     onClick={() => { setTone(item.id); setScriptEdited(false); }}
                   >
-                    {item.id}
+                    {tone === item.id && <Check size={13} strokeWidth={3} />}{item.id}
                   </button>
                 ))}
               </div>
@@ -406,15 +450,23 @@ export function VoiceCloneStudio({
                 </small>
               </div>
 
+              {/* ปุ่มอัดคือการกระทำหลัก บนมือถือจึงกินเต็มความกว้าง และมีแถบเวลา
+                  ให้เห็นว่าอัดพอหรือยังโดยไม่ต้องคอยอ่านตัวเลข */}
               <div className="clone-actions">
                 {recording ? (
-                  <button type="button" className="button button-danger" onClick={stopRecording}>
-                    <Square size={15} /> หยุดอัด ({seconds} วิ)
+                  <button type="button" className="button button-danger clone-record-button" onClick={stopRecording}>
+                    <Square size={15} fill="currentColor" /> หยุดอัด · {seconds} วิ
                   </button>
                 ) : (
-                  <button type="button" className="button button-primary" disabled={locked || Boolean(busy) || !canRecord} onClick={() => void startRecording()}>
-                    <Mic size={16} /> {busy ? busy : "เริ่มอัด"}
+                  <button type="button" className="button button-primary clone-record-button" disabled={locked || Boolean(busy) || !canRecord} onClick={() => void startRecording()}>
+                    {busy ? <><Loader2 size={16} className="spin" /> {busy}</> : <><Mic size={16} /> เริ่มอัด</>}
                   </button>
+                )}
+                {recording && (
+                  <div className="clone-meter" role="progressbar" aria-valuemin={0} aria-valuemax={MAX_SECONDS} aria-valuenow={seconds}>
+                    <span className={seconds >= MIN_SECONDS ? "ready" : ""} style={{ width: `${Math.min(100, (seconds / MAX_SECONDS) * 100)}%` }} />
+                    <em style={{ left: `${(MIN_SECONDS / MAX_SECONDS) * 100}%` }} />
+                  </div>
                 )}
                 <small>
                   {recording

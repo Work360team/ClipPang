@@ -95,6 +95,9 @@ async function uploadAssetFile(file: File, onProgress?: (progress: number) => vo
   });
 }
 
+/** URL ของไฟล์เสียงต้นแบบ ใช้กับ <audio> โดยตรง ไม่ผ่าน apiFetch ที่คืนเป็น JSON */
+export const voiceCloneSampleUrl = (id: string) => `/api/voice-clones/${encodeURIComponent(id)}/sample`;
+
 export const localApi = {
   setupStatus: () => apiFetch<SetupStatus>("/api/setup/status"),
   installFfmpeg: () => apiFetch<{ ok: true; status: string; progress: number }>("/api/setup/ffmpeg", { method: "POST", body: "{}" }),
