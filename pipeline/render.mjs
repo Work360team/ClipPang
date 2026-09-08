@@ -81,6 +81,8 @@ export async function burnAndMux(
   {
     bgm = null,
     bgmGainDb = -14,
+    // [{ path, atMs, gainDb }] เรียงตามเวลา คำนวณมาจาก pipeline/sfx.mjs
+    sfx = [],
     overlay = null,
     fontsDir = path.join(ROOT, "fonts"),
     signal,
@@ -116,24 +118,51 @@ export async function burnAndMux(
     );
   }
 
+  // ทางเสียงที่จะเอาไปผสม เรียงให้ตัวที่กำหนดความยาวอยู่หน้าสุดเสมอ เพราะ amix
+  // ใช้ duration=first — ถ้าเอาเสียงประกอบสั้น ๆ ขึ้นก่อน เสียงทั้งคลิปจะถูกตัดตามมัน
+  const mixInputs = [];
+
   if (bgm) {
     const idx = next;
     next += 1;
     args.push("-stream_loop", "-1", "-i", bgm);
-    // normalize=0 สำคัญ ถ้าปล่อยค่าเริ่มต้น amix จะหารระดับเสียงทุกทางเข้าด้วยจำนวนทาง
-    // ทั้งเสียงพากย์และเพลงจะเบาลง 6 dB และค่าที่ผู้ใช้เลือกจะไม่ตรงกับที่ได้ยิน
-    // ยอดคลื่นที่เกินให้ alimiter คุมท้ายสายแทน
     filters.push(
       `[${idx}:a]volume=${bgmGainDb}dB,aformat=sample_rates=24000:channel_layouts=mono[bg]`,
       "[bg][1:a]sidechaincompress=threshold=0.05:ratio=4:attack=20:release=400[duck]",
-      "[duck][1:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95[a]",
+    );
+    mixInputs.push("[duck]");
+  }
+
+  mixInputs.push("[1:a]");
+
+  // เสียงประกอบเข้ามาเป็นทางแยกทางละไฟล์ แล้วเลื่อนด้วย adelay ไปยังวินาทีที่ต้องดัง
+  // ไม่ผ่าน ducking เพราะมันตั้งใจให้ดังทับเสียงพูดอยู่แล้ว กดลงไปก็ไม่ได้ยิน
+  for (const cue of sfx) {
+    const idx = next;
+    next += 1;
+    args.push("-i", cue.path);
+    const delay = Math.max(0, Math.round(cue.atMs));
+    filters.push(
+      `[${idx}:a]volume=${cue.gainDb}dB,aformat=sample_rates=24000:channel_layouts=mono,` +
+      `adelay=${delay}:all=1[sfx${idx}]`,
+    );
+    mixInputs.push(`[sfx${idx}]`);
+  }
+
+  if (mixInputs.length > 1) {
+    // normalize=0 สำคัญ ถ้าปล่อยค่าเริ่มต้น amix จะหารระดับเสียงทุกทางเข้าด้วยจำนวนทาง
+    // ทั้งเสียงพากย์และเพลงจะเบาลงตามจำนวนทาง และค่าที่ผู้ใช้เลือกจะไม่ตรงกับที่ได้ยิน
+    // ยอดคลื่นที่เกินให้ alimiter คุมท้ายสายแทน
+    filters.push(
+      `${mixInputs.join("")}amix=inputs=${mixInputs.length}:duration=first:dropout_transition=0:normalize=0,` +
+      "alimiter=limit=0.95[a]",
     );
   }
 
   args.push(
     "-filter_complex", filters.join(";"),
     "-map", "[v]",
-    "-map", bgm ? "[a]" : "1:a:0",
+    "-map", mixInputs.length > 1 ? "[a]" : "1:a:0",
     "-t", total,
     "-c:v", "libx264", "-preset", "medium", "-crf", "20",
     "-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.1",

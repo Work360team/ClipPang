@@ -1,0 +1,19 @@
+{
+  "slug": "snappy",
+  "name": "คมกริบ",
+  "tagline": "จังหวะไว เร่งอารมณ์ เหมาะกับคลิปขายของ",
+  "cues": {
+    "open": {
+      "file": "sweep-down.wav",
+      "gainDb": -17
+    },
+    "transition": {
+      "file": "whoosh-tight.wav",
+      "gainDb": -16
+    },
+    "accent": {
+      "file": "tick.wav",
+      "gainDb": -19
+    }
+  }
+}

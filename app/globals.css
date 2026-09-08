@@ -6955,6 +6955,45 @@ a.notification-link:hover { background: #fafbf8; }
 }
 
 /* ---------- เพลงประกอบ (ขั้นที่ 3) ---------- */
+/* เสียงประกอบใช้กล่องหน้าตาเดียวกับเพลง เพราะอยู่ในขั้นเดียวกันและเป็นเรื่องเสียงเหมือนกัน
+   ต่างกันแค่ไม่มีปุ่มอัปโหลด เพราะระบบหาจังหวะเองจากสคริปต์กับเวลาที่จับคำได้ */
+.sfx-block {
+  display: grid;
+  gap: 13px;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--card);
+}
+
+.sfx-options { display: flex; flex-wrap: wrap; gap: 7px; }
+
+.sfx-options button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+.sfx-options button:hover:not(:disabled):not(.active) { border-color: var(--line-strong); }
+.sfx-options button.active { border-color: var(--yellow-dark); background: var(--yellow); color: #4d3f0d; }
+.sfx-options button:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  /* บนมือถือให้ชิปกดง่ายเท่าปุ่มอื่นในขั้นนี้ */
+  .sfx-options button { min-height: 42px; }
+}
 .bgm-block {
   margin-top: 14px;
   padding: 15px 16px 16px;

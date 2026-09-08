@@ -201,11 +201,22 @@ function localRequestAllowed(request) {
   return Boolean(readSession(readSessionCookie(request.headers.get("cookie")), SECRET));
 }
 
-function normalizeScriptChunks(chunks) {
+/**
+ * @param chunks ท่อนสคริปต์ อาจเป็นสตริงล้วนถ้ามาจากหน้าเว็บ
+ * @param emphasisByIndex คำที่ควรเน้นของแต่ละท่อน เรียงตรงกัน — ท่อนที่เป็นสตริง
+ *   ไม่มีที่เก็บคำเน้นในตัวเอง ต้องรับมาทางนี้ ไม่งั้นสีไฮไลต์กับเสียงเน้นจะไม่มีวันทำงาน
+ */
+function normalizeScriptChunks(chunks, emphasisByIndex = []) {
   const list = Array.isArray(chunks) ? chunks : (typeof chunks === "string" ? [chunks] : []);
+  const carried = Array.isArray(emphasisByIndex) ? emphasisByIndex : [];
   return list.map((chunk, index) => {
     if (typeof chunk === "string") {
-      return { i: index, text: chunk, role: index === 0 ? "hook" : "body", emphasis: [] };
+      return {
+        i: index,
+        text: chunk,
+        role: index === 0 ? "hook" : "body",
+        emphasis: Array.isArray(carried[index]) ? carried[index] : [],
+      };
     }
     return {
       ...chunk,
@@ -218,10 +229,16 @@ function normalizeScriptChunks(chunks) {
 }
 
 export function pickScript(config, product) {
-  if (Array.isArray(config.script) && !config.script.some((item) => Array.isArray(item?.chunks))) {
-    return normalizeScriptChunks(config.script);
-  }
   const scripts = config.scripts ?? product.scripts ?? [];
+  const findEmphasis = () => {
+    const source = scripts.find?.((item) => item.id === config.scriptId || item.id === config.variantId);
+    return source?.emphasis;
+  };
+
+  // หน้าเว็บส่งท่อนมาเป็นสตริงล้วน คำที่ควรเน้นจึงมาแยกกันคนละฟิลด์
+  if (Array.isArray(config.script) && !config.script.some((item) => Array.isArray(item?.chunks))) {
+    return normalizeScriptChunks(config.script, config.scriptEmphasis ?? findEmphasis());
+  }
   const variants = Array.isArray(config.script) && config.script.some((item) => Array.isArray(item?.chunks))
     ? config.script
     : scripts;
@@ -230,6 +247,7 @@ export function pickScript(config, product) {
   ) ?? variants[0];
   return normalizeScriptChunks(
     selected?.chunks ?? selected?.lines ?? selected?.script ?? config.chunks ?? [],
+    config.scriptEmphasis ?? selected?.emphasis,
   );
 }
 
@@ -292,6 +310,9 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       // เพลงประกอบเก็บอยู่ในโฟลเดอร์ของโปรเจกต์ pipeline รับเป็นพาธแบบ relative
       bgm: config.bgmName ? path.join("bgm", config.bgmName) : null,
       bgmGainDb: Number(config.bgmGainDb ?? -14),
+      // เสียงประกอบเลือกเป็นชุด ตัววางคิวคำนวณเวลาเองจากไทม์ไลน์ที่ประกอบเสร็จแล้ว
+      sfxKit: config.sfxKit || null,
+      sfxGainDb: Number(config.sfxGainDb ?? -18),
       kind: render.kind,
       ...(prepared.selectedTotalMs != null ? {
         targetSec: prepared.selectedTotalMs / 1000,

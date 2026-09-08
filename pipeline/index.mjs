@@ -49,6 +49,7 @@ import { fitNarrationToTimeline } from "./narration-fit.mjs";
 import { compileAss, compileSrt } from "./ass.mjs";
 import { AlphaOverlayError, renderOverlay } from "./hyperframes.mjs";
 import { buildVideoTrack, buildVoiceTrack, burnAndMux, poster } from "./render.mjs";
+import { getSfxKit, planSfxCues, resolveSfxCues } from "./sfx.mjs";
 
 const PIPELINE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(PIPELINE_ROOT, "..");
@@ -860,12 +861,23 @@ export async function runPipeline(options = {}) {
     });
     await emit("mix", 87, reuse ? "ใช้เสียงพากย์เดิมเรียบร้อย" : "ปรับเสียงพากย์เรียบร้อย");
 
+    // เสียงประกอบคำนวณจากไทม์ไลน์ที่ประกอบเสร็จแล้ว จึงได้เวลาหลังจากซับถูกจับคำ
+    // ด้วย whisper เรียบร้อย — คิวจะตรงกับที่คนดูได้ยินจริง ไม่ใช่เวลาที่ประเมินไว้
+    const sfxKit = getSfxKit(options.sfxKit);
+    const sfxCues = sfxKit
+      ? resolveSfxCues(planSfxCues(timeline, sfxKit, {
+        gainDb: Number(options.sfxGainDb ?? -18),
+        maxCues: Number(options.sfxMaxCues ?? 12),
+      }))
+      : [];
+
     let outputMeta = null;
     await emit("package", 88, "กำลังประกอบภาพ เสียง และซับ");
     await timeStage("package", async () => {
       await burnAndMux(timeline, runDir, "final.mp4", {
         bgm: options.bgm ? path.resolve(projectDir, options.bgm) : null,
         bgmGainDb: Number(options.bgmGainDb ?? -14),
+        sfx: sfxCues,
         overlay: overlayFile,
         fontsDir: FONTS_DIR,
         signal,
@@ -950,7 +962,10 @@ export async function runPipeline(options = {}) {
         reused: Boolean(reuse),
         sourceRenderId: reuse?.renderId || null,
       },
-      bgm: options.bgm ? { file: options.bgm, gainDb: Number(options.bgmGainDb ?? -18) } : null,
+      bgm: options.bgm ? { file: options.bgm, gainDb: Number(options.bgmGainDb ?? -14) } : null,
+      sfx: sfxKit
+        ? { kit: sfxKit.slug, name: sfxKit.name, cues: sfxCues.map(({ cue, file, atMs, gainDb }) => ({ cue, file, atMs, gainDb })) }
+        : null,
       durationMs: timeline.durationMs,
       // สถิติความเร็วพูดของงานนี้ ใช้ประเมินความยาวสคริปต์ครั้งต่อไปให้แม่นขึ้น
       // เสียงที่ถูกเร่งให้ลงไทม์ไลน์แล้วสั้นกว่าจังหวะพูดจริง เอาไปวัดอัตราจะได้ค่าที่

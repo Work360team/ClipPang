@@ -432,6 +432,18 @@ export function ProjectWizard() {
   // เพลงประกอบ — ผู้ใช้อัปโหลดเอง เก็บไว้ในโฟลเดอร์ของโปรเจกต์
   const [bgm, setBgm] = useState<LocalBgm | null>(null);
   const [bgmGainDb, setBgmGainDb] = useState(-14);
+  const [sfxKit, setSfxKit] = useState("");
+  const [sfxGainDb, setSfxGainDb] = useState(-18);
+  const [sfxKits, setSfxKits] = useState<{ slug: string; name: string; tagline: string }[]>([]);
+
+  // รายการชุดเสียงมาจากไฟล์ในโฟลเดอร์ ไม่ได้ฝังไว้ในหน้าเว็บ วางไฟล์เพิ่มแล้วเห็นเลย
+  useEffect(() => {
+    let active = true;
+    void localApi.sfxKits()
+      .then((result) => { if (active) setSfxKits(result.kits); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   const [bgmBusy, setBgmBusy] = useState(false);
   const [bgmError, setBgmError] = useState("");
   const bgmInputRef = useRef<HTMLInputElement | null>(null);
@@ -1057,6 +1069,8 @@ export function ProjectWizard() {
       });
     } else setBgm(null);
     if (typeof config.bgmGainDb === "number") setBgmGainDb(config.bgmGainDb);
+    if (typeof config.sfxKit === "string") setSfxKit(config.sfxKit);
+    if (typeof config.sfxGainDb === "number") setSfxGainDb(config.sfxGainDb);
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
@@ -1338,6 +1352,7 @@ export function ProjectWizard() {
         speed, tone, pace, scriptId: selectedScript, scriptVoiceSignature,
         styleId: selectedStyle, position: captionPosition, captionColor,
         bgmName: bgm?.name ?? null, bgmOriginalName: bgm?.originalName ?? null, bgmGainDb,
+        sfxKit: sfxKit || null, sfxGainDb,
       },
       ...extra,
     };
@@ -1423,7 +1438,7 @@ export function ProjectWizard() {
     clipAssets, timelineClips, projectId, engineState,
     selectedScript, scriptTexts, scriptVariants, scriptVoiceSignature,
     selectedVoice, speed, tone, pace, voiceEngine, cloneVoice,
-    selectedStyle, captionPosition, captionColor, bgm, bgmGainDb,
+    selectedStyle, captionPosition, captionColor, bgm, bgmGainDb, sfxKit, sfxGainDb,
   ]);
 
   const saveProject = async (message = "บันทึกโปรเจกต์และ Timeline แล้ว") => {
@@ -2298,6 +2313,8 @@ export function ProjectWizard() {
             brief: briefForApi(),
             scriptId: selectedScript,
             script: currentChunks,
+            // คำที่ควรเน้นเดินทางแยก เพราะ currentChunks เป็นสตริงล้วนเพื่อให้แก้ได้
+            scriptEmphasis: selectedScriptData?.emphasis ?? null,
             voiceId: voiceEngine === "jaitts" ? cloneVoice?.id : selectedVoice,
             provider: voiceEngine === "jaitts" ? "jaitts" : (selectedVoiceData.provider || "gemini"),
             speed,
@@ -2308,6 +2325,8 @@ export function ProjectWizard() {
             captionColor,
             bgmName: bgm?.name ?? null,
             bgmGainDb,
+            sfxKit: sfxKit || null,
+            sfxGainDb,
           },
         });
       if (editRevisionRef.current !== renderEditRevision) {
@@ -2871,6 +2890,61 @@ export function ProjectWizard() {
                   )}
 
                   {bgmError && <p className="key-hint idea-error" role="alert">{bgmError}</p>}
+                </div>
+
+                {/* เสียงประกอบไม่ต้องอัปโหลดอะไร ระบบหาจังหวะเองจากคำที่สคริปต์สั่งให้เน้น
+                    กับเวลาที่จับคำได้ตอนทำซับ จึงเหลือให้เลือกแค่ว่าจะเอาโทนไหน */}
+                <div className="sfx-block">
+                  <div className="bgm-head">
+                    <span className="bgm-icon"><Zap size={16} /></span>
+                    <div>
+                      <b>เสียงประกอบ</b>
+                      <small>ระบบวางให้เองตามจังหวะพูด ไม่ต้องอัปโหลด</small>
+                    </div>
+                  </div>
+                  <div className="sfx-options" role="group" aria-label="เลือกชุดเสียงประกอบ">
+                    <button
+                      type="button"
+                      className={!sfxKit ? "active" : ""}
+                      aria-pressed={!sfxKit}
+                      disabled={scriptBusy}
+                      onClick={() => setSfxKit("")}
+                    >
+                      {!sfxKit && <Check size={13} strokeWidth={3} />}ไม่ใส่
+                    </button>
+                    {sfxKits.map((kit) => (
+                      <button
+                        type="button"
+                        key={kit.slug}
+                        className={sfxKit === kit.slug ? "active" : ""}
+                        aria-pressed={sfxKit === kit.slug}
+                        disabled={scriptBusy}
+                        title={kit.tagline}
+                        onClick={() => setSfxKit(kit.slug)}
+                      >
+                        {sfxKit === kit.slug && <Check size={13} strokeWidth={3} />}{kit.name}
+                      </button>
+                    ))}
+                  </div>
+                  {sfxKit ? (
+                    <div className="control-block">
+                      <div className="control-label"><span>ความดังเสียงประกอบ</span><b>{sfxGainDb} dB</b></div>
+                      <input
+                        className="range"
+                        type="range"
+                        min="-30"
+                        max="-6"
+                        step="1"
+                        value={sfxGainDb}
+                        disabled={scriptBusy}
+                        onChange={(event) => setSfxGainDb(Number(event.target.value))}
+                        aria-label="ความดังเสียงประกอบ"
+                      />
+                      <div className="range-labels"><span>แผ่ว</span><span>กำลังดี</span><span>เด่น</span></div>
+                    </div>
+                  ) : (
+                    <p className="bgm-empty">{sfxKits.find((kit) => kit.slug === "soft-pop")?.tagline ?? "เลือกโทนที่เข้ากับคลิปได้"}</p>
+                  )}
                 </div>
                 {scriptBusy && (
                   <div className="analysis-box script-generation-status" role="status" aria-live="polite">

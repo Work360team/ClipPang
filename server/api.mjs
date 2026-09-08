@@ -37,6 +37,7 @@ import { hashPassword, markOwnerReady, ownerAccountReady, verifyPassword } from 
 import { quotaStatus } from "../pipeline/tts-quota.mjs";
 import { timingForPace, VOICE_GENDERS, VOICE_TONES } from "../pipeline/core.mjs";
 import { deleteClone, listClones, listSpeakers, readClone, updateCloneGender } from "../pipeline/voice-clones.mjs";
+import { listSfxKits } from "../pipeline/sfx.mjs";
 import { discoverJaitts } from "../pipeline/jaitts.mjs";
 import { toSpokenThai } from "../pipeline/thai-speech.mjs";
 import { whisperReady } from "../pipeline/whisper.mjs";
@@ -208,29 +209,44 @@ function scriptChunkText(chunk) {
   return String(chunk ?? "");
 }
 
+/**
+ * คำที่ควรเน้นของแต่ละท่อน เรียงตรงกับ chunks
+ *
+ * ต้องเดินทางแยกจากตัวข้อความ เพราะหน้าเว็บเก็บท่อนเป็นสตริงล้วนเพื่อให้แก้ได้ง่าย
+ * ถ้าฝากไว้ในตัว chunk มันจะหายทันทีที่แปลงเป็นสตริง ซึ่งเป็นเหตุที่ทำให้
+ * สีไฮไลต์คำเน้นไม่เคยทำงานเลยตั้งแต่แรก
+ */
+function scriptEmphasisList(chunks) {
+  return (chunks ?? []).map((chunk) => (Array.isArray(chunk?.emphasis) ? chunk.emphasis : []));
+}
+
 function normalizeScriptsForClient(input) {
   const scripts = Array.isArray(input) ? input : input?.variants ?? [];
   return scripts.map((script) => ({
     ...script,
     chunks: (script?.chunks ?? []).map(scriptChunkText),
+    emphasis: scriptEmphasisList(script?.chunks),
   }));
 }
 
 function normalizeScriptsForPipeline(input) {
   const scripts = Array.isArray(input) ? input : input?.variants ?? [];
-  return scripts.map((script) => ({
-    ...script,
-    chunks: (script?.chunks ?? []).map((chunk, index) => (
-      typeof chunk === "string"
-        ? {
-            i: index,
-            text: chunk,
-            role: index === 0 ? "hook" : "body",
-            emphasis: [],
-          }
-        : chunk
-    )),
-  }));
+  return scripts.map((script) => {
+    const carried = Array.isArray(script?.emphasis) ? script.emphasis : [];
+    return {
+      ...script,
+      chunks: (script?.chunks ?? []).map((chunk, index) => (
+        typeof chunk === "string"
+          ? {
+              i: index,
+              text: chunk,
+              role: index === 0 ? "hook" : "body",
+              emphasis: Array.isArray(carried[index]) ? carried[index] : [],
+            }
+          : chunk
+      )),
+    };
+  });
 }
 
 function normalizeProductMedia(product) {
@@ -942,6 +958,10 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         return json({ ok: true, voices });
       }
       // ส่งชุดสีไปพร้อมสไตล์ หน้าเลือกสไตล์ใช้ทั้งสองอย่างในจอเดียวกัน ไม่ต้องยิงซ้ำ
+      if (method === "GET" && pathname === "/api/sfx-kits") {
+        return json({ ok: true, kits: listSfxKits() });
+      }
+
       if (method === "GET" && pathname === "/api/styles") {
         return json({ ok: true, styles: await listStyles(), colorSets: CAPTION_COLOR_SETS });
       }

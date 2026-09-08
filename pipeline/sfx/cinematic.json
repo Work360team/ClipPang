@@ -1,0 +1,19 @@
+{
+  "slug": "cinematic",
+  "name": "ภาพยนตร์",
+  "tagline": "กวาดต่ำ ทุ้มลึก เหมาะกับคลิปเล่าเรื่อง",
+  "cues": {
+    "open": {
+      "file": "rise.wav",
+      "gainDb": -18
+    },
+    "transition": {
+      "file": "whoosh-deep.wav",
+      "gainDb": -17
+    },
+    "accent": {
+      "file": "ding.wav",
+      "gainDb": -23
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "slug": "soft-pop",
+  "name": "ป๊อปนุ่ม",
+  "tagline": "เบา ๆ ไม่แย่งเสียงพูด ใช้ได้กับทุกโหมด",
+  "cues": {
+    "open": {
+      "file": "rise.wav",
+      "gainDb": -20
+    },
+    "transition": {
+      "file": "whoosh-soft.wav",
+      "gainDb": -19
+    },
+    "accent": {
+      "file": "pop.wav",
+      "gainDb": -22
+    }
+  }
+}

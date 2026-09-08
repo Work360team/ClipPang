@@ -167,6 +167,7 @@ export const localApi = {
   regenerateChunk: (id: string, variantId: string, index: number, body: Record<string, unknown>) => apiFetch<{ ok: true; chunk: string; scripts?: LocalScript[] }>(`/api/projects/${encodeURIComponent(id)}/script/${encodeURIComponent(variantId)}/chunk/${index}`, { method: "POST", body: JSON.stringify(body) }),
   voices: () => apiFetch<{ ok: true; voices: LocalVoice[] }>("/api/voices"),
   styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[]; colorSets?: LocalColorSet[] }>("/api/styles"),
+  sfxKits: () => apiFetch<{ ok: true; kits: { slug: string; name: string; tagline: string }[] }>("/api/sfx-kits"),
   previewVoice: async (voiceId: string, body: Record<string, unknown>) => {
     const response = await fetch(`/api/voices/${encodeURIComponent(voiceId)}/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!response.ok) await parseResponse(response);
@@ -247,6 +248,8 @@ export interface LocalScript {
   hookType?: string;
   estDurationMs?: number;
   chunks: string[];
+  /** คำที่ควรเน้นของแต่ละท่อน เรียงตรงกับ chunks — แยกออกมาเพราะท่อนถูกเก็บเป็นสตริงล้วน */
+  emphasis?: string[][];
 }
 export type VoiceGender = "หญิง" | "ชาย";
 
