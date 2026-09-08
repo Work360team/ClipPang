@@ -309,6 +309,15 @@ type ProductBrief = {
   cta: string;
 };
 
+/**
+ * เสียงประกอบอัตโนมัติยังพักไว้ก่อน
+ *
+ * โค้ด คลังเสียง และเทสต์ยังอยู่ครบ (pipeline/sfx.mjs, pipeline/sfx/) แค่ยังไม่เปิดให้
+ * ผู้ใช้เลือก เพราะเจ้าของโปรเจกต์ขอพักเรื่องนี้ไว้ทำทีหลัง เปิดคืนได้ด้วยการ
+ * เปลี่ยนค่านี้เป็น true อย่างเดียว
+ */
+const SFX_ENABLED = false;
+
 const initialBrief: ProductBrief = {
   name: "",
   category: "",
@@ -2325,7 +2334,7 @@ export function ProjectWizard() {
             captionColor,
             bgmName: bgm?.name ?? null,
             bgmGainDb,
-            sfxKit: sfxKit || null,
+            sfxKit: SFX_ENABLED ? (sfxKit || null) : null,
             sfxGainDb,
           },
         });
@@ -2894,6 +2903,7 @@ export function ProjectWizard() {
 
                 {/* เสียงประกอบไม่ต้องอัปโหลดอะไร ระบบหาจังหวะเองจากคำที่สคริปต์สั่งให้เน้น
                     กับเวลาที่จับคำได้ตอนทำซับ จึงเหลือให้เลือกแค่ว่าจะเอาโทนไหน */}
+                {SFX_ENABLED && (
                 <div className="sfx-block">
                   <div className="bgm-head">
                     <span className="bgm-icon"><Zap size={16} /></span>
@@ -2946,6 +2956,7 @@ export function ProjectWizard() {
                     <p className="bgm-empty">{sfxKits.find((kit) => kit.slug === "soft-pop")?.tagline ?? "เลือกโทนที่เข้ากับคลิปได้"}</p>
                   )}
                 </div>
+                )}
                 {scriptBusy && (
                   <div className="analysis-box script-generation-status" role="status" aria-live="polite">
                     <LoaderCircle size={18} className="spin" />
