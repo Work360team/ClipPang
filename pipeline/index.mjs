@@ -792,6 +792,13 @@ export async function runPipeline(options = {}) {
     writeJson(path.join(runDir, "timeline.json"), publicTimeline);
     await emit("timeline", 50, `${reuse ? "ใช้" : "จัด"} timeline ${Math.round(timeline.durationMs / 100) / 10} วินาทีแล้ว`);
 
+    // ช็อตโมชันกราฟิกวาดในเลเยอร์เดียวกับซับ จึงเป็นของเลน hyperframes เท่านั้น
+    // เลน ass เบิร์นลงภาพตรง ๆ ไม่มีที่ให้วาดจอเต็ม ถ้าสไตล์อยู่เลนนั้นก็ข้ามไป
+    const motionShots = Array.isArray(options.motionShots) ? options.motionShots : [];
+    if (motionShots.length && style.lane !== "hyperframes") {
+      warnings.push("ช็อตโมชันกราฟิกใช้ได้เฉพาะสไตล์ซับพรีเมียม — รอบนี้ข้ามไปก่อน");
+    }
+
     let overlayFile = null;
     let laneUsed = "ass";
     let overlayFallback = null;
@@ -815,6 +822,8 @@ export async function runPipeline(options = {}) {
               height,
               fps,
               overlayFormat: options.overlayFormat || "mov",
+              // ช็อตโมชันวาดอยู่ในเลเยอร์เดียวกับซับ จอทึบของมันจึงบังฟุตเทจข้างล่างเอง
+              motionShots,
               signal,
               timeoutMs: options.hyperframesTimeoutMs,
             },

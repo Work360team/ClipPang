@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ffmpeg, ffprobe, run } from "./lib.mjs";
 import { anchorMarginV, normalizeAnchor } from "./core.mjs";
+import { compileMotionShots, isCoveredByMotion } from "./motion.mjs";
 
 // This module lives directly in pipeline/. Keep media assets relative to the
 // module; workspace dependencies are resolved one level above in
@@ -25,7 +26,7 @@ function fontFace(family, file, weight) {
     `src:url(data:font/ttf;base64,${b64}) format('truetype')}`;
 }
 
-export function compileComposition(timeline, style, { width, height, fps = 30 }) {
+export function compileComposition(timeline, style, { width, height, fps = 30, motion = null }) {
   const p = style.params;
   const fontFile = path.join(ROOT, "fonts", p.font.file);
   if (!fs.existsSync(fontFile)) {
@@ -152,6 +153,10 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
       }
       .sp { -webkit-text-stroke: 0; }
       ${p.emphasis ? `.w.em { font-size: ${p.emphasis.scale ?? 1.5}em; ${p.emphasis.weight ? `font-weight: ${p.emphasis.weight};` : ""} }` : ""}
+      /* ซับต้องอยู่เหนือช็อตโมชันเสมอ ไม่งั้นจอทึบจะบังคำบรรยายของตัวเอง */
+      .clip.mo { z-index: 1; }
+      .cap { z-index: 2; }
+      ${motion?.css || ""}
       ${p.scanlines ? `.cap::after { content: ""; position: absolute; inset: 0; pointer-events: none;
         background: repeating-linear-gradient(180deg, rgba(0,0,0,${p.scanlines.alpha ?? 0.22}) 0px, rgba(0,0,0,${p.scanlines.alpha ?? 0.22}) 1px, transparent 1px, transparent ${p.scanlines.gap ?? 4}px); }` : ""}
     </style>
@@ -166,6 +171,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
       data-height="${height}"
       data-fps="${fps}"
     >
+      ${motion?.html || ""}
       ${clips}
     </div>
 
@@ -190,6 +196,7 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
         var POP = ${JSON.stringify(p.animation?.scale ?? 1.12)};
         var POP_S = ${JSON.stringify((p.animation?.durationMs ?? 160) / 1000)};
         var BEATS = ${JSON.stringify(beats)};
+        var MOTION_BEATS = ${JSON.stringify(motion?.beats || [])};
 
         gsap.set(".w", { color: FILL, scale: 1, y: 0 });
         var tl = gsap.timeline({ paused: true });
@@ -207,6 +214,22 @@ export function compileComposition(timeline, style, { width, height, fps = 30 })
             );
           } else {
             tl.set(b.sel, WEIGHT_OFF ? { color: FILL, fontWeight: WEIGHT_OFF } : { color: FILL }, b.t);
+          }
+        });
+
+        // ช็อตโมชันกราฟิก — เทมเพลตส่งคำสั่งมาเป็นข้อมูล ไม่ใช่โค้ด ตัวขับตีความเองที่นี่
+        // รับเฉพาะ set กับ fromTo ซึ่งเป็นคุณสมบัติที่ GSAP วาดจริง ห้ามมี callback
+        // เพราะ HyperFrames เรนเดอร์ทีละเฟรมด้วย seek() ซึ่งระงับ callback ทั้งหมด
+        // (วัดแล้ว: seek(t) ไม่เรียก onUpdate ส่วน seek(t, false) เรียก)
+        // จะได้ไม่ต้อง eval สตริงจากไฟล์เทมเพลต และทุกท่ายังอยู่บนไทม์ไลน์เดียวกับซับ
+        MOTION_BEATS.forEach(function (b) {
+          if (b.kind === "set") {
+            tl.set(b.sel, b.vars || {}, b.t);
+          } else if (b.kind === "fromTo") {
+            tl.fromTo(b.sel, b.from || {}, Object.assign({}, b.to, {
+              duration: b.duration || 0.3,
+              ease: b.ease || "power2.out",
+            }), b.t);
           }
         });
 
@@ -271,10 +294,16 @@ export async function validateOverlayAlpha(file, timeline, opts = {}) {
     throw new AlphaOverlayError(`เลเยอร์ซับไม่มี alpha channel (${pixelFormat})`, { file, pixelFormat });
   }
 
-  const first = timeline.chunks?.[0];
-  const atSec = first
-    ? Math.max(0, (first.startMs + Math.min(250, Math.max(1, first.endMs - first.startMs) / 2)) / 1000)
-    : 0;
+  // ต้องสุ่มเฟรมที่ "มีซับแต่ไม่มีช็อตโมชันบัง" — ช็อตโมชันทึบเต็มจอโดยตั้งใจ
+  // ถ้าไปเจอเฟรมนั้นเข้า ตัวตรวจจะเห็นว่าทึบทั้งเฟรมแล้วตีว่าเลเยอร์เสีย
+  // ทั้งที่เป็นพฤติกรรมที่ถูกต้อง แล้วทั้งงานจะถอยไปเลน libass โดยไม่จำเป็น
+  const motionShots = opts.motionShots || [];
+  const sampleAt = (chunk) =>
+    (chunk.startMs + Math.min(250, Math.max(1, chunk.endMs - chunk.startMs) / 2));
+  const candidate = (timeline.chunks || [])
+    .map(sampleAt)
+    .find((ms) => !isCoveredByMotion(ms, motionShots));
+  const atSec = Math.max(0, (candidate ?? (timeline.chunks?.[0] ? sampleAt(timeline.chunks[0]) : 0)) / 1000);
   let diagnostics = "";
   try {
     ({ err: diagnostics } = await ffmpeg([
@@ -307,7 +336,17 @@ export async function validateOverlayAlpha(file, timeline, opts = {}) {
 export async function renderOverlay(timeline, style, runDir, opts, onLog = () => {}) {
   const hfDir = path.join(runDir, "hf");
   fs.mkdirSync(hfDir, { recursive: true });
-  fs.writeFileSync(path.join(hfDir, "index.html"), compileComposition(timeline, style, opts), "utf8");
+  const motion = await compileMotionShots(opts.motionShots, {
+    width: opts.width,
+    height: opts.height,
+    font: style.params?.font,
+    captionAnchor: normalizeAnchor(style.params?.position?.anchor),
+  });
+  fs.writeFileSync(
+    path.join(hfDir, "index.html"),
+    compileComposition(timeline, style, { ...opts, motion }),
+    "utf8",
+  );
 
   // เรียก entry .mjs ของ hyperframes ด้วย node โดยตรง
   // อย่าเรียกผ่าน npx/npx.cmd — Node บน Windows บล็อกการ spawn .cmd (CVE-2024-27980)

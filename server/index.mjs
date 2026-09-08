@@ -313,6 +313,8 @@ export async function createLocalRuntime({ store: providedStore, processor } = {
       // เสียงประกอบเลือกเป็นชุด ตัววางคิวคำนวณเวลาเองจากไทม์ไลน์ที่ประกอบเสร็จแล้ว
       sfxKit: config.sfxKit || null,
       sfxGainDb: Number(config.sfxGainDb ?? -18),
+      // ช็อตโมชันกราฟิก วาดอยู่ในเลเยอร์เดียวกับซับ
+      motionShots: Array.isArray(config.motionShots) ? config.motionShots : [],
       kind: render.kind,
       ...(prepared.selectedTotalMs != null ? {
         targetSec: prepared.selectedTotalMs / 1000,
