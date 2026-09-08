@@ -8,6 +8,7 @@ import {
   getMotionTemplate,
   isCoveredByMotion,
   listMotionTemplates,
+  resolveMotionShots,
 } from "../pipeline/motion.mjs";
 import { compileComposition } from "../pipeline/hyperframes.mjs";
 
@@ -185,4 +186,64 @@ test("ไม่มีช็อตโมชันก็คอมไพล์ไ�
   assert.deepEqual(empty, { html: "", css: "", beats: [], shots: [] });
   const html = compileComposition(timeline(), style(), { width: 720, height: 1280, fps: 30 });
   assert.equal(html.includes('class="clip mo"'), false);
+});
+
+/* ---------- ผูกการ์ดกับท่อนสคริปต์ ---------- */
+
+const timelineWith = (chunks, durationMs) => ({ durationMs, chunks });
+
+test("การ์ดที่ผูกกับท่อน ได้เวลาจริงจากไทม์ไลน์", () => {
+  const resolved = resolveMotionShots(
+    [{ template: "number-card", atChunk: 1, durationMs: 3000, data: {} }],
+    timelineWith([
+      { i: 0, from: 0, startMs: 0, endMs: 2000 },
+      { i: 1, from: 1, startMs: 2000, endMs: 5000 },
+    ], 9000),
+  );
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0].startMs, 2000);
+  assert.equal(resolved[0].endMs, 5000);
+});
+
+test("ท่อนของผู้ใช้ที่ถูกหั่นย่อย การ์ดยังลงตรงท่อนแรกของมัน", () => {
+  // ท่อนที่ผู้ใช้เขียนยาวเกิน 22 ตัวอักษรจะถูกหั่น ดัชนีในไทม์ไลน์จึงเลื่อนไปจากที่ผู้ใช้เห็น
+  // ถ้าไปนับตำแหน่งในอาเรย์ตรง ๆ การ์ดของท่อนที่ 2 จะไปโผล่กลางท่อนที่ 1 แทน
+  const resolved = resolveMotionShots(
+    [{ template: "number-card", atChunk: 2, durationMs: 2000, data: {} }],
+    timelineWith([
+      { i: 0, from: 0, startMs: 0, endMs: 1000 },
+      { i: 1, from: 1, startMs: 1000, endMs: 2000 },
+      { i: 2, from: 1, startMs: 2000, endMs: 3000 },
+      { i: 3, from: 2, startMs: 3000, endMs: 4200 },
+    ], 8000),
+  );
+  assert.equal(resolved[0].startMs, 3000, "ต้องเป็นท่อนแรกที่มาจากท่อนที่ 2 ของผู้ใช้");
+});
+
+test("การ์ดไม่ยาวเกินคลิป", () => {
+  const resolved = resolveMotionShots(
+    [{ template: "number-card", atChunk: 0, durationMs: 9000, data: {} }],
+    timelineWith([{ i: 0, from: 0, startMs: 4000, endMs: 5000 }], 5000),
+  );
+  assert.equal(resolved[0].endMs, 5000);
+});
+
+test("การ์ดที่ชี้ไปท่อนที่ไม่มีอยู่ถูกทิ้ง ไม่พัง", () => {
+  const resolved = resolveMotionShots(
+    [{ template: "number-card", atChunk: 9, data: {} }],
+    timelineWith([{ i: 0, from: 0, startMs: 0, endMs: 1000 }], 4000),
+  );
+  assert.deepEqual(resolved, []);
+});
+
+test("การ์ดที่ระบุเวลามาเองยังใช้เวลานั้น (ทางของบรรทัดคำสั่ง)", () => {
+  const shot = { template: "number-card", startMs: 1200, endMs: 4000, data: {} };
+  assert.deepEqual(resolveMotionShots([shot], timelineWith([], 9000)), [shot]);
+});
+
+test("การ์ดที่ไม่มีทั้งเวลาและหมายเลขท่อนถูกทิ้ง", () => {
+  assert.deepEqual(
+    resolveMotionShots([{ template: "number-card", data: {} }], timelineWith([{ i: 0, from: 0, startMs: 0, endMs: 1000 }], 4000)),
+    [],
+  );
 });

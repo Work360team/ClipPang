@@ -120,6 +120,38 @@ export async function compileMotionShots(shots, { width, height, font, captionAn
   return { html: htmlParts.join("\n      "), css: cssParts.join("\n"), beats, shots: accepted };
 }
 
+/** ความยาวเริ่มต้นของการ์ด ถ้าไม่ได้ระบุมา — พออ่านตัวเลขกับคำอธิบายจบพอดี */
+export const DEFAULT_MOTION_MS = 3500;
+
+/**
+ * แปลงการ์ดที่ผูกกับ "ท่อนสคริปต์" ให้เป็นเวลาจริง
+ *
+ * หน้าเว็บผูกการ์ดไว้กับหมายเลขท่อนที่ผู้ใช้เขียน เพราะตอนอยู่ขั้นเลือกสคริปต์
+ * ยังไม่มีใครรู้ว่าท่อนนั้นจะถูกพูดวินาทีที่เท่าไร — เวลาจริงเกิดหลังพากย์เสียง
+ * และจับคำด้วย whisper เสร็จแล้วเท่านั้น
+ *
+ * ท่อนของผู้ใช้หนึ่งท่อนอาจถูกหั่นเป็นหลายท่อนในไทม์ไลน์ จึงจับจากฟิลด์ from
+ * ที่ติดมากับแต่ละท่อน ไม่ใช่นับตำแหน่งในอาเรย์ซึ่งจะเลื่อนทันทีที่มีการหั่น
+ */
+export function resolveMotionShots(shots, timeline) {
+  const chunks = timeline?.chunks || [];
+  const totalMs = Number(timeline?.durationMs) || 0;
+  return (Array.isArray(shots) ? shots : [])
+    .map((shot) => {
+      // ระบุเวลามาเองแล้วก็ใช้ตามนั้น (ทางที่สคริปต์บรรทัดคำสั่งใช้)
+      if (Number.isFinite(Number(shot?.startMs)) && Number.isFinite(Number(shot?.endMs))) return shot;
+      const at = Number(shot?.atChunk);
+      if (!Number.isInteger(at)) return null;
+      const anchor = chunks.find((chunk) => (chunk.from ?? chunk.i) === at);
+      if (!anchor) return null;
+      const durationMs = Number(shot.durationMs) || DEFAULT_MOTION_MS;
+      const endMs = totalMs ? Math.min(totalMs, anchor.startMs + durationMs) : anchor.startMs + durationMs;
+      return { ...shot, startMs: anchor.startMs, endMs };
+    })
+    .filter(Boolean)
+    .filter((shot) => shot.endMs > shot.startMs);
+}
+
 /** ช่วงเวลาที่ถูกช็อตโมชันบังอยู่ ใช้เลี่ยงตอนสุ่มเฟรมไปตรวจ alpha */
 export function motionCoverage(shots) {
   return (Array.isArray(shots) ? shots : [])

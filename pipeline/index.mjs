@@ -50,6 +50,7 @@ import { compileAss, compileSrt } from "./ass.mjs";
 import { AlphaOverlayError, renderOverlay } from "./hyperframes.mjs";
 import { buildVideoTrack, buildVoiceTrack, burnAndMux, poster } from "./render.mjs";
 import { getSfxKit, planSfxCues, resolveSfxCues } from "./sfx.mjs";
+import { resolveMotionShots } from "./motion.mjs";
 
 const PIPELINE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(PIPELINE_ROOT, "..");
@@ -307,11 +308,15 @@ export async function synthesizePreview({
 function normalizeVariant(variant, fallbackId = "v1") {
   if (!variant?.chunks?.length) throw new Error("สคริปต์ที่เลือกไม่มีข้อความสำหรับพากย์");
   const chunks = [];
-  for (const source of variant.chunks) {
+  // ท่อนที่ผู้ใช้เขียนหนึ่งท่อนอาจถูกหั่นเป็นหลายท่อนถ้ายาวเกิน 22 ตัวอักษร
+  // ต้องจำไว้ว่าท่อนย่อยมาจากท่อนที่เท่าไรของผู้ใช้ ไม่งั้นการ์ดโมชันที่ผูกกับ
+  // หมายเลขท่อนจะไปโผล่ผิดจังหวะทันทีที่มีท่อนไหนถูกหั่น
+  for (const [sourceIndex, source] of variant.chunks.entries()) {
     for (const text of chunkText(String(source.text || ""))) {
       if (!text) continue;
       chunks.push({
         i: chunks.length,
+        from: sourceIndex,
         text,
         role: source.role || (chunks.length === 0 ? "hook" : "body"),
         emphasis: Array.isArray(source.emphasis) ? source.emphasis : [],
@@ -794,7 +799,8 @@ export async function runPipeline(options = {}) {
 
     // ช็อตโมชันกราฟิกวาดในเลเยอร์เดียวกับซับ จึงเป็นของเลน hyperframes เท่านั้น
     // เลน ass เบิร์นลงภาพตรง ๆ ไม่มีที่ให้วาดจอเต็ม ถ้าสไตล์อยู่เลนนั้นก็ข้ามไป
-    const motionShots = Array.isArray(options.motionShots) ? options.motionShots : [];
+    // การ์ดที่ผูกกับหมายเลขท่อนต้องรอถึงตรงนี้ถึงจะรู้เวลาจริง เพราะไทม์ไลน์เพิ่งเสร็จ
+    const motionShots = resolveMotionShots(options.motionShots, timeline);
     if (motionShots.length && style.lane !== "hyperframes") {
       warnings.push("ช็อตโมชันกราฟิกใช้ได้เฉพาะสไตล์ซับพรีเมียม — รอบนี้ข้ามไปก่อน");
     }

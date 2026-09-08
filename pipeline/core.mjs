@@ -225,6 +225,8 @@ export function buildChunkTimeline(takes, timing = DEFAULT_TIMING) {
     t = endMs + (idx === takes.length - 1 ? 0 : padMs);
     return {
       i: take.i,
+      // หมายเลขท่อนต้นทางที่ผู้ใช้เขียน ใช้ผูกการ์ดโมชันเข้ากับจังหวะพูด
+      from: take.from ?? take.i,
       text: take.text,
       role: take.role || "body",
       audioFile: take.audioFile,

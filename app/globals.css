@@ -4823,6 +4823,90 @@ img.mini-project-thumb::after { content: none; }
   border-bottom: 0;
 }
 
+/* ---------- การ์ดโมชันที่แทรกได้ตรงท่อนสคริปต์ ---------- */
+
+/* ท่อนที่มีการ์ดต้องเห็นได้จากการกวาดตา ไม่ต้องเปิดดูทีละอัน */
+.chunk.has-card {
+  background: #fffdf5;
+  box-shadow: inset 3px 0 0 var(--yellow);
+}
+
+.chunk-card-toggle {
+  grid-column: 2 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+.chunk-card-toggle:hover { border-color: var(--yellow-dark); color: #6b5200; }
+
+.chunk-card-toggle.on {
+  border-style: solid;
+  border-color: var(--yellow-dark);
+  background: var(--yellow);
+  color: #4d3f0d;
+}
+
+/* ตัวแก้การ์ดกางอยู่ในแถวเดียวกับท่อน จะได้เห็นว่าการ์ดผูกกับข้อความไหน */
+.chunk-card-editor {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 11px;
+  margin-top: 2px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.chunk-card-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.chunk-card-fields .field span { font-size: 12px; }
+.chunk-card-fields input { font-size: 13.5px; }
+
+.chunk-card-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.chunk-card-foot .field { min-width: 0; }
+.chunk-card-foot .field span { font-size: 12px; color: var(--ink-soft); }
+
+.chunk-card-warn {
+  margin: 0;
+  color: #8a6316;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  /* ปุ่มแทรกการ์ดกินเต็มความกว้างบนจอแคบ จะได้กดโดนโดยไม่ต้องเล็ง */
+  .chunk-card-toggle { justify-self: stretch; justify-content: center; min-height: 38px; }
+  .chunk-card-fields { grid-template-columns: 1fr; }
+  .chunk-card-foot { grid-template-columns: 1fr; align-items: stretch; }
+  .chunk-card-foot .button { justify-content: center; min-height: 40px; }
+}
+
+
 .chunk-index {
   color: #a0a69e;
   font-family: ui-monospace, monospace;

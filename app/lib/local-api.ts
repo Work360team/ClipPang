@@ -168,6 +168,7 @@ export const localApi = {
   voices: () => apiFetch<{ ok: true; voices: LocalVoice[] }>("/api/voices"),
   styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[]; colorSets?: LocalColorSet[] }>("/api/styles"),
   sfxKits: () => apiFetch<{ ok: true; kits: { slug: string; name: string; tagline: string }[] }>("/api/sfx-kits"),
+  motionTemplates: () => apiFetch<{ ok: true; templates: LocalMotionTemplate[]; defaultDurationMs: number }>("/api/motion-templates"),
   previewVoice: async (voiceId: string, body: Record<string, unknown>) => {
     const response = await fetch(`/api/voices/${encodeURIComponent(voiceId)}/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!response.ok) await parseResponse(response);
@@ -240,6 +241,22 @@ export interface LocalTimelineClip {
 }
 // hookType และ estDurationMs มาจากตัวสร้างสคริปต์จริง ส่วน name/tag/score เป็นรูปแบบเดิม
 // ที่ยังมีอยู่ในโปรเจกต์ที่บันทึกไว้ก่อนหน้า จึงต้องรับได้ทั้งสองแบบ
+export interface LocalMotionTemplate {
+  slug: string;
+  name: string;
+  tagline: string;
+  fields: { key: string; label: string; required?: boolean; options?: string[] }[];
+}
+
+/** การ์ดโมชันหนึ่งใบ ผูกกับหมายเลขท่อนสคริปต์ ไม่ใช่วินาที */
+export interface LocalMotionShot {
+  id: string;
+  template: string;
+  atChunk: number;
+  durationMs: number;
+  data: Record<string, string>;
+}
+
 export interface LocalScript {
   id: string;
   name?: string;
