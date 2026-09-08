@@ -247,3 +247,22 @@ test("การ์ดที่ไม่มีทั้งเวลาและ�
     [],
   );
 });
+
+test("ค่าที่เขียนมามีจุลภาค การ์ดต้องมีจุลภาคด้วย", async () => {
+  // ซับขึ้น "20,000mAh" ถ้าการ์ดขึ้น 20000 จะดูเหมือนคนละตัวเลขทั้งที่อยู่บนจอพร้อมกัน
+  const result = await compileMotionShots(
+    [shot({ data: { value: "20,000", suffix: "mAh" } })],
+    { width: 720, height: 1280 },
+  );
+  const steps = [...result.html.matchAll(/class="mo-num-step"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.equal(steps[steps.length - 1], "20,000");
+});
+
+test("ค่าที่ไม่มีจุลภาคก็ไม่ต้องเติมให้", async () => {
+  const result = await compileMotionShots(
+    [shot({ data: { value: "5000", suffix: "W" } })],
+    { width: 720, height: 1280 },
+  );
+  const steps = [...result.html.matchAll(/class="mo-num-step"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.equal(steps[steps.length - 1], "5000");
+});

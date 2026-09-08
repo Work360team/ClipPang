@@ -91,14 +91,27 @@ function countTarget(value) {
  */
 const COUNT_STEPS = 14;
 
-function countFrames(target, decimals) {
+/**
+ * ใส่จุลภาคคั่นหลักพันถ้าค่าที่ผู้ใช้เขียนมามีอยู่แล้ว
+ *
+ * สคริปต์เขียน "20,000mAh" ซับก็ขึ้น 20,000 ถ้าการ์ดขึ้น 20000 เฉย ๆ จะดูเหมือน
+ * คนละตัวเลขทั้งที่อยู่บนจอพร้อมกัน
+ */
+function group(text, grouped) {
+  if (!grouped) return text;
+  const [whole, fraction] = text.split(".");
+  const withCommas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return fraction ? `${withCommas}.${fraction}` : withCommas;
+}
+
+function countFrames(target, decimals, grouped) {
   const frames = [];
   for (let step = 1; step <= COUNT_STEPS; step += 1) {
     // ผ่อนปลายทางให้ช้าลง (easeOut) จะได้ความรู้สึกเดียวกับ tween จริง
     const progress = 1 - (1 - step / COUNT_STEPS) ** 3;
-    frames.push((target * progress).toFixed(decimals));
+    frames.push(group((target * progress).toFixed(decimals), grouped));
   }
-  frames[frames.length - 1] = target.toFixed(decimals);
+  frames[frames.length - 1] = group(target.toFixed(decimals), grouped);
   return frames;
 }
 
@@ -120,7 +133,9 @@ export function render({ id, shot, width, height, font, safe, data }) {
 
   const family = font?.family ? `'${font.family}', sans-serif` : "sans-serif";
 
-  const frames = target !== null ? countFrames(target, decimals) : [];
+  // ถ้าค่าที่เขียนมามีจุลภาค การ์ดต้องมีด้วย จะได้ตรงกับซับที่ขึ้นพร้อมกัน
+  const grouped = String(data.value ?? "").includes(",");
+  const frames = target !== null ? countFrames(target, decimals, grouped) : [];
   const value = target !== null
     ? [
         `<span class="mo-num-value">`,

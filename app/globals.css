@@ -4823,88 +4823,89 @@ img.mini-project-thumb::after { content: none; }
   border-bottom: 0;
 }
 
-/* ---------- การ์ดโมชันที่แทรกได้ตรงท่อนสคริปต์ ---------- */
+/* ---------- สวิตช์การ์ดตัวเลข (ระบบวางให้เอง) ---------- */
 
-/* ท่อนที่มีการ์ดต้องเห็นได้จากการกวาดตา ไม่ต้องเปิดดูทีละอัน */
-.chunk.has-card {
-  background: #fffdf5;
-  box-shadow: inset 3px 0 0 var(--yellow);
-}
-
-.chunk-card-toggle {
-  grid-column: 2 / -1;
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color .14s ease, background .14s ease, color .14s ease;
-}
-
-.chunk-card-toggle:hover { border-color: var(--yellow-dark); color: #6b5200; }
-
-.chunk-card-toggle.on {
-  border-style: solid;
-  border-color: var(--yellow-dark);
-  background: var(--yellow);
-  color: #4d3f0d;
-}
-
-/* ตัวแก้การ์ดกางอยู่ในแถวเดียวกับท่อน จะได้เห็นว่าการ์ดผูกกับข้อความไหน */
-.chunk-card-editor {
-  grid-column: 2 / -1;
+.motion-switch {
   display: grid;
-  gap: 11px;
-  margin-top: 2px;
-  padding: 13px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 12px;
+  padding: 15px 17px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--card);
 }
 
-.chunk-card-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+.motion-toggle {
+  flex: none;
+  width: 48px;
+  height: 28px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: #d9dcd4;
+  cursor: pointer;
+  transition: background .16s ease;
 }
 
-.chunk-card-fields .field span { font-size: 12px; }
-.chunk-card-fields input { font-size: 13.5px; }
+.motion-toggle.on { background: var(--green); }
 
-.chunk-card-foot {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 12px;
-  padding-top: 11px;
-  border-top: 1px solid var(--line-soft);
+.motion-toggle-knob {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(24, 27, 24, .3);
+  transition: transform .16s ease;
 }
 
-.chunk-card-foot .field { min-width: 0; }
-.chunk-card-foot .field span { font-size: 12px; color: var(--ink-soft); }
+.motion-toggle.on .motion-toggle-knob { transform: translateX(20px); }
 
-.chunk-card-warn {
-  margin: 0;
-  color: #8a6316;
+.motion-switch-copy { min-width: 0; display: grid; gap: 2px; }
+.motion-switch-copy b { font-size: 14px; font-weight: 620; }
+.motion-switch-copy small { color: var(--ink-soft); font-size: 12.5px; line-height: 1.5; }
+
+/* การ์ดที่ระบบจะใส่ให้ โชว์เป็นชิปเล็ก ๆ ให้เห็นก่อนเรนเดอร์ */
+.motion-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.motion-preview-card {
+  display: grid;
+  gap: 1px;
+  padding: 9px 13px;
+  border: 1px solid #f0e2b4;
+  border-radius: 11px;
+  background: #fffdf3;
+}
+
+.motion-preview-card b {
+  color: #d8621f;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.motion-preview-card b i {
+  margin-left: 3px;
+  color: var(--yellow-dark);
   font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
 }
+
+.motion-preview-card span { color: var(--ink); font-size: 12.5px; }
+.motion-preview-card small { color: var(--ink-faint); font-size: 11px; }
 
 @media (max-width: 720px) {
-  /* ปุ่มแทรกการ์ดกินเต็มความกว้างบนจอแคบ จะได้กดโดนโดยไม่ต้องเล็ง */
-  .chunk-card-toggle { justify-self: stretch; justify-content: center; min-height: 38px; }
-  .chunk-card-fields { grid-template-columns: 1fr; }
-  .chunk-card-foot { grid-template-columns: 1fr; align-items: stretch; }
-  .chunk-card-foot .button { justify-content: center; min-height: 40px; }
+  .motion-preview-card { flex: 1 1 calc(50% - 4px); }
 }
+
 
 
 .chunk-index {

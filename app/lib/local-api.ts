@@ -169,6 +169,7 @@ export const localApi = {
   styles: () => apiFetch<{ ok: true; styles: LocalCaptionStyle[]; colorSets?: LocalColorSet[] }>("/api/styles"),
   sfxKits: () => apiFetch<{ ok: true; kits: { slug: string; name: string; tagline: string }[] }>("/api/sfx-kits"),
   motionTemplates: () => apiFetch<{ ok: true; templates: LocalMotionTemplate[]; defaultDurationMs: number }>("/api/motion-templates"),
+  motionPlan: (chunks: string[]) => apiFetch<{ ok: true; cards: LocalMotionShot[] }>("/api/motion-plan", { method: "POST", body: JSON.stringify({ chunks }) }),
   previewVoice: async (voiceId: string, body: Record<string, unknown>) => {
     const response = await fetch(`/api/voices/${encodeURIComponent(voiceId)}/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!response.ok) await parseResponse(response);

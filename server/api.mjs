@@ -39,6 +39,7 @@ import { timingForPace, VOICE_GENDERS, VOICE_TONES } from "../pipeline/core.mjs"
 import { deleteClone, listClones, listSpeakers, readClone, updateCloneGender } from "../pipeline/voice-clones.mjs";
 import { listSfxKits } from "../pipeline/sfx.mjs";
 import { DEFAULT_MOTION_MS, listMotionTemplates } from "../pipeline/motion.mjs";
+import { planMotionCards } from "../pipeline/motion-plan.mjs";
 import { discoverJaitts } from "../pipeline/jaitts.mjs";
 import { toSpokenThai } from "../pipeline/thai-speech.mjs";
 import { whisperReady } from "../pipeline/whisper.mjs";
@@ -959,6 +960,14 @@ export function createApiHandler({ store, queue, version = "0.3.0", services = {
         return json({ ok: true, voices });
       }
       // ส่งชุดสีไปพร้อมสไตล์ หน้าเลือกสไตล์ใช้ทั้งสองอย่างในจอเดียวกัน ไม่ต้องยิงซ้ำ
+      // หน้าเว็บถามล่วงหน้าว่าสคริปต์ชุดนี้จะได้การ์ดกี่ใบ ใบไหนบ้าง
+      // ใช้ตัววางตัวเดียวกับตอนเรนเดอร์ สิ่งที่พรีวิวจึงตรงกับของจริงเสมอ
+      if (method === "POST" && pathname === "/api/motion-plan") {
+        const body = await readJson(request, { optional: true });
+        const chunks = Array.isArray(body?.chunks) ? body.chunks : [];
+        return json({ ok: true, cards: planMotionCards(chunks) });
+      }
+
       if (method === "GET" && pathname === "/api/motion-templates") {
         // ส่งเฉพาะข้อมูลที่หน้าเว็บใช้ ฟังก์ชัน render เอาไปทำอะไรฝั่งเบราว์เซอร์ไม่ได้
         const templates = await listMotionTemplates();

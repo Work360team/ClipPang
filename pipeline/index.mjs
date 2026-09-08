@@ -51,6 +51,7 @@ import { AlphaOverlayError, renderOverlay } from "./hyperframes.mjs";
 import { buildVideoTrack, buildVoiceTrack, burnAndMux, poster } from "./render.mjs";
 import { getSfxKit, planSfxCues, resolveSfxCues } from "./sfx.mjs";
 import { resolveMotionShots } from "./motion.mjs";
+import { planMotionCards } from "./motion-plan.mjs";
 
 const PIPELINE_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(PIPELINE_ROOT, "..");
@@ -799,8 +800,13 @@ export async function runPipeline(options = {}) {
 
     // ช็อตโมชันกราฟิกวาดในเลเยอร์เดียวกับซับ จึงเป็นของเลน hyperframes เท่านั้น
     // เลน ass เบิร์นลงภาพตรง ๆ ไม่มีที่ให้วาดจอเต็ม ถ้าสไตล์อยู่เลนนั้นก็ข้ามไป
+    // การ์ดวางให้เองจากตัวเลขที่มีอยู่ในสคริปต์ ผู้ใช้ตัดสินแค่เปิดหรือปิด
+    // ถ้าสคริปต์ไม่มีตัวเลขเลยก็ไม่มีการ์ด ซึ่งถูกแล้ว ดีกว่ายัดการ์ดว่างใส่คลิป
+    const plannedCards = options.motionAuto === false
+      ? (options.motionShots || [])
+      : planMotionCards(timeline.chunks, options.motionPlan);
     // การ์ดที่ผูกกับหมายเลขท่อนต้องรอถึงตรงนี้ถึงจะรู้เวลาจริง เพราะไทม์ไลน์เพิ่งเสร็จ
-    const motionShots = resolveMotionShots(options.motionShots, timeline);
+    const motionShots = resolveMotionShots(plannedCards, timeline);
     if (motionShots.length && style.lane !== "hyperframes") {
       warnings.push("ช็อตโมชันกราฟิกใช้ได้เฉพาะสไตล์ซับพรีเมียม — รอบนี้ข้ามไปก่อน");
     }
@@ -978,6 +984,9 @@ export async function runPipeline(options = {}) {
         sourceRenderId: reuse?.renderId || null,
       },
       bgm: options.bgm ? { file: options.bgm, gainDb: Number(options.bgmGainDb ?? -14) } : null,
+      motion: motionShots.length
+        ? motionShots.map(({ template, atChunk, startMs, endMs, data }) => ({ template, atChunk, startMs, endMs, data }))
+        : null,
       sfx: sfxKit
         ? { kit: sfxKit.slug, name: sfxKit.name, cues: sfxCues.map(({ cue, file, atMs, gainDb }) => ({ cue, file, atMs, gainDb })) }
         : null,

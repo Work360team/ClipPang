@@ -17,7 +17,6 @@ import {
   FolderOpen,
   Gauge,
   GripVertical,
-  Layers,
   LoaderCircle,
   Mic,
   Mic2,
@@ -47,7 +46,7 @@ import {
   type CSSProperties,
   type DragEvent,
 } from "react";
-import type { LocalMotionShot, LocalMotionTemplate } from "../lib/local-api";
+import type { LocalMotionShot } from "../lib/local-api";
 import { AppShell } from "./AppShell";
 import { refreshProjects } from "../lib/project-store";
 import { CaptionIdeas } from "./CaptionIdeas";
@@ -449,24 +448,11 @@ export function ProjectWizard() {
 
   // การ์ดโมชันผูกกับหมายเลขท่อนสคริปต์ ไม่ใช่วินาที เพราะตอนอยู่ขั้นนี้ยังไม่มีใครรู้
   // ว่าท่อนนั้นจะถูกพูดวินาทีที่เท่าไร เวลาจริงเกิดหลังพากย์เสียงและจับคำเสร็จแล้ว
-  const [motionShots, setMotionShots] = useState<LocalMotionShot[]>([]);
-  const [motionTemplates, setMotionTemplates] = useState<LocalMotionTemplate[]>([]);
-  const [motionDefaultMs, setMotionDefaultMs] = useState(3500);
-  const [motionEditing, setMotionEditing] = useState<number | null>(null);
+  const [motionAuto, setMotionAuto] = useState(true);
+  const [motionPlan, setMotionPlan] = useState<LocalMotionShot[]>([]);
+  const [motionPlanBusy, setMotionPlanBusy] = useState(false);
 
   // รายการชุดเสียงมาจากไฟล์ในโฟลเดอร์ ไม่ได้ฝังไว้ในหน้าเว็บ วางไฟล์เพิ่มแล้วเห็นเลย
-  useEffect(() => {
-    let active = true;
-    void localApi.motionTemplates()
-      .then((result) => {
-        if (!active) return;
-        setMotionTemplates(result.templates);
-        setMotionDefaultMs(result.defaultDurationMs);
-      })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, []);
-
   useEffect(() => {
     let active = true;
     void localApi.sfxKits()
@@ -561,6 +547,21 @@ export function ProjectWizard() {
   ));
   const selectedVoiceData = voiceLibrary.find((item) => item.id === selectedVoice) ?? voiceLibrary[0] ?? voices[0];
   const currentChunks = scriptTexts[selectedScript] ?? selectedScriptData?.chunks ?? NO_CHUNKS;
+
+  // ถามล่วงหน้าว่าสคริปต์ชุดนี้จะได้การ์ดอะไรบ้าง ใช้ตัววางตัวเดียวกับตอนเรนเดอร์
+  // ผู้ใช้จะได้เห็นก่อนว่าเปิดแล้วได้อะไร ไม่ใช่กดแล้วรอลุ้น
+  useEffect(() => {
+    if (!motionAuto || !currentChunks.length) { setMotionPlan([]); return; }
+    let active = true;
+    setMotionPlanBusy(true);
+    const timer = window.setTimeout(() => {
+      void localApi.motionPlan(currentChunks)
+        .then((result) => { if (active) setMotionPlan(result.cards); })
+        .catch(() => { if (active) setMotionPlan([]); })
+        .finally(() => { if (active) setMotionPlanBusy(false); });
+    }, 400);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [motionAuto, currentChunks]);
 
   // แสดงเวลาที่ผ่านไปเพื่อให้รู้ว่า AI ยังทำงานอยู่ ไม่ใช่หน้าจอค้างเงียบ ๆ
   useEffect(() => {
@@ -1101,7 +1102,7 @@ export function ProjectWizard() {
     if (typeof config.bgmGainDb === "number") setBgmGainDb(config.bgmGainDb);
     if (typeof config.sfxKit === "string") setSfxKit(config.sfxKit);
     if (typeof config.sfxGainDb === "number") setSfxGainDb(config.sfxGainDb);
-    if (Array.isArray(config.motionShots)) setMotionShots(config.motionShots as LocalMotionShot[]);
+    if (typeof config.motionAuto === "boolean") setMotionAuto(config.motionAuto);
     if (typeof config.styleId === "string") setSelectedStyle(config.styleId);
     if (typeof config.position === "string") setCaptionPosition(config.position === "top" ? "บน" : config.position === "middle" || config.position === "center" ? "กลาง" : config.position === "bottom" ? "ล่าง" : config.position);
     if (typeof config.speed === "number") setSpeed(config.speed);
@@ -1384,7 +1385,7 @@ export function ProjectWizard() {
         styleId: selectedStyle, position: captionPosition, captionColor,
         bgmName: bgm?.name ?? null, bgmOriginalName: bgm?.originalName ?? null, bgmGainDb,
         sfxKit: sfxKit || null, sfxGainDb,
-        motionShots,
+        motionAuto,
       },
       ...extra,
     };
@@ -1470,7 +1471,7 @@ export function ProjectWizard() {
     clipAssets, timelineClips, projectId, engineState,
     selectedScript, scriptTexts, scriptVariants, scriptVoiceSignature,
     selectedVoice, speed, tone, pace, voiceEngine, cloneVoice,
-    selectedStyle, captionPosition, captionColor, bgm, bgmGainDb, sfxKit, sfxGainDb, motionShots,
+    selectedStyle, captionPosition, captionColor, bgm, bgmGainDb, sfxKit, sfxGainDb, motionAuto,
   ]);
 
   const saveProject = async (message = "บันทึกโปรเจกต์และ Timeline แล้ว") => {
@@ -2358,7 +2359,7 @@ export function ProjectWizard() {
             bgmName: bgm?.name ?? null,
             bgmGainDb,
             sfxKit: SFX_ENABLED ? (sfxKit || null) : null,
-            motionShots,
+            motionAuto,
             sfxGainDb,
           },
         });
@@ -3093,11 +3094,8 @@ export function ProjectWizard() {
                     </div>
                   )}
                   <div className="chunk-list">
-                    {currentChunks.map((chunk, index) => {
-                      const card = motionShots.find((shot) => shot.atChunk === index) ?? null;
-                      const open = motionEditing === index;
-                      return (
-                      <div className={`chunk${card ? " has-card" : ""}`} key={`${selectedScript}-${index}`}>
+                    {currentChunks.map((chunk, index) => (
+                      <div className="chunk" key={`${selectedScript}-${index}`}>
                         <span className="chunk-index">{String(index + 1).padStart(2, '0')}</span>
                         <textarea
                           value={chunk}
@@ -3107,99 +3105,8 @@ export function ProjectWizard() {
                         />
                         <button type="button" onClick={() => void regenerateChunk(index)} title="เขียนท่อนนี้ใหม่"><RotateCcw size={15} /></button>
                         <small>{index * 6}:00–{(index + 1) * 6}:00</small>
-
-                        {/* การ์ดผูกกับท่อน ไม่ใช่วินาที ผู้ใช้จึงบอกได้ว่า "พูดถึงตรงนี้แล้วขึ้นการ์ด"
-                            โดยไม่ต้องเดาว่าท่อนนี้จะถูกพูดวินาทีที่เท่าไร */}
-                        <button
-                          type="button"
-                          className={`chunk-card-toggle${card ? " on" : ""}`}
-                          aria-expanded={open}
-                          title={card ? "แก้การ์ดของท่อนนี้" : "แทรกการ์ดตรงท่อนนี้"}
-                          onClick={() => {
-                            if (!card && motionTemplates.length) {
-                              const template = motionTemplates[0];
-                              setMotionShots((current) => [...current, {
-                                id: `mo-${Date.now().toString(36)}`,
-                                template: template.slug,
-                                atChunk: index,
-                                durationMs: motionDefaultMs,
-                                data: { value: "", tone: "soft" },
-                              }]);
-                            }
-                            setMotionEditing(open ? null : index);
-                          }}
-                        >
-                          <Layers size={14} /> {card ? "การ์ด" : "แทรกการ์ด"}
-                        </button>
-
-                        {card && open && (
-                          <div className="chunk-card-editor">
-                            <div className="chunk-card-fields">
-                              {(motionTemplates.find((item) => item.slug === card.template)?.fields ?? []).map((field) => (
-                                <label className="field" key={field.key}>
-                                  <span>{field.label}{field.required ? " *" : ""}</span>
-                                  {field.options ? (
-                                    <div className="tone-options">
-                                      {field.options.map((option) => (
-                                        <button
-                                          type="button"
-                                          key={option}
-                                          className={(card.data[field.key] ?? field.options?.[0]) === option ? "active" : ""}
-                                          onClick={() => setMotionShots((current) => current.map((shot) => shot.id === card.id
-                                            ? { ...shot, data: { ...shot.data, [field.key]: option } }
-                                            : shot))}
-                                        >
-                                          {option === "soft" ? "น่ารัก" : option === "night" ? "เข้ม" : option}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <input
-                                      value={card.data[field.key] ?? ""}
-                                      placeholder={field.key === "value" ? "เช่น 80" : ""}
-                                      onChange={(event) => setMotionShots((current) => current.map((shot) => shot.id === card.id
-                                        ? { ...shot, data: { ...shot.data, [field.key]: event.target.value } }
-                                        : shot))}
-                                    />
-                                  )}
-                                </label>
-                              ))}
-                            </div>
-                            <div className="chunk-card-foot">
-                              <label className="field">
-                                <span>ค้างไว้ {(card.durationMs / 1000).toFixed(1)} วินาที</span>
-                                <input
-                                  className="range"
-                                  type="range"
-                                  min="1500"
-                                  max="6000"
-                                  step="250"
-                                  value={card.durationMs}
-                                  aria-label="ความยาวการ์ด"
-                                  onChange={(event) => setMotionShots((current) => current.map((shot) => shot.id === card.id
-                                    ? { ...shot, durationMs: Number(event.target.value) }
-                                    : shot))}
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                className="button button-quiet"
-                                onClick={() => {
-                                  setMotionShots((current) => current.filter((shot) => shot.id !== card.id));
-                                  setMotionEditing(null);
-                                }}
-                              >
-                                <Trash2 size={15} /> เอาการ์ดออก
-                              </button>
-                            </div>
-                            {!card.data.value?.trim() && (
-                              <p className="chunk-card-warn">ยังไม่ได้ใส่ตัวเลข การ์ดนี้จะถูกข้ามตอนเรนเดอร์</p>
-                            )}
-                          </div>
-                        )}
                       </div>
-                      );
-                    })}
+                    ))}
                   </div>
                 </div>
                 )}
@@ -3211,6 +3118,44 @@ export function ProjectWizard() {
                 <div className="step-panel-heading inline-heading">
                   <div><span className="step-kicker">ขั้นที่ 5 จาก 6</span><h2>หน้าตาซับ</h2><p>เลือกสไตล์และตำแหน่งให้เข้ากับคลิป ดูตัวอย่างจากคลิปจริงของคุณได้เลย</p></div>
                 </div>
+
+                {/* ผู้ใช้ตัดสินแค่เปิดหรือปิด ระบบหาเองว่าท่อนไหนมีตัวเลขน่าอวด
+                    แล้ววางการ์ดให้ตรงจังหวะที่พูดถึง — โชว์ให้เห็นก่อนว่าจะได้อะไร
+                    ไม่ใช่สวิตช์ที่กดแล้วต้องรอลุ้นตอนเรนเดอร์ */}
+                <div className="motion-switch">
+                  <button
+                    type="button"
+                    className={`motion-toggle${motionAuto ? " on" : ""}`}
+                    role="switch"
+                    aria-checked={motionAuto}
+                    onClick={() => setMotionAuto((current) => !current)}
+                  >
+                    <span className="motion-toggle-knob" />
+                  </button>
+                  <div className="motion-switch-copy">
+                    <b>การ์ดตัวเลข</b>
+                    <small>
+                      {!motionAuto
+                        ? "ปิดอยู่ — คลิปจะมีแต่ซับอย่างเดียว"
+                        : motionPlanBusy
+                          ? "กำลังดูว่าสคริปต์นี้มีอะไรให้ทำการ์ดบ้าง…"
+                          : motionPlan.length
+                            ? `ระบบจะใส่ให้ ${motionPlan.length} ใบ ตรงจังหวะที่พูดถึงพอดี`
+                            : "สคริปต์นี้ไม่มีตัวเลข จึงไม่มีการ์ด — เพิ่มตัวเลขลงในสคริปต์แล้วจะขึ้นเอง"}
+                    </small>
+                  </div>
+                </div>
+                {motionAuto && motionPlan.length > 0 && (
+                  <div className="motion-preview">
+                    {motionPlan.map((card, index) => (
+                      <div className="motion-preview-card" key={`${card.atChunk}-${index}`}>
+                        <b>{card.data.value}<i>{card.data.suffix}</i></b>
+                        <span>{card.data.label || "—"}</span>
+                        <small>ท่อนที่ {card.atChunk + 1}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="subsection-heading"><div><h3>สไตล์ซับ</h3><p>พรีวิวจากคลิปจริงของคุณ</p></div><Link href="/styles" className="text-link">ดูแกลเลอรี <ArrowRight size={15} /></Link></div>
                 <div className="style-filter-row" role="group" aria-label="กรองตามวิธีเรนเดอร์">
