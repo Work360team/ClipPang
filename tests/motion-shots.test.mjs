@@ -67,7 +67,26 @@ test("CSS ของเทมเพลตเดียวกันใส่คร�
     { width: 720, height: 1280 },
   );
   assert.equal(result.shots.length, 2);
-  assert.equal(result.css.split(".mo-num-ground").length - 1, 1, "บล็อก CSS ต้องไม่ซ้ำ");
+  assert.equal(result.css.split(".mo-num-card {").length - 1, 1, "บล็อก CSS ต้องไม่ซ้ำ");
+});
+
+test("การ์ดโปร่งแสง ไม่ใช่จอทึบที่บังภาพจริงทั้งเฟรม", async () => {
+  const result = await compileMotionShots([shot()], { width: 720, height: 1280 });
+  // พื้นของการ์ดต้องมี alpha น้อยกว่า 1 ไม่งั้นภาพเบื้องหลังจะหายไปเลย
+  const fills = [...result.css.matchAll(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/g)]
+    .map((m) => Number(m[1]));
+  assert.ok(fills.length > 0, "ควรใช้สีแบบมี alpha");
+  assert.ok(fills.every((alpha) => alpha < 1), `มีสีทึบสนิทปนอยู่: ${fills.filter((a) => a >= 1)}`);
+  assert.equal(/background:\s*#/.test(result.css), false, "ห้ามใช้สีทึบเป็นพื้นการ์ด");
+  // เวทีที่ครอบการ์ดต้องไม่มีพื้นของตัวเอง ภาพจริงจะได้เล่นผ่านรอบ ๆ การ์ด
+  assert.equal(/\.mo-num-stage\s*\{[^}]*background/.test(result.css), false);
+});
+
+test("การ์ดมีท่าออกก่อนช็อตจบ ไม่หายวับ", async () => {
+  const result = await compileMotionShots([shot({ startMs: 0, endMs: 4000 })], { width: 720, height: 1280 });
+  const exits = result.beats.filter((beat) => beat.to && beat.to.opacity === 0);
+  assert.equal(exits.length, 1, "ควรมีท่าออกหนึ่งท่า");
+  assert.ok(exits[0].t > 3 && exits[0].t < 4, `ท่าออกควรอยู่ท้ายช็อต แต่อยู่ที่ ${exits[0].t}`);
 });
 
 test("beats ทุกตัวเป็นคุณสมบัติที่วาดได้ ไม่มี callback", async () => {
