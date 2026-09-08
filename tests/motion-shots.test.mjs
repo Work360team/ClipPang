@@ -70,16 +70,48 @@ test("CSS ของเทมเพลตเดียวกันใส่คร�
   assert.equal(result.css.split(".mo-num-card {").length - 1, 1, "บล็อก CSS ต้องไม่ซ้ำ");
 });
 
-test("การ์ดโปร่งแสง ไม่ใช่จอทึบที่บังภาพจริงทั้งเฟรม", async () => {
-  const result = await compileMotionShots([shot()], { width: 720, height: 1280 });
-  // พื้นของการ์ดต้องมี alpha น้อยกว่า 1 ไม่งั้นภาพเบื้องหลังจะหายไปเลย
-  const fills = [...result.css.matchAll(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/g)]
-    .map((m) => Number(m[1]));
-  assert.ok(fills.length > 0, "ควรใช้สีแบบมี alpha");
-  assert.ok(fills.every((alpha) => alpha < 1), `มีสีทึบสนิทปนอยู่: ${fills.filter((a) => a >= 1)}`);
-  assert.equal(/background:\s*#/.test(result.css), false, "ห้ามใช้สีทึบเป็นพื้นการ์ด");
-  // เวทีที่ครอบการ์ดต้องไม่มีพื้นของตัวเอง ภาพจริงจะได้เล่นผ่านรอบ ๆ การ์ด
-  assert.equal(/\.mo-num-stage\s*\{[^}]*background/.test(result.css), false);
+/** กฎ CSS ของคลาสหนึ่งจากผลลัพธ์ที่คอมไพล์ได้ */
+function ruleFor(css, selector) {
+  const found = new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(css);
+  assert.ok(found, `ไม่พบกฎของ ${selector}`);
+  return found[1];
+}
+
+for (const tone of ["soft", "night"]) {
+  test(`โทน ${tone}: การ์ดโปร่งแสง ไม่ใช่จอทึบที่บังภาพจริงทั้งเฟรม`, async () => {
+    const result = await compileMotionShots(
+      [shot({ data: { value: "80", suffix: "%", label: "ทดสอบ", tone } })],
+      { width: 720, height: 1280 },
+    );
+    // ตัวการ์ดเท่านั้นที่ต้องโปร่ง ป้ายหน่วยเม็ดเล็กเป็นสีทึบได้ ไม่ได้บังอะไร
+    const card = ruleFor(result.css, ".mo-num-card");
+    const base = /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)(?=;|\s*$)/m.exec(card);
+    assert.ok(base, "พื้นการ์ดต้องเป็นสีแบบมี alpha");
+    assert.ok(Number(base[1]) < 0.95, `พื้นการ์ดทึบเกินไป: ${base[1]}`);
+    assert.equal(/background:\s*#[0-9a-f]/i.test(card), false, "ห้ามใช้สีทึบเป็นพื้นการ์ด");
+    // เวทีที่ครอบการ์ดต้องไม่มีพื้นของตัวเอง ภาพจริงจะได้เล่นผ่านรอบ ๆ การ์ด
+    assert.equal(/background/.test(ruleFor(result.css, ".mo-num-stage")), false);
+  });
+}
+
+test("โทน soft เอียงเหมือนสติกเกอร์ ส่วนโทน night วางตรง", async () => {
+  const tilt = async (tone) => {
+    const result = await compileMotionShots(
+      [shot({ data: { value: "80", tone } })],
+      { width: 720, height: 1280 },
+    );
+    return result.beats.find((beat) => beat.to && beat.to.rotation !== undefined)?.to.rotation;
+  };
+  assert.notEqual(await tilt("soft"), 0, "โทน soft ต้องเอียง");
+  assert.equal(await tilt("night"), 0, "โทน night ต้องวางตรง");
+});
+
+test("โทนที่ไม่รู้จักตกมาที่ soft ไม่ใช่พัง", async () => {
+  const result = await compileMotionShots(
+    [shot({ data: { value: "80", tone: "ไม่มีโทนนี้" } })],
+    { width: 720, height: 1280 },
+  );
+  assert.match(ruleFor(result.css, ".mo-num-card"), /rgba\(255, 251, 243/);
 });
 
 test("การ์ดมีท่าออกก่อนช็อตจบ ไม่หายวับ", async () => {
